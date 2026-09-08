@@ -1,13 +1,19 @@
 project_id = "thdoggygang"
 
 [auth]
-site_url = "https://thdoggygang.vercel.app"
+site_url = "https://www.thedoggygang.com"
 additional_redirect_urls = [
   "http://localhost:3000/**",
   "https://thdoggygang.vercel.app/**",
   "https://www.thedoggygang.com/**",
 ]
 enable_signup = true
+
+[auth.sms]
+enable_signup = true
+enable_confirmations = true
+template = "Tu código de acceso a The Doggy Gang es {{ .Code }}"
+max_frequency = "60s"
 
 [auth.email.template.magic_link]
 subject = "Tu acceso a The Doggy Gang"
