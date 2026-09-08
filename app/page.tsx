@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 
 const adventures = [
   { slug: 'sendero-del-duende', day: '20', month: 'SEP', title: 'Sendero del Duende', place: 'Cholula, Puebla', details: '8 KM · 2.5 H · FÁCIL / MEDIA', price: '$350', spots: '12 lugares', image: 'https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=1400&q=86' },
@@ -23,7 +24,7 @@ export default function Home() {
           <p className="eyebrow light">HIKES · PERRITOS · NATURALEZA</p>
           <h1>Aventuras que se disfrutan<br className="desktop-break" /> mejor en <em>manada.</em></h1>
           <p className="hero-intro">Caminamos juntos, descubrimos lugares increíbles y creamos historias con nuestros mejores amigos.</p>
-          <a className="button button-primary" href="#aventuras">VER PRÓXIMAS AVENTURAS <span aria-hidden="true">↘</span></a>
+          <a className="button button-primary" href="#aventuras">VER PRÓXIMAS AVENTURAS <ArrowDownRight aria-hidden="true" /></a>
         </div>
         <div className="hero-stamp" aria-hidden="true"><span>DESDE</span><strong>2019</strong><span>EN MANADA</span></div>
         <div className="scroll-cue" aria-hidden="true">SCROLL ↓</div>
@@ -56,7 +57,7 @@ export default function Home() {
                   <h3>{adventure.title}</h3><p className="card-meta">{adventure.details}</p>
                   <div className="card-footer">
                     <div><span>DESDE</span><strong>{adventure.price} <small>MXN</small></strong></div>
-                    <div className="spots"><i />{adventure.spots}</div><span className="round-arrow" aria-hidden="true">↗</span>
+                    <div className="spots"><i />{adventure.spots}</div><span className="round-arrow" aria-hidden="true"><ArrowUpRight /></span>
                   </div>
                 </div>
               </Link>
