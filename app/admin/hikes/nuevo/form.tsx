@@ -27,6 +27,13 @@ export type HikeFormInitial = {
   cancellationPolicy: string;
   coverUrl: string | null;
   published: boolean;
+  transportMode: "NONE" | "OPTIONAL" | "INCLUDED";
+  transportCapacity: number | null;
+  transportPrice: number;
+  transportDeparturePlace: string;
+  transportDepartureAt: string;
+  transportReturnDetails: string;
+  transportRules: string;
 };
 
 export function NewHikeForm({
@@ -79,6 +86,13 @@ export function NewHikeForm({
       dogSuitability: data.get("dogSuitability"),
       rules: data.get("rules"),
       cancellationPolicy: data.get("cancellationPolicy"),
+      transportMode: data.get("transportMode"),
+      transportCapacity: Number(data.get("transportCapacity")) || null,
+      transportPriceCents: Math.round(Number(data.get("transportPrice") || 0) * 100),
+      transportDeparturePlace: data.get("transportDeparturePlace") || null,
+      transportDepartureAt: data.get("transportDepartureAt") ? new Date(String(data.get("transportDepartureAt"))).toISOString() : null,
+      transportReturnDetails: data.get("transportReturnDetails") || null,
+      transportRules: data.get("transportRules") || null,
       published: data.get("published") === "on",
     };
     try {
@@ -310,7 +324,44 @@ export function NewHikeForm({
         </div>
       </div>
       <div className="form-section">
-        <span>04 · REGLAS Y CANCELACIONES</span>
+        <span>04 · TRANSPORTE</span>
+        <div className="form-grid thirds">
+          <label>
+            MODALIDAD
+            <select name="transportMode" defaultValue={initial?.transportMode ?? "NONE"}>
+              <option value="NONE">Sin transporte</option>
+              <option value="OPTIONAL">Opcional con costo</option>
+              <option value="INCLUDED">Incluido en el hike</option>
+            </select>
+          </label>
+          <label>
+            CUPO DE TRANSPORTE
+            <input min="0" name="transportCapacity" type="number" defaultValue={initial?.transportCapacity ?? ""} placeholder="24" />
+          </label>
+          <label>
+            PRECIO POR PERSONA MXN
+            <input min="0" step="1" name="transportPrice" type="number" defaultValue={initial?.transportPrice ?? 0} />
+          </label>
+          <label>
+            LUGAR DE SALIDA
+            <input name="transportDeparturePlace" defaultValue={initial?.transportDeparturePlace} placeholder="Angelópolis" />
+          </label>
+          <label>
+            FECHA Y HORA DE SALIDA
+            <input name="transportDepartureAt" type="datetime-local" defaultValue={initial?.transportDepartureAt} />
+          </label>
+          <label>
+            DETALLES DE REGRESO
+            <input name="transportReturnDetails" defaultValue={initial?.transportReturnDetails} placeholder="Regreso al finalizar la caminata" />
+          </label>
+          <label className="full-field">
+            REGLAS DE TRANSPORTE
+            <textarea name="transportRules" defaultValue={initial?.transportRules} placeholder="Indicaciones para personas y perritos durante el traslado." />
+          </label>
+        </div>
+      </div>
+      <div className="form-section">
+        <span>05 · REGLAS Y CANCELACIONES</span>
         <div className="form-grid">
           <label className="full-field">
             REGLAS DE LA MANADA
@@ -329,7 +380,7 @@ export function NewHikeForm({
       </label>
       {message && <p className="wizard-error">{message}</p>}
       <div className="admin-form-actions">
-        <Link href="/admin">CANCELAR</Link>
+        <Link href="/admin/hikes">CANCELAR</Link>
         <button className="button button-primary" disabled={saving}>
           {saving ? "GUARDANDO…" : hikeId ? "GUARDAR CAMBIOS" : "CREAR AVENTURA →"}
         </button>

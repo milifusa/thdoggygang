@@ -22,7 +22,7 @@ export default async function EditHikePage({
     const supabase = await createSupabaseServerClient();
     const { data: hike } = await supabase
       .from("hikes")
-      .select("name, slug, description, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published")
+      .select("name, slug, description, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules)")
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
@@ -36,6 +36,8 @@ export default async function EditHikePage({
       hour12: false,
       timeZone: "America/Mexico_City",
     }).format(new Date(hike.starts_at)).replace(" ", "T");
+    const transportValue = Array.isArray(hike.transport_configurations) ? hike.transport_configurations[0] : hike.transport_configurations;
+    const transportLocalDate = transportValue?.departure_at ? new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Mexico_City" }).format(new Date(transportValue.departure_at)).replace(" ", "T") : "";
     initial = {
       name: hike.name,
       slug: hike.slug,
@@ -60,6 +62,13 @@ export default async function EditHikePage({
       cancellationPolicy: hike.cancellation_policy ?? "",
       coverUrl: hike.cover_path?.startsWith(`${id}/`) ? hikeCoverUrl(id, hike.cover_path) : null,
       published: hike.published,
+      transportMode: transportValue?.mode === "OPTIONAL" || transportValue?.mode === "INCLUDED" ? transportValue.mode : "NONE",
+      transportCapacity: transportValue?.capacity ?? null,
+      transportPrice: (transportValue?.price_cents ?? 0) / 100,
+      transportDeparturePlace: transportValue?.departure_place ?? "",
+      transportDepartureAt: transportLocalDate,
+      transportReturnDetails: transportValue?.return_details ?? "",
+      transportRules: transportValue?.rules ?? "",
     };
   }
   return (

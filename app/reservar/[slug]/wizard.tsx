@@ -84,9 +84,11 @@ function SignaturePad({
 export function BookingWizard({
   adventure,
   context,
+  cardPaymentsEnabled,
 }: {
   adventure: Adventure;
   context: BookingContext;
+  cardPaymentsEnabled: boolean;
 }) {
   const people = context.people;
   const dogs = context.dogs;
@@ -102,7 +104,7 @@ export function BookingWizard({
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [waiverSaved, setWaiverSaved] = useState(false);
   const [accepted, setAccepted] = useState(false);
-  const [payment, setPayment] = useState<"card" | "transfer">("card");
+  const [payment, setPayment] = useState<"card" | "transfer">(cardPaymentsEnabled ? "card" : "transfer");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [transferPending, setTransferPending] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -541,8 +543,9 @@ export function BookingWizard({
                   <button
                     className={payment === "card" ? "active" : ""}
                     onClick={() => setPayment("card")}
+                    disabled={!cardPaymentsEnabled}
                   >
-                    TARJETA
+                    {cardPaymentsEnabled ? "TARJETA" : "TARJETA · PRÓXIMAMENTE"}
                   </button>
                   <button
                     className={payment === "transfer" ? "active" : ""}

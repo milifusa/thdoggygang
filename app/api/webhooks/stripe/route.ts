@@ -19,11 +19,13 @@ export async function POST(request: Request) {
   if (eventError) return Response.json({ error: 'No pudimos registrar el evento.' }, { status: 500 });
   if (event.type === 'checkout.session.completed' && event.data.object.payment_status === 'paid') {
     const bookingId = event.data.object.metadata?.booking_id; const orderId = event.data.object.metadata?.order_id;
-    if (bookingId && orderId) {
+    if (orderId) {
       await service.from('payments').update({ status: 'PAID', paid_at: new Date().toISOString(), raw_status: event.type }).eq('provider', 'stripe').eq('provider_payment_id', event.data.object.id);
       await service.from('orders').update({ status: 'PAID' }).eq('id', orderId);
-      await service.from('bookings').update({ status: 'CONFIRMED', confirmed_at: new Date().toISOString() }).eq('id', bookingId);
-      await ensureBookingQrToken(bookingId);
+      if (bookingId) {
+        await service.from('bookings').update({ status: 'CONFIRMED', confirmed_at: new Date().toISOString() }).eq('id', bookingId);
+        await ensureBookingQrToken(bookingId);
+      }
     }
   }
   return Response.json({ received: true });

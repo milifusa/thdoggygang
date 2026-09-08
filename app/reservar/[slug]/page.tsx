@@ -12,5 +12,5 @@ export default async function BookingPage({ params }: { params: Promise<{ slug: 
   if (!adventure) notFound();
   const context = await loadBookingContext();
   if (context.mode === 'live' && !context.authenticated) redirect(`/ingresar?next=/reservar/${encodeURIComponent(slug)}`);
-  return <BookingWizard adventure={adventure} context={context} />;
+  return <BookingWizard adventure={adventure} context={context} cardPaymentsEnabled={Boolean(process.env.STRIPE_SECRET_KEY)} />;
 }

@@ -2938,6 +2938,213 @@ footer small {
   font-size: 10px;
 }
 
+/* Admin modules */
+.admin-kpi-first {
+  margin-top: 0;
+}
+.admin-next-compact {
+  grid-template-columns: minmax(220px, .7fr) 1.3fr;
+}
+.admin-next-compact .admin-next-image {
+  min-height: 220px;
+}
+.admin-next-compact > div:last-child {
+  padding: 24px 30px;
+}
+.admin-next-compact h2 {
+  font-size: 27px;
+}
+.admin-next-compact .admin-stats {
+  margin: 18px 0;
+  grid-template-columns: repeat(3, 1fr);
+}
+.admin-module-panel {
+  margin-top: 0;
+}
+.admin-dashboard-lower {
+  margin-top: 25px;
+}
+.admin-quick-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-top: 18px;
+}
+.admin-quick-grid a {
+  min-height: 88px;
+  padding: 16px;
+  background: #f5f4ef;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.admin-quick-grid strong { font-size: 13px; }
+.admin-quick-grid span { color: #777; font-size: 9px; line-height: 1.45; }
+.admin-text-link {
+  display: inline-block;
+  margin-top: 20px;
+  font-size: 8px;
+  font-weight: 900;
+  border-bottom: 1px solid;
+}
+.admin-hike-list-detailed article {
+  grid-template-columns: 135px minmax(260px, 1fr) auto auto;
+}
+.admin-row-wide {
+  grid-template-columns: 90px 1fr 1.5fr auto auto 22px;
+}
+.admin-booking-detail {
+  grid-template-columns: repeat(4, 1fr);
+}
+.admin-payment-list article {
+  display: grid;
+  grid-template-columns: minmax(200px,1.5fr) 90px 110px 100px 150px auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #eee;
+}
+.admin-payment-list article > div { display:flex; flex-direction:column; gap:5px; }
+.admin-payment-list strong { font-size: 11px; }
+.admin-payment-list small { font-size: 8px; color:#777; }
+.admin-payment-list span,.admin-payment-list em { font-size:7px; font-style:normal; font-weight:900; }
+.admin-payment-list em { background:#fff0cf; padding:7px; text-align:center; }
+.admin-payment-list em.paid { background:#e0eee2; color:#315a38; }
+.admin-payment-list svg { width:18px; color:#777; }
+.admin-payment-list button { border:1px solid #111; background:#fff; min-height:34px; font-size:7px; font-weight:900; }
+.report-grid {
+  display: grid;
+  gap: 10px;
+  padding-top: 18px;
+}
+.report-grid article {
+  display: grid;
+  grid-template-columns: minmax(220px,1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+  background:#f5f4ef;
+}
+.report-grid article > div { display:flex; flex-direction:column; gap:5px; }
+.report-grid strong { font-size:12px; }
+.report-grid small { font-size:8px; color:#777; }
+.report-grid a {
+  min-height:38px;
+  padding:0 12px;
+  border:1px solid #bbb;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  font-size:7px;
+  font-weight:900;
+}
+.report-grid svg { width:14px; }
+.admin-hike-tabs {
+  display:flex;
+  gap:8px;
+  overflow-x:auto;
+  margin-bottom:18px;
+}
+.admin-hike-tabs a {
+  flex:0 0 auto;
+  min-height:40px;
+  padding:0 14px;
+  display:inline-flex;
+  align-items:center;
+  background:#fff;
+  border:1px solid #d4d1c9;
+  font-size:8px;
+  font-weight:900;
+}
+.admin-hike-tabs a.active { background:var(--black); color:#fff; }
+.photo-upload-form {
+  display:grid;
+  grid-template-columns:minmax(220px,1fr) 160px 130px 190px auto;
+  gap:12px;
+  align-items:end;
+  padding:20px 0;
+}
+.photo-upload-form > div { display:flex; flex-direction:column; gap:6px; }
+.photo-upload-form > div span { font-size:9px; color:#777; line-height:1.4; }
+.photo-upload-form label,.admin-photo-grid label {
+  display:flex; flex-direction:column; gap:6px; font-size:7px; font-weight:900; letter-spacing:.08em;
+}
+.photo-upload-form input,.photo-upload-form select,.admin-photo-grid input,.admin-photo-grid select {
+  min-height:40px; border:1px solid #bbb; background:#fff; padding:0 10px; font:inherit;
+}
+.photo-file-picker {
+  min-height:40px; border:1px solid #111; display:flex!important; flex-direction:row!important; align-items:center; justify-content:center; cursor:pointer;
+}
+.photo-file-picker svg { width:15px; }
+.photo-file-picker input { position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; }
+.admin-feedback { background:#fff8e8; border-left:3px solid var(--yellow); padding:12px; font-size:9px; }
+.admin-photo-grid {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:12px;
+}
+.admin-photo-grid > form { border:1px solid #ddd; padding:10px; display:flex; flex-direction:column; gap:9px; }
+.admin-photo-grid img { aspect-ratio:4/3; object-fit:cover; background:#eee; }
+.admin-photo-grid > form > div:not(.admin-photo-actions) { display:grid; grid-template-columns:1fr 100px; gap:8px; }
+.admin-photo-actions { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; }
+.admin-photo-actions button,.admin-photo-actions a { min-height:34px; border:1px solid #bbb; background:#fff; display:flex; align-items:center; justify-content:center; gap:4px; font-size:6px; font-weight:900; }
+.admin-photo-actions svg { width:12px; }
+
+/* Gallery controls */
+.photo-select-button,.photo-download-button {
+  position:absolute;
+  top:13px;
+  right:13px;
+  width:34px;
+  height:34px;
+  border:1px solid #fff;
+  background:rgba(0,0,0,.48);
+  color:#fff;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  z-index:2;
+  font-weight:900;
+}
+.photo-select-button svg,.photo-download-button svg { width:16px; }
+.photo-item.selected .photo-select-button { background:var(--yellow); color:#111; border-color:var(--yellow); }
+.photo-meta {
+  position:absolute;
+  left:0; right:0; bottom:0;
+  padding:28px 14px 13px;
+  background:linear-gradient(transparent,rgba(0,0,0,.72));
+  color:#fff;
+  display:flex;
+  justify-content:space-between;
+  align-items:end;
+  gap:10px;
+  pointer-events:none;
+}
+.photo-meta strong { font-size:10px; }
+.photo-meta span { font-size:7px; font-weight:900; letter-spacing:.06em; }
+.photo-cart > p { grid-column:1/-1; margin:0; color:#9b332c; font-size:8px; }
+
+@media (max-width: 1050px) {
+  .admin-payment-list article { grid-template-columns:1fr auto auto; }
+  .admin-payment-list article > small { display:none; }
+  .photo-upload-form { grid-template-columns:1fr 1fr; }
+  .photo-upload-form > div { grid-column:1/-1; }
+  .admin-photo-grid { grid-template-columns:1fr 1fr; }
+}
+@media (max-width: 650px) {
+  .admin-next-compact { grid-template-columns:1fr; }
+  .admin-next-compact .admin-next-image { min-height:180px; }
+  .admin-quick-grid,.admin-photo-grid { grid-template-columns:1fr; }
+  .admin-hike-list-detailed article { grid-template-columns:1fr; }
+  .admin-hike-list-detailed .admin-item-actions { justify-content:flex-start; }
+  .admin-row-wide { grid-template-columns:1fr auto; }
+  .admin-booking-detail { grid-template-columns:1fr; }
+  .report-grid article { grid-template-columns:1fr; }
+  .report-grid a { justify-content:center; }
+  .photo-upload-form { grid-template-columns:1fr; }
+  .photo-upload-form > div { grid-column:auto; }
+}
+
 /* Field mode */
 .hike-mode {
   min-height: 100svh;

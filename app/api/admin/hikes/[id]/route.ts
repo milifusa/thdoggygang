@@ -16,7 +16,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (value.includes !== undefined) map.includes = value.includes; if (value.excludes !== undefined) map.excludes = value.excludes; if (value.packingList !== undefined) map.packing_list = value.packingList;
   if (value.dogSuitability !== undefined) map.dog_suitability = value.dogSuitability; if (value.rules !== undefined) map.rules = value.rules; if (value.cancellationPolicy !== undefined) map.cancellation_policy = value.cancellationPolicy;
   const { data, error } = await supabase.from('hikes').update(map).eq('id', id).select('id, slug').single();
-  return error ? Response.json({ error: error.message }, { status: 400 }) : Response.json({ hike: data });
+  if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (value.transportMode !== undefined) {
+    const { error: transportError } = await supabase.from('transport_configurations').upsert({ hike_id: id, mode: value.transportMode, capacity: value.transportCapacity ?? null, price_cents: value.transportMode === 'INCLUDED' ? 0 : value.transportPriceCents ?? 0, departure_place: value.transportDeparturePlace ?? null, departure_at: value.transportDepartureAt ?? null, return_details: value.transportReturnDetails ?? null, rules: value.transportRules ?? null }, { onConflict: 'hike_id' });
+    if (transportError) return Response.json({ error: transportError.message }, { status: 400 });
+  }
+  return Response.json({ hike: data });
 }
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ id: string }> }) {
