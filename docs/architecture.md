@@ -32,6 +32,8 @@
 | `/admin` | Operación administrativa |
 | `/admin/hike-mode` | Scanner y check-in en campo |
 
-## Siguiente integración de producción
+## Estado de integración
 
-El MVP visual ya consume los contratos del dominio, pero usa datos representativos. La siguiente iteración sustituye esos fixtures por queries de Supabase, añade un proveedor de pagos concreto, conecta el procesador asíncrono de imágenes y protege rutas con sesión/rol en middleware.
+La aplicación selecciona el modo automáticamente: conserva fixtures cuando Supabase no está configurado y usa cuentas, perfiles, RLS y persistencia real cuando existen las variables. El wizard guarda su borrador mediante una función PostgreSQL transaccional; la firma genera un PDF real y lo sube a Storage; Stripe Checkout y las transferencias actualizan órdenes verificadas antes de emitir el QR.
+
+Quedan como siguientes módulos de producción el worker asíncrono de imágenes, notificaciones transaccionales, exportaciones administrativas y cola offline del Modo Hike.

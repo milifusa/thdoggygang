@@ -13,7 +13,7 @@ Plataforma web mobile-first para descubrir y reservar hikes con perros, gestiona
 - API para generar responsivas PDF, validar QR, registrar check-ins y procesar webhooks de pago firmados.
 - Esquema PostgreSQL completo, RLS y buckets privados versionados como migraciones.
 
-Los datos visibles son representativos para que todos los recorridos se puedan evaluar sin credenciales. Al configurar Supabase, los formularios de acceso y APIs pasan a usar servicios reales.
+Sin credenciales se conserva una demo interactiva. Al configurar Supabase, la reserva usa automáticamente perfiles reales, guarda cada paso de forma atómica, genera y almacena la responsiva firmada, crea órdenes de pago y emite el QR después de la confirmación.
 
 ## Desarrollo
 
@@ -31,9 +31,14 @@ npm run dev
 2. Vincular el proyecto con Supabase CLI.
 3. Aplicar `supabase/migrations` con `supabase db push`.
 4. Habilitar email OTP y/o phone OTP en Authentication.
-5. Copiar las variables de `.env.example` a desarrollo, Preview y Production.
+5. Generar `QR_TOKEN_ENCRYPTION_KEY` con 32 bytes aleatorios codificados en base64.
+6. Copiar las variables de `.env.example` a desarrollo, Preview y Production.
 
-La `SUPABASE_SERVICE_ROLE_KEY` sólo puede existir del lado servidor. Los originales de fotos, comprobantes y responsivas permanecen privados y deben entregarse mediante signed URLs después de autorizar al usuario.
+La `SUPABASE_SERVICE_ROLE_KEY` y la llave de cifrado del QR sólo pueden existir del lado servidor. Los originales de fotos, comprobantes y responsivas permanecen privados y deben entregarse mediante signed URLs después de autorizar al usuario.
+
+## Pagos
+
+El flujo de tarjeta crea un Stripe Checkout alojado y verifica `checkout.session.completed` mediante `Stripe-Signature`. El flujo de transferencia sube el comprobante al bucket privado, lo deja en revisión y permite que ADMIN lo apruebe. Ambos métodos confirman la reservación y generan un token QR cifrado; la base sólo usa su hash para validarlo.
 
 ## Vercel
 

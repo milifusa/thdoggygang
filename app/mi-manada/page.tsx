@@ -1,6 +1,9 @@
 import Link from 'next/link';
+import { requireClientSession } from '../lib/auth/guards';
 
-export default function MyGangPage() {
+export const dynamic = 'force-dynamic';
+export default async function MyGangPage() {
+  await requireClientSession('/mi-manada');
   return (
     <main className="account-page">
       <aside className="account-sidebar">
