@@ -36,7 +36,7 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
             <div><span>DISTANCIA</span><strong>{hike.distance}</strong></div><div><span>DURACIÓN</span><strong>{hike.duration}</strong></div><div><span>DIFICULTAD</span><strong>{hike.difficulty}</strong></div><div><span>ELEVACIÓN</span><strong>{hike.elevation}</strong></div>
           </div>
           <div className="detail-story">
-            <p className="eyebrow">SOBRE LA AVENTURA</p><h2>Respira bosque.<br />Camina en manada.</h2><p>{hike.description}</p>
+            <p className="eyebrow">SOBRE LA AVENTURA</p><h2 className="preserve-lines">{hike.storyTitle}</h2><p>{hike.description}</p>
           </div>
           <div className="info-columns">
             <div><h3>Esto incluye</h3><ul>{hike.includes.map((item) => <li key={item}>{item}</li>)}</ul>{!hike.includes.length && <p>Consulta los detalles con el equipo.</p>}</div>

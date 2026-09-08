@@ -22,7 +22,7 @@ export default async function EditHikePage({
     const supabase = await createSupabaseServerClient();
     const { data: hike } = await supabase
       .from("hikes")
-      .select("name, slug, description, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules)")
+      .select("name, slug, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules)")
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
@@ -42,6 +42,7 @@ export default async function EditHikePage({
       name: hike.name,
       slug: hike.slug,
       description: hike.description,
+      storyTitle: hike.story_title ?? "Respira bosque.\nCamina en manada.",
       startsAt: localDate,
       location: hike.location_name,
       price: hike.price_cents / 100,

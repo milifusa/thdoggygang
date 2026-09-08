@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { getAdventures } from './lib/data';
+import { getLandingSettings } from './lib/landing-content';
 
 export const revalidate = 60;
 
 export default async function Home() {
-  const adventures = await getAdventures();
+  const [adventures, landing] = await Promise.all([getAdventures(), getLandingSettings()]);
+  const { content } = landing;
   return (
     <main>
       <header className="site-header">
@@ -17,29 +19,29 @@ export default async function Home() {
       </header>
 
       <section className="hero">
-        <div className="hero-image" aria-hidden="true" /><div className="hero-shade" />
+        <div className="hero-image" style={{ backgroundImage: `url("${landing.heroImage}")` }} aria-hidden="true" /><div className="hero-shade" />
         <div className="hero-copy">
-          <p className="eyebrow light">HIKES · PERRITOS · NATURALEZA</p>
-          <h1>Aventuras que se disfrutan<br className="desktop-break" /> mejor en <em>manada.</em></h1>
-          <p className="hero-intro">Caminamos juntos, descubrimos lugares increíbles y creamos historias con nuestros mejores amigos.</p>
-          <a className="button button-primary" href="#aventuras">VER PRÓXIMAS AVENTURAS <ArrowDownRight aria-hidden="true" /></a>
+          <p className="eyebrow light">{content.heroEyebrow}</p>
+          <h1>{content.heroTitle} <em>{content.heroAccent}</em></h1>
+          <p className="hero-intro">{content.heroIntro}</p>
+          <a className="button button-primary" href="#aventuras">{content.heroButton} <ArrowDownRight aria-hidden="true" /></a>
         </div>
         <div className="hero-stamp" aria-hidden="true"><span>DESDE</span><strong>2019</strong><span>EN MANADA</span></div>
         <div className="scroll-cue" aria-hidden="true">SCROLL ↓</div>
       </section>
 
       <section className="intro" id="manada">
-        <p className="eyebrow">SOMOS THE DOGGY GANG</p>
+        <p className="eyebrow">{content.introEyebrow}</p>
         <div className="intro-grid">
-          <h2>No es sólo un hike.<br />Es su día <span>favorito.</span></h2>
-          <div><p>Creamos experiencias al aire libre para personas que saben que la vida es mejor con cuatro patas al lado.</p><a className="text-link" href="#como-funciona">CONOCE A LA MANADA <span>→</span></a></div>
+          <h2>{content.introTitle} <span>{content.introAccent}</span></h2>
+          <div><p>{content.introBody}</p><a className="text-link" href="#como-funciona">{content.introLink} <span>→</span></a></div>
         </div>
       </section>
 
       <section className="adventures" id="aventuras">
         <div className="section-heading">
-          <div><p className="eyebrow">ELIGE TU PRÓXIMA HISTORIA</p><h2>Próximas aventuras</h2></div>
-          <p>Senderos nuevos, amigos nuevos y muchas colitas felices.</p>
+          <div><p className="eyebrow">{content.adventuresEyebrow}</p><h2>{content.adventuresTitle}</h2></div>
+          <p>{content.adventuresBody}</p>
         </div>
         <div className="adventure-grid">
           {adventures.map((adventure, index) => (
@@ -62,32 +64,28 @@ export default async function Home() {
             </article>
           ))}
         </div>
-        <div className="centered-link"><Link className="button button-dark" href="/aventuras">VER TODAS LAS AVENTURAS</Link></div>
+        <div className="centered-link"><Link className="button button-dark" href="/aventuras">{content.adventuresButton}</Link></div>
       </section>
 
       <section className="how" id="como-funciona">
-        <div className="how-image" aria-hidden="true" />
+        <div className="how-image" style={{ backgroundImage: `url("${landing.howImage}")` }} aria-hidden="true" />
         <div className="how-copy">
-          <p className="eyebrow">ASÍ DE FÁCIL</p><h2>Tu próxima aventura,<br />en tres pasos.</h2>
+          <p className="eyebrow">{content.howEyebrow}</p><h2>{content.howTitle}</h2>
           <ol>
-            <li><span>01</span><div><strong>Elige una aventura</strong><p>Encuentra el sendero ideal para ti y tu perrito.</p></div></li>
-            <li><span>02</span><div><strong>Arma tu manada</strong><p>Selecciona quién viene, firma y reserva tu lugar.</p></div></li>
-            <li><span>03</span><div><strong>Disfruta el camino</strong><p>Muestra tu QR, conoce a la manada y crea recuerdos.</p></div></li>
+            {content.howSteps.map((step,index)=><li key={step.title}><span>{String(index+1).padStart(2,"0")}</span><div><strong>{step.title}</strong><p>{step.body}</p></div></li>)}
           </ol>
         </div>
       </section>
       <section className="instagram-feed" id="instagram">
-        <div className="instagram-heading"><div><p className="eyebrow">DESDE LA MONTAÑA</p><h2>Así se vive<br />en la manada.</h2></div><div><p>Rutas reales, perros libres para explorar y recuerdos compartidos desde Puebla.</p><a href="https://www.instagram.com/the_doggy_gangmx/" target="_blank" rel="noreferrer">SEGUIR @THE_DOGGY_GANGMX →</a></div></div>
+        <div className="instagram-heading"><div><p className="eyebrow">{content.instagramEyebrow}</p><h2>{content.instagramTitle}</h2></div><div><p>{content.instagramBody}</p><a href={content.instagramUrl} target="_blank" rel="noreferrer">{content.instagramCta} →</a></div></div>
         <div className="instagram-grid">
-          <iframe title="Próximas rutas de The Doggy Gang" src="https://www.instagram.com/p/DcfMAamMgFB/embed/captioned/" loading="lazy" allow="encrypted-media" />
-          <iframe title="Sendero del Duende de The Doggy Gang" src="https://www.instagram.com/reel/DcyxwONxgfK/embed/captioned/" loading="lazy" allow="encrypted-media" />
-          <iframe title="Entre montañas con The Doggy Gang" src="https://www.instagram.com/reel/Dci9RxaRr7X/embed/captioned/" loading="lazy" allow="encrypted-media" />
+          {content.instagramEmbeds.map((url,index)=><iframe title={`Publicación ${index+1} de The Doggy Gang`} src={url} loading="lazy" allow="encrypted-media" key={url} />)}
         </div>
       </section>
-      <section className="quote-band"><p>“Los mejores caminos se recorren con huellas al lado.”</p><span>THE DOGGY GANG · PUEBLA, MX</span></section>
+      <section className="quote-band"><p>“{content.quote}”</p><span>{content.quoteAttribution}</span></section>
       <footer>
-        <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>Aventuras reales. Perritos felices. Una gran manada.</p>
-        <div><a href="https://www.instagram.com/the_doggy_gangmx/" target="_blank" rel="noreferrer">Instagram</a><a href="#aventuras">WhatsApp</a><a href="#aventuras">Términos</a></div><small>© 2026 THE DOGGY GANG</small>
+        <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>{content.footerText}</p>
+        <div><a href={content.footerInstagramUrl} target="_blank" rel="noreferrer">Instagram</a><a href={content.footerWhatsappUrl}>WhatsApp</a><a href={content.footerTermsUrl}>Términos</a></div><small>© 2026 THE DOGGY GANG</small>
       </footer>
     </main>
   );

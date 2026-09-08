@@ -7,6 +7,7 @@ export type HikeFormInitial = {
   name: string;
   slug: string;
   description: string;
+  storyTitle: string;
   startsAt: string;
   location: string;
   price: number;
@@ -68,6 +69,7 @@ export function NewHikeForm({
       name: data.get("name"),
       slug: data.get("slug"),
       description: data.get("description"),
+      storyTitle: data.get("storyTitle"),
       startsAt,
       locationName: data.get("location"),
       priceCents: Math.round(Number(data.get("price")) * 100),
@@ -180,6 +182,11 @@ export function NewHikeForm({
               placeholder="Cuéntale a la manada qué hace especial esta ruta."
               defaultValue={initial?.description}
             />
+          </label>
+          <label className="full-field">
+            FRASE PRINCIPAL DEL DETALLE
+            <textarea required minLength={5} name="storyTitle" defaultValue={initial?.storyTitle ?? "Respira bosque.\nCamina en manada."} />
+            <small>Puedes usar un salto de línea para controlar cómo se muestra.</small>
           </label>
           <label className="full-field hike-cover-field">
             PORTADA DEL HIKE

@@ -8,6 +8,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const supabase = await adminClient(); if (!supabase) return Response.json({ error: 'No autorizado.' }, { status: 403 });
   const map: Record<string, unknown> = {}; const value = parsed.data;
   if (value.name !== undefined) map.name = value.name; if (value.slug !== undefined) map.slug = value.slug; if (value.description !== undefined) map.description = value.description;
+  if (value.storyTitle !== undefined) map.story_title = value.storyTitle;
   if (value.startsAt !== undefined) map.starts_at = value.startsAt; if (value.locationName !== undefined) map.location_name = value.locationName; if (value.priceCents !== undefined) map.price_cents = value.priceCents;
   if (value.capacity !== undefined) map.capacity = value.capacity; if (value.maxDogs !== undefined) map.max_dogs = value.maxDogs; if (value.distanceKm !== undefined) map.distance_km = value.distanceKm;
   if (value.elevationM !== undefined) map.elevation_m = value.elevationM; if (value.durationMinutes !== undefined) map.duration_minutes = value.durationMinutes; if (value.difficulty !== undefined) map.difficulty = value.difficulty;

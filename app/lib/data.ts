@@ -22,6 +22,7 @@ export type Adventure = {
   spots: number;
   image: string;
   description: string;
+  storyTitle: string;
   includes: string[];
   excludes: string[];
   packingList: string[];
@@ -61,6 +62,7 @@ const demoAdventures: Adventure[] = [
     image: "/brand/profile-trail-sun.png",
     description:
       "Un sendero entre bosque, vistas abiertas y rincones que parecen salidos de un cuento.",
+    storyTitle: "Respira bosque.\nCamina en manada.",
     includes: ["Guías de The Doggy Gang", "Kit de bienvenida", "Hidratación durante la ruta", "Galería digital de recuerdos"],
     excludes: [],
     packingList: ["Correa fija y placa", "Agua para tu perrito", "Calzado con buena tracción", "Bolsitas y snacks"],
@@ -128,6 +130,7 @@ function mapHike(row: Record<string, unknown>): Adventure {
     spots: Number(row.capacity ?? 0),
     image: hikeCoverUrl(String(row.id), row.cover_path ? String(row.cover_path) : null),
     description: String(row.description),
+    storyTitle: String(row.story_title || "Respira bosque.\nCamina en manada."),
     includes: Array.isArray(row.includes) ? row.includes.map(String) : [],
     excludes: Array.isArray(row.excludes) ? row.excludes.map(String) : [],
     packingList: Array.isArray(row.packing_list) ? row.packing_list.map(String) : [],
@@ -149,7 +152,7 @@ export async function getAdventures(): Promise<Adventure[]> {
   );
   const { data, error } = await supabase
     .from("hikes")
-    .select("id, slug, name, description, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, transport_configurations(mode, price_cents, departure_place)")
+    .select("id, slug, name, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, transport_configurations(mode, price_cents, departure_place)")
     .eq("published", true)
     .is("deleted_at", null)
     .gte("starts_at", new Date().toISOString())

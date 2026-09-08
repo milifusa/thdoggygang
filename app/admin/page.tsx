@@ -58,6 +58,7 @@ export default async function AdminDashboard() {
               <Link href="/admin/reservaciones"><strong>Reservaciones</strong><span>Consulta personas, perritos y estatus.</span></Link>
               <Link href="/admin/fotos"><strong>Fotografías</strong><span>Carga, publica y vende recuerdos.</span></Link>
               <Link href="/admin/reportes"><strong>Reportes</strong><span>Descarga manifiestos y conciliación.</span></Link>
+              <Link href="/admin/sitio"><strong>Sitio</strong><span>Edita imágenes y textos del landing.</span></Link>
             </div>
           </div>
           <div className="alerts-panel">
