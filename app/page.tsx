@@ -1,0 +1,87 @@
+import Link from 'next/link';
+
+const adventures = [
+  { slug: 'sendero-del-duende', day: '20', month: 'SEP', title: 'Sendero del Duende', place: 'Cholula, Puebla', details: '8 KM · 2.5 H · FÁCIL / MEDIA', price: '$350', spots: '12 lugares', image: 'https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=1400&q=86' },
+  { slug: 'bosque-de-las-nubes', day: '05', month: 'OCT', title: 'Bosque de las Nubes', place: 'Zacatlán, Puebla', details: '11 KM · 4 H · MEDIA', price: '$490', spots: '8 lugares', image: 'https://images.unsplash.com/photo-1534361960057-19889db9621e?auto=format&fit=crop&w=1400&q=86' },
+  { slug: 'amanecer-en-izta', day: '19', month: 'OCT', title: 'Amanecer en Izta', place: 'Amecameca, Edo. Méx.', details: '6 KM · 3 H · MEDIA', price: '$620', spots: '6 lugares', image: 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1400&q=86' },
+];
+
+export default function Home() {
+  return (
+    <main>
+      <header className="site-header">
+        <Link className="wordmark" href="/" aria-label="The Doggy Gang, inicio">THE DOGGY <span>GANG</span></Link>
+        <nav className="desktop-nav" aria-label="Navegación principal">
+          <a href="#aventuras">Aventuras</a><a href="#manada">La manada</a><a href="#como-funciona">¿Cómo funciona?</a>
+        </nav>
+        <Link className="header-account" href="/ingresar">MI CUENTA <span aria-hidden="true">→</span></Link>
+      </header>
+
+      <section className="hero">
+        <div className="hero-image" aria-hidden="true" /><div className="hero-shade" />
+        <div className="hero-copy">
+          <p className="eyebrow light">HIKES · PERRITOS · NATURALEZA</p>
+          <h1>Aventuras que se disfrutan<br className="desktop-break" /> mejor en <em>manada.</em></h1>
+          <p className="hero-intro">Caminamos juntos, descubrimos lugares increíbles y creamos historias con nuestros mejores amigos.</p>
+          <a className="button button-primary" href="#aventuras">VER PRÓXIMAS AVENTURAS <span aria-hidden="true">↘</span></a>
+        </div>
+        <div className="hero-stamp" aria-hidden="true"><span>DESDE</span><strong>2019</strong><span>EN MANADA</span></div>
+        <div className="scroll-cue" aria-hidden="true">SCROLL ↓</div>
+      </section>
+
+      <section className="intro" id="manada">
+        <p className="eyebrow">SOMOS THE DOGGY GANG</p>
+        <div className="intro-grid">
+          <h2>No es sólo un hike.<br />Es su día <span>favorito.</span></h2>
+          <div><p>Creamos experiencias al aire libre para personas que saben que la vida es mejor con cuatro patas al lado.</p><a className="text-link" href="#como-funciona">CONOCE A LA MANADA <span>→</span></a></div>
+        </div>
+      </section>
+
+      <section className="adventures" id="aventuras">
+        <div className="section-heading">
+          <div><p className="eyebrow">ELIGE TU PRÓXIMA HISTORIA</p><h2>Próximas aventuras</h2></div>
+          <p>Senderos nuevos, amigos nuevos y muchas colitas felices.</p>
+        </div>
+        <div className="adventure-grid">
+          {adventures.map((adventure, index) => (
+            <article className="adventure-card" key={adventure.slug}>
+              <Link href={`/aventuras/${adventure.slug}`} aria-label={`Ver ${adventure.title}`}>
+                <div className="card-image-wrap">
+                  <img src={adventure.image} alt={`Perrito en la aventura ${adventure.title}`} />
+                  <div className="date-tile"><strong>{adventure.day}</strong><span>{adventure.month}</span></div>
+                  {index === 0 && <span className="featured-badge">MÁS POPULAR</span>}
+                </div>
+                <div className="card-body">
+                  <div className="location"><span aria-hidden="true">●</span>{adventure.place}</div>
+                  <h3>{adventure.title}</h3><p className="card-meta">{adventure.details}</p>
+                  <div className="card-footer">
+                    <div><span>DESDE</span><strong>{adventure.price} <small>MXN</small></strong></div>
+                    <div className="spots"><i />{adventure.spots}</div><span className="round-arrow" aria-hidden="true">↗</span>
+                  </div>
+                </div>
+              </Link>
+            </article>
+          ))}
+        </div>
+        <div className="centered-link"><a className="button button-dark" href="#aventuras">VER TODAS LAS AVENTURAS →</a></div>
+      </section>
+
+      <section className="how" id="como-funciona">
+        <div className="how-image" aria-hidden="true" />
+        <div className="how-copy">
+          <p className="eyebrow">ASÍ DE FÁCIL</p><h2>Tu próxima aventura,<br />en tres pasos.</h2>
+          <ol>
+            <li><span>01</span><div><strong>Elige una aventura</strong><p>Encuentra el sendero ideal para ti y tu perrito.</p></div></li>
+            <li><span>02</span><div><strong>Arma tu manada</strong><p>Selecciona quién viene, firma y reserva tu lugar.</p></div></li>
+            <li><span>03</span><div><strong>Disfruta el camino</strong><p>Muestra tu QR, conoce a la manada y crea recuerdos.</p></div></li>
+          </ol>
+        </div>
+      </section>
+      <section className="quote-band"><p>“Los mejores caminos se recorren con huellas al lado.”</p><span>THE DOGGY GANG · PUEBLA, MX</span></section>
+      <footer>
+        <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>Aventuras reales. Perritos felices. Una gran manada.</p>
+        <div><a href="#aventuras">Instagram</a><a href="#aventuras">WhatsApp</a><a href="#aventuras">Términos</a></div><small>© 2026 THE DOGGY GANG</small>
+      </footer>
+    </main>
+  );
+}
