@@ -4874,10 +4874,10 @@ h3,
 }
 .wordmark {
   display: block !important;
-  width: 176px !important;
+  width: 62px !important;
   height: 62px !important;
   flex: none;
-  background: url("/brand/logo-horizontal-blue.png") center/contain no-repeat;
+  background: url("/brand/logo-circular-blue.png") center/contain no-repeat;
   color: transparent !important;
   font-size: 0 !important;
   line-height: 0 !important;
@@ -4888,12 +4888,24 @@ h3,
 }
 .header-dark .wordmark,
 .login-photo > .wordmark,
-.admin-sidebar .wordmark {
-  background-image: url("/brand/logo-horizontal-sun.png");
+.admin-sidebar .wordmark,
+.account-sidebar .wordmark,
+.admin-form-page > header .wordmark {
+  background-image: url("/brand/logo-circular-sun.png");
 }
 .footer-mark {
-  width: 205px !important;
-  height: 84px !important;
+  width: 118px !important;
+  height: 118px !important;
+}
+.login-photo > .wordmark {
+  width: 112px !important;
+  height: 112px !important;
+}
+.admin-sidebar .wordmark,
+.account-sidebar .wordmark {
+  width: 100px !important;
+  height: 100px !important;
+  align-self: center;
 }
 .hero-stamp {
   width: 145px;
@@ -5373,8 +5385,8 @@ footer {
 }
 @media (max-width: 420px) {
   .wordmark {
-    width: 145px !important;
-    height: 54px !important;
+    width: 52px !important;
+    height: 52px !important;
   }
   .site-header {
     padding: 0 13px;
