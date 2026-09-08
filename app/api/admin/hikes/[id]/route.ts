@@ -12,6 +12,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (value.capacity !== undefined) map.capacity = value.capacity; if (value.maxDogs !== undefined) map.max_dogs = value.maxDogs; if (value.distanceKm !== undefined) map.distance_km = value.distanceKm;
   if (value.elevationM !== undefined) map.elevation_m = value.elevationM; if (value.durationMinutes !== undefined) map.duration_minutes = value.durationMinutes; if (value.difficulty !== undefined) map.difficulty = value.difficulty;
   if (value.terrain !== undefined) map.terrain = value.terrain; if (value.published !== undefined) map.published = value.published;
+  if (value.pricingMode !== undefined) map.pricing_mode = value.pricingMode; if (value.dogPriceCents !== undefined) map.dog_price_cents = value.dogPriceCents;
+  if (value.includes !== undefined) map.includes = value.includes; if (value.excludes !== undefined) map.excludes = value.excludes; if (value.packingList !== undefined) map.packing_list = value.packingList;
+  if (value.dogSuitability !== undefined) map.dog_suitability = value.dogSuitability; if (value.rules !== undefined) map.rules = value.rules; if (value.cancellationPolicy !== undefined) map.cancellation_policy = value.cancellationPolicy;
   const { data, error } = await supabase.from('hikes').update(map).eq('id', id).select('id, slug').single();
   return error ? Response.json({ error: error.message }, { status: 400 }) : Response.json({ hike: data });
 }

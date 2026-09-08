@@ -1,21 +1,25 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { SiteHeader } from '../../components/SiteHeader';
 import { getAdventure } from '../../lib/data';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const hike = getAdventure(slug);
+  const hike = await getAdventure(slug);
+  if (!hike) return { title: 'Aventura no encontrada | The Doggy Gang' };
+  const image = hike.image.startsWith('http') ? hike.image : `${process.env.APP_ORIGIN ?? 'https://www.thedoggygang.com'}${hike.image}`;
   return {
     title: `${hike.title} | The Doggy Gang`,
     description: `${hike.date} · ${hike.location}. ${hike.description}`,
-    openGraph: { title: hike.title, description: `${hike.date} · ${hike.location}`, images: [{ url: hike.image }] },
+    openGraph: { title: hike.title, description: `${hike.date} · ${hike.location}`, images: [{ url: image }] },
   };
 }
 
 export default async function AdventurePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const hike = getAdventure(slug);
+  const hike = await getAdventure(slug);
+  if (!hike) notFound();
   return (
     <main className="detail-page">
       <SiteHeader />
@@ -35,17 +39,24 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
             <p className="eyebrow">SOBRE LA AVENTURA</p><h2>Respira bosque.<br />Camina en manada.</h2><p>{hike.description}</p>
           </div>
           <div className="info-columns">
-            <div><h3>Esto incluye</h3><ul><li>Guías de The Doggy Gang</li><li>Kit de bienvenida</li><li>Hidratación durante la ruta</li><li>Galería digital de recuerdos</li></ul></div>
-            <div><h3>Que no se te olvide</h3><ul><li>Correa fija y placa</li><li>Agua para tu perrito</li><li>Calzado con buena tracción</li><li>Bolsitas y snacks</li></ul></div>
+            <div><h3>Esto incluye</h3><ul>{hike.includes.map((item) => <li key={item}>{item}</li>)}</ul>{!hike.includes.length && <p>Consulta los detalles con el equipo.</p>}</div>
+            <div><h3>Que no se te olvide</h3><ul>{hike.packingList.map((item) => <li key={item}>{item}</li>)}</ul>{!hike.packingList.length && <p>Consulta las recomendaciones con el equipo.</p>}</div>
           </div>
-          <div className="recommendation"><span>DG</span><div><strong>¿Esta ruta es para mi perrito?</strong><p>Recomendada para perros sociables, sanos y con condición para caminar al menos 2.5 horas. Tamaños pequeños bien acondicionados también son bienvenidos.</p></div></div>
-          <div className="rules-block"><h3>Antes de caminar juntos</h3><details open><summary>Reglas de la manada</summary><p>Todos los perritos deben permanecer con correa. Pedimos respeto por el entorno, los ritmos del grupo y las indicaciones de guías.</p></details><details><summary>Cancelaciones</summary><p>Puedes transferir tu lugar hasta 72 horas antes. Las rutas pueden reprogramarse por condiciones meteorológicas.</p></details></div>
+          {hike.excludes.length > 0 && <div className="not-included"><h3>No incluye</h3><ul>{hike.excludes.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+          <div className="recommendation"><span>DG</span><div><strong>¿Esta ruta es para mi perrito?</strong><p>{hike.dogSuitability}</p></div></div>
+          <div className="rules-block"><h3>Antes de caminar juntos</h3><details open><summary>Reglas de la manada</summary><p>{hike.rules}</p></details><details><summary>Cancelaciones</summary><p>{hike.cancellationPolicy}</p></details></div>
         </div>
         <aside className="booking-card">
           <p className="booking-date">{hike.date}</p><h3>{hike.time}</h3><p className="muted">Punto de encuentro confirmado 24 horas antes.</p>
-          <div className="price-line"><span>Precio por persona</span><strong>${hike.price} <small>MXN</small></strong></div>
-          <div className="availability"><i /> Sólo quedan {hike.spots} lugares</div>
-          <div className="transport-note"><span>BUS</span><p><strong>Transporte disponible</strong><br />Desde Angelópolis · +$200</p></div>
+          {hike.pricingMode === 'PERSON_DOG_BUNDLE' ? <>
+            <div className="price-line"><span>1 persona + 1 perrito</span><strong>${hike.price.toLocaleString('es-MX')} <small>MXN</small></strong></div>
+            <div className="price-secondary"><span>Perrito adicional</span><strong>+${hike.dogPrice.toLocaleString('es-MX')} MXN</strong></div>
+          </> : <>
+            <div className="price-line"><span>Precio por persona</span><strong>${hike.price.toLocaleString('es-MX')} <small>MXN</small></strong></div>
+            <div className="price-secondary"><span>Precio por perrito</span><strong>+${hike.dogPrice.toLocaleString('es-MX')} MXN</strong></div>
+          </>}
+          <div className="availability"><i /> Cupo para {hike.spots} personas</div>
+          {hike.transportAvailable && <div className="transport-note"><span>BUS</span><p><strong>Transporte disponible</strong><br />{hike.transportDeparture ? `Desde ${hike.transportDeparture}` : 'Punto por confirmar'} · +${hike.transportPrice.toLocaleString('es-MX')}</p></div>}
           <Link className="button button-primary full-button" href={`/reservar/${hike.slug}`}>QUIERO IR <span>→</span></Link>
           <p className="secure-note">Reserva segura · Confirmación inmediata</p>
         </aside>

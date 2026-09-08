@@ -10,6 +10,8 @@ export type HikeFormInitial = {
   startsAt: string;
   location: string;
   price: number;
+  dogPrice: number;
+  pricingMode: "PER_PERSON" | "PERSON_DOG_BUNDLE";
   capacity: number;
   maxDogs: number | null;
   distance: number | null;
@@ -17,6 +19,13 @@ export type HikeFormInitial = {
   duration: number | null;
   difficulty: string | null;
   terrain: string | null;
+  includes: string[];
+  excludes: string[];
+  packingList: string[];
+  dogSuitability: string;
+  rules: string;
+  cancellationPolicy: string;
+  coverUrl: string | null;
   published: boolean;
 };
 
@@ -32,6 +41,11 @@ export function NewHikeForm({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [createdSlug, setCreatedSlug] = useState("");
+  const [pricingMode, setPricingMode] = useState<"PER_PERSON" | "PERSON_DOG_BUNDLE">(
+    initial?.pricingMode ?? "PER_PERSON",
+  );
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState(initial?.coverUrl ?? "");
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
@@ -39,6 +53,10 @@ export function NewHikeForm({
     const data = new FormData(event.currentTarget);
     const localDate = String(data.get("startsAt"));
     const startsAt = new Date(localDate).toISOString();
+    const lines = (name: string) => String(data.get(name) ?? "")
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
     const payload = {
       name: data.get("name"),
       slug: data.get("slug"),
@@ -46,6 +64,8 @@ export function NewHikeForm({
       startsAt,
       locationName: data.get("location"),
       priceCents: Math.round(Number(data.get("price")) * 100),
+      dogPriceCents: Math.round(Number(data.get("dogPrice")) * 100),
+      pricingMode,
       capacity: Number(data.get("capacity")),
       maxDogs: Number(data.get("maxDogs")) || null,
       distanceKm: Number(data.get("distance")) || null,
@@ -53,6 +73,12 @@ export function NewHikeForm({
       durationMinutes: Number(data.get("duration")) || null,
       difficulty: data.get("difficulty"),
       terrain: data.get("terrain"),
+      includes: lines("includes"),
+      excludes: lines("excludes"),
+      packingList: lines("packingList"),
+      dogSuitability: data.get("dogSuitability"),
+      rules: data.get("rules"),
+      cancellationPolicy: data.get("cancellationPolicy"),
       published: data.get("published") === "on",
     };
     try {
@@ -68,11 +94,23 @@ export function NewHikeForm({
         body: JSON.stringify(payload),
       });
       const result = (await response.json()) as {
-        hike?: { slug: string };
+        hike?: { id: string; slug: string };
         error?: string;
       };
       if (!response.ok || !result.hike)
         throw new Error(result.error ?? "No pudimos guardar el hike.");
+      if (coverFile) {
+        const coverForm = new FormData();
+        coverForm.set("cover", coverFile);
+        const coverResponse = await fetch(`/api/admin/hikes/${result.hike.id}/cover`, {
+          method: "POST",
+          body: coverForm,
+        });
+        const coverResult = (await coverResponse.json()) as { error?: string };
+        if (!coverResponse.ok) {
+          throw new Error(coverResult.error ?? "El hike se guardó, pero no pudimos subir la portada.");
+        }
+      }
       setCreatedSlug(result.hike.slug);
       setMessage(hikeId ? "Cambios guardados correctamente." : "Aventura creada correctamente.");
     } catch (error) {
@@ -129,6 +167,22 @@ export function NewHikeForm({
               defaultValue={initial?.description}
             />
           </label>
+          <label className="full-field hike-cover-field">
+            PORTADA DEL HIKE
+            <span>JPG, PNG o WebP · máximo 10 MB. Esta imagen aparecerá en el home y el detalle.</span>
+            {coverPreview && <img src={coverPreview} alt="Vista previa de la portada" />}
+            <input
+              required={!initial?.coverUrl}
+              name="cover"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setCoverFile(file);
+                if (file) setCoverPreview(URL.createObjectURL(file));
+              }}
+            />
+          </label>
           <label>
             FECHA Y HORA
             <input required name="startsAt" type="datetime-local" defaultValue={initial?.startsAt} />
@@ -142,8 +196,19 @@ export function NewHikeForm({
       <div className="form-section">
         <span>02 · RUTA Y CUPO</span>
         <div className="form-grid thirds">
+          <label className="full-field">
+            MODALIDAD DE COBRO
+            <select
+              name="pricingMode"
+              value={pricingMode}
+              onChange={(event) => setPricingMode(event.target.value as "PER_PERSON" | "PERSON_DOG_BUNDLE")}
+            >
+              <option value="PER_PERSON">Persona y perrito por separado</option>
+              <option value="PERSON_DOG_BUNDLE">Paquete: 1 persona + 1 perrito</option>
+            </select>
+          </label>
           <label>
-            PRECIO MXN
+            {pricingMode === "PERSON_DOG_BUNDLE" ? "PRECIO PERSONA + PERRITO" : "PRECIO POR PERSONA"} MXN
             <input
               required
               min="0"
@@ -152,6 +217,18 @@ export function NewHikeForm({
               type="number"
               placeholder="350"
               defaultValue={initial?.price}
+            />
+          </label>
+          <label>
+            {pricingMode === "PERSON_DOG_BUNDLE" ? "PERRITO ADICIONAL" : "PRECIO POR PERRITO"} MXN
+            <input
+              required
+              min="0"
+              step="1"
+              name="dogPrice"
+              type="number"
+              placeholder="100"
+              defaultValue={initial?.dogPrice ?? 0}
             />
           </label>
           <label>
@@ -200,6 +277,48 @@ export function NewHikeForm({
           <label>
             TERRENO
             <input name="terrain" placeholder="Bosque y sendero" defaultValue={initial?.terrain ?? ""} />
+          </label>
+        </div>
+      </div>
+      <div className="form-section">
+        <span>03 · CONTENIDO DE LA AVENTURA</span>
+        <div className="form-grid">
+          <label>
+            ESTO INCLUYE
+            <textarea required name="includes" placeholder={"Guías de The Doggy Gang\nHidratación\nGalería digital"} defaultValue={initial?.includes.join("\n")} />
+            <small>Escribe un elemento por línea.</small>
+          </label>
+          <label>
+            NO INCLUYE
+            <textarea name="excludes" placeholder={"Transporte\nAlimentos"} defaultValue={initial?.excludes.join("\n")} />
+            <small>Escribe un elemento por línea.</small>
+          </label>
+          <label className="full-field">
+            QUE NO SE TE OLVIDE
+            <textarea required name="packingList" placeholder={"Correa fija y placa\nAgua para tu perrito\nCalzado con tracción"} defaultValue={initial?.packingList.join("\n")} />
+            <small>Escribe un elemento por línea.</small>
+          </label>
+          <label className="full-field">
+            ¿ESTA RUTA ES PARA MI PERRITO?
+            <textarea
+              required
+              minLength={20}
+              name="dogSuitability"
+              defaultValue={initial?.dogSuitability ?? "Recomendada para perros sociables, sanos y con condición para caminar al menos 2.5 horas. Tamaños pequeños bien acondicionados también son bienvenidos."}
+            />
+          </label>
+        </div>
+      </div>
+      <div className="form-section">
+        <span>04 · REGLAS Y CANCELACIONES</span>
+        <div className="form-grid">
+          <label className="full-field">
+            REGLAS DE LA MANADA
+            <textarea required minLength={10} name="rules" defaultValue={initial?.rules ?? "Todos los perritos deben permanecer con correa. Pedimos respeto por el entorno, los ritmos del grupo y las indicaciones de guías."} />
+          </label>
+          <label className="full-field">
+            POLÍTICA DE CANCELACIÓN
+            <textarea required minLength={10} name="cancellationPolicy" defaultValue={initial?.cancellationPolicy ?? "Puedes transferir tu lugar hasta 72 horas antes. Las rutas pueden reprogramarse por condiciones meteorológicas."} />
           </label>
         </div>
       </div>

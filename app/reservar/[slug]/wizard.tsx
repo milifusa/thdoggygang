@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Check, CircleCheck, Plus, X } from "lucide-react";
-import type { Adventure } from "../../lib/data";
+import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 
 const steps = [
@@ -108,11 +108,13 @@ export function BookingWizard({
   const [processing, setProcessing] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState("");
+  const hikeSubtotal = useMemo(
+    () => calculateHikeSubtotal(adventure, selectedPeople.length, selectedDogs.length),
+    [adventure, selectedPeople.length, selectedDogs.length],
+  );
   const total = useMemo(
-    () =>
-      selectedPeople.length * adventure.price +
-      (transport ? transportPeople.length * 200 : 0),
-    [selectedPeople, transport, transportPeople, adventure.price],
+    () => hikeSubtotal + (transport ? transportPeople.length * adventure.transportPrice : 0),
+    [hikeSubtotal, transport, transportPeople.length, adventure.transportPrice],
   );
   const toggle = (
     id: string,
@@ -439,7 +441,7 @@ export function BookingWizard({
                     <small>Te compartiremos el punto exacto.</small>
                     <i aria-hidden="true">{!transport && <Check />}</i>
                   </button>
-                  <button
+                  {adventure.transportAvailable && <button
                     type="button"
                     aria-pressed={transport}
                     onClick={() => setTransport(true)}
@@ -447,9 +449,9 @@ export function BookingWizard({
                   >
                     <span>BUS</span>
                     <strong>Necesitamos transporte</strong>
-                    <small>Desde Angelópolis · $200 por persona.</small>
+                    <small>{adventure.transportDeparture ? `Desde ${adventure.transportDeparture}` : "Punto por confirmar"} · ${adventure.transportPrice.toLocaleString("es-MX")} por persona.</small>
                     <i aria-hidden="true">{transport && <Check />}</i>
-                  </button>
+                  </button>}
                 </div>
                 {transport && (
                   <div className="transport-people">
@@ -470,7 +472,7 @@ export function BookingWizard({
                             }
                           />
                           <span>{person.name}</span>
-                          <small>＋ $200</small>
+                          <small>＋ ${adventure.transportPrice.toLocaleString("es-MX")}</small>
                         </label>
                       ))}
                   </div>
@@ -638,16 +640,14 @@ export function BookingWizard({
                 <dt>Hike</dt>
                 <dd>
                   $
-                  {(selectedPeople.length * adventure.price).toLocaleString(
-                    "es-MX",
-                  )}
+                  {hikeSubtotal.toLocaleString("es-MX")}
                 </dd>
               </div>
               {transport && (
                 <div>
                   <dt>Transporte</dt>
                   <dd>
-                    ${(transportPeople.length * 200).toLocaleString("es-MX")}
+                    ${(transportPeople.length * adventure.transportPrice).toLocaleString("es-MX")}
                   </dd>
                 </div>
               )}

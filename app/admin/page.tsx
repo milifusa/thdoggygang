@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { requireStaffSession } from "../lib/auth/guards";
 import { createSupabaseServerClient } from "../lib/supabase/server";
+import { hikeCoverUrl } from "../lib/data";
 import { ApprovePaymentButton } from "./approve-payment-button";
 import { HikeDeleteButton } from "./hike-delete-button";
 
@@ -27,7 +28,7 @@ async function liveDashboard() {
   const [{ data: hikes }, { data: payments }] = await Promise.all([
     supabase
       .from("hikes")
-      .select("id, name, slug, starts_at, location_name, capacity, max_dogs, published")
+      .select("id, name, slug, starts_at, location_name, capacity, max_dogs, cover_path, published")
       .gte("starts_at", now)
       .is("deleted_at", null)
       .order("starts_at")
@@ -192,7 +193,7 @@ export default async function AdminDashboard() {
           <section className="admin-next">
             <div className="admin-next-image">
               <img
-                src="https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=1100&q=88"
+                src={hikeCoverUrl(live.hike.id, live.hike.cover_path)}
                 alt={live.hike.name}
               />
               <span>PRÓXIMA AVENTURA</span>

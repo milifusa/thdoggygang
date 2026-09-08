@@ -1,13 +1,11 @@
 import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { getAdventures } from './lib/data';
 
-const adventures = [
-  { slug: 'sendero-del-duende', day: '20', month: 'SEP', title: 'Sendero del Duende', place: 'Cholula, Puebla', details: '8 KM · 2.5 H · FÁCIL / MEDIA', price: '$350', spots: '12 lugares', image: 'https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=1400&q=86' },
-  { slug: 'bosque-de-las-nubes', day: '05', month: 'OCT', title: 'Bosque de las Nubes', place: 'Zacatlán, Puebla', details: '11 KM · 4 H · MEDIA', price: '$490', spots: '8 lugares', image: 'https://images.unsplash.com/photo-1534361960057-19889db9621e?auto=format&fit=crop&w=1400&q=86' },
-  { slug: 'amanecer-en-izta', day: '19', month: 'OCT', title: 'Amanecer en Izta', place: 'Amecameca, Edo. Méx.', details: '6 KM · 3 H · MEDIA', price: '$620', spots: '6 lugares', image: 'https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1400&q=86' },
-];
+export const revalidate = 60;
 
-export default function Home() {
+export default async function Home() {
+  const adventures = await getAdventures();
   return (
     <main>
       <header className="site-header">
@@ -49,22 +47,22 @@ export default function Home() {
               <Link href={`/aventuras/${adventure.slug}`} aria-label={`Ver ${adventure.title}`}>
                 <div className="card-image-wrap">
                   <img src={adventure.image} alt={`Perrito en la aventura ${adventure.title}`} />
-                  <div className="date-tile"><strong>{adventure.day}</strong><span>{adventure.month}</span></div>
+                  <div className="date-tile"><strong>{adventure.shortDate.split(" ")[0]}</strong><span>{adventure.shortDate.split(" ").slice(1).join(" ")}</span></div>
                   {index === 0 && <span className="featured-badge">MÁS POPULAR</span>}
                 </div>
                 <div className="card-body">
-                  <div className="location"><span aria-hidden="true">●</span>{adventure.place}</div>
-                  <h3>{adventure.title}</h3><p className="card-meta">{adventure.details}</p>
+                  <div className="location"><span aria-hidden="true">●</span>{adventure.location}</div>
+                  <h3>{adventure.title}</h3><p className="card-meta">{adventure.distance.toUpperCase()} · {adventure.duration.toUpperCase()} · {adventure.difficulty.toUpperCase()}</p>
                   <div className="card-footer">
-                    <div><span>DESDE</span><strong>{adventure.price} <small>MXN</small></strong></div>
-                    <div className="spots"><i />{adventure.spots}</div><span className="round-arrow" aria-hidden="true"><ArrowUpRight /></span>
+                    <div><span>DESDE</span><strong>${adventure.price.toLocaleString("es-MX")} <small>MXN</small></strong></div>
+                    <div className="spots"><i />Cupo {adventure.spots}</div><span className="round-arrow" aria-hidden="true"><ArrowUpRight /></span>
                   </div>
                 </div>
               </Link>
             </article>
           ))}
         </div>
-        <div className="centered-link"><a className="button button-dark" href="#aventuras">VER TODAS LAS AVENTURAS →</a></div>
+        <div className="centered-link"><Link className="button button-dark" href="/aventuras">VER TODAS LAS AVENTURAS</Link></div>
       </section>
 
       <section className="how" id="como-funciona">

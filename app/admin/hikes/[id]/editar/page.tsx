@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireStaffSession } from "../../../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { hikeCoverUrl } from "../../../../lib/data";
 import {
   NewHikeForm,
   type HikeFormInitial,
@@ -21,7 +22,7 @@ export default async function EditHikePage({
     const supabase = await createSupabaseServerClient();
     const { data: hike } = await supabase
       .from("hikes")
-      .select("name, slug, description, starts_at, location_name, price_cents, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, published")
+      .select("name, slug, description, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published")
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
@@ -42,6 +43,8 @@ export default async function EditHikePage({
       startsAt: localDate,
       location: hike.location_name,
       price: hike.price_cents / 100,
+      dogPrice: hike.dog_price_cents / 100,
+      pricingMode: hike.pricing_mode === "PERSON_DOG_BUNDLE" ? "PERSON_DOG_BUNDLE" : "PER_PERSON",
       capacity: hike.capacity,
       maxDogs: hike.max_dogs,
       distance: hike.distance_km === null ? null : Number(hike.distance_km),
@@ -49,6 +52,13 @@ export default async function EditHikePage({
       duration: hike.duration_minutes,
       difficulty: hike.difficulty,
       terrain: hike.terrain,
+      includes: hike.includes ?? [],
+      excludes: hike.excludes ?? [],
+      packingList: hike.packing_list ?? [],
+      dogSuitability: hike.dog_suitability ?? "",
+      rules: hike.rules ?? "",
+      cancellationPolicy: hike.cancellation_policy ?? "",
+      coverUrl: hike.cover_path?.startsWith(`${id}/`) ? hikeCoverUrl(id, hike.cover_path) : null,
       published: hike.published,
     };
   }
