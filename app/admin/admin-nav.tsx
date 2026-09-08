@@ -4,15 +4,19 @@ import {
   Bolt,
   Camera,
   ChartNoAxesCombined,
+  ChevronDown,
   House,
+  Menu,
   Mountain,
   PanelsTopLeft,
+  Users,
   ShoppingBag,
   ReceiptText,
 } from "lucide-react";
 
 const sections = [
   { href: "/admin", label: "Dashboard", icon: House },
+  { href: "/admin/clientes", label: "Clientes", icon: Users },
   { href: "/admin/hikes", label: "Hikes", icon: Mountain },
   { href: "/admin/reservaciones", label: "Reservaciones", icon: ReceiptText },
   { href: "/admin/pagos", label: "Pagos", icon: BadgeDollarSign },
@@ -44,8 +48,13 @@ export function AdminNav({ active, hikeId }: { active: string; hikeId?: string |
 export function AdminMobileNav() {
   return (
     <nav className="admin-mobile-nav" aria-label="Navegación administrativa">
-      {sections.map(({ href, label }) => <Link href={href} key={href}>{label.toUpperCase()}</Link>)}
-      <Link href="/admin/hike-mode">MODO HIKE</Link>
+      <details>
+        <summary><Menu aria-hidden="true" /><span>MENÚ DEL ADMINISTRADOR</span><ChevronDown aria-hidden="true" /></summary>
+        <div>
+          {sections.map(({ href, label, icon: Icon }) => <Link href={href} key={href}><Icon aria-hidden="true" /><span>{label}</span></Link>)}
+          <Link href="/admin/hike-mode"><Bolt aria-hidden="true" /><span>Modo hike</span></Link>
+        </div>
+      </details>
     </nav>
   );
 }

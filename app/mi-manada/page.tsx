@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, ShoppingBag } from "lucide-react";
 import { requireClientSession } from "../lib/auth/guards";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { GangManager, type DogRecord, type PersonRecord } from "./gang-manager";
@@ -33,6 +33,7 @@ type DogRow = {
   photo_path: string | null;
 };
 type HikeSummary = {
+  id: string;
   slug: string;
   name: string;
   starts_at: string;
@@ -92,7 +93,7 @@ export default async function MyGangPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, created_at, total_cents, hike:hikes(slug, name, starts_at, location_name), booking_participants(id), booking_dogs(id)",
+          "id, status, created_at, total_cents, hike:hikes(id, slug, name, starts_at, location_name), booking_participants(id), booking_dogs(id)",
         )
         .eq("profile_id", session.profile.id)
         .order("created_at", { ascending: false })
@@ -245,14 +246,17 @@ export default async function MyGangPage({
                     </small>
                   </div>
                 </div>
-                <Link
-                  className="button button-dark"
-                  href={`/mi-manada/aventuras/${hikeOf(nextBooking)!.slug}`}
-                >
-                  {nextBooking.status === "CONFIRMED"
-                    ? "VER MI QR →"
-                    : "VER DETALLE →"}
-                </Link>
+                <div className="next-adventure-actions">
+                  <Link
+                    className="button button-dark"
+                    href={`/mi-manada/aventuras/${hikeOf(nextBooking)!.slug}`}
+                  >
+                    {nextBooking.status === "CONFIRMED"
+                      ? "VER MI QR →"
+                      : "VER DETALLE →"}
+                  </Link>
+                  {nextBooking.status === "CONFIRMED" && <Link className="button next-shop-button" href={`/tienda?hike=${hikeOf(nextBooking)!.id}`}><ShoppingBag aria-hidden="true" /> COMPRAR ARTÍCULOS</Link>}
+                </div>
               </div>
             </>
           ) : (

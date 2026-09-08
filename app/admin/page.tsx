@@ -55,6 +55,7 @@ export default async function AdminDashboard() {
             <div className="admin-section-head"><div><p>ACCESOS DIRECTOS</p><h2>Operación</h2></div></div>
             <div className="admin-quick-grid">
               <Link href="/admin/hikes"><strong>Hikes</strong><span>Edita contenido, precios y transporte.</span></Link>
+              <Link href="/admin/clientes"><strong>Clientes</strong><span>Consulta expedientes y descarga responsivas.</span></Link>
               <Link href="/admin/reservaciones"><strong>Reservaciones</strong><span>Consulta personas, perritos y estatus.</span></Link>
               <Link href="/admin/fotos"><strong>Fotografías</strong><span>Carga, publica y vende recuerdos.</span></Link>
               <Link href="/admin/productos"><strong>Productos</strong><span>Administra catálogo, precios e inventario.</span></Link>

@@ -1,16 +1,19 @@
 "use client";
+import Link from "next/link";
 import { useMemo,useState } from "react";
-import { Minus,Plus,ShoppingBag,Truck } from "lucide-react";
+import { ArrowRight,Check,Minus,Plus,ShoppingBag,Truck } from "lucide-react";
 import type { Product } from "../lib/products";
 
-type HikeOption={id:string;name:string;date:string};
+type HikeOption={id:string;slug:string;name:string;date:string;booked:boolean};
 const money=(cents:number)=>(cents/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"});
 
-export function Shop({products,hikes,cardPaymentsEnabled}:{products:Product[];hikes:HikeOption[];cardPaymentsEnabled:boolean}){
+export function Shop({products,hikes,initialHikeId,cardPaymentsEnabled}:{products:Product[];hikes:HikeOption[];initialHikeId?:string;cardPaymentsEnabled:boolean}){
+  const bookedHikes=hikes.filter((hike)=>hike.booked);
+  const otherHikes=hikes.filter((hike)=>!hike.booked);
   const [quantities,setQuantities]=useState<Record<string,number>>({});
   const [variants,setVariants]=useState<Record<string,string>>(Object.fromEntries(products.map((p)=>[p.id,p.variants[0]??""])));
-  const [fulfillment,setFulfillment]=useState<"SHIPPING"|"HIKE_PICKUP">("SHIPPING");
-  const [pickupHikeId,setPickupHikeId]=useState(hikes[0]?.id??"");
+  const [fulfillment,setFulfillment]=useState<"SHIPPING"|"HIKE_PICKUP">(initialHikeId?"HIKE_PICKUP":"SHIPPING");
+  const [pickupHikeId,setPickupHikeId]=useState(initialHikeId??bookedHikes[0]?.id??"");
   const [payment,setPayment]=useState<"card"|"transfer">(cardPaymentsEnabled?"card":"transfer");
   const [receipt,setReceipt]=useState<File|null>(null);
   const [busy,setBusy]=useState(false);
@@ -76,11 +79,15 @@ export function Shop({products,hikes,cardPaymentsEnabled}:{products:Product[];hi
         <div className="shop-cart-title"><ShoppingBag/><div><span>TU PEDIDO</span><strong>{selected.reduce((sum,p)=>sum+(quantities[p.id]??0),0)} productos</strong></div></div>
         {selected.map((p)=><div className="shop-line" key={p.id}><span>{quantities[p.id]} × {p.name}{variants[p.id]?" · "+variants[p.id]:""}</span><strong>{money((quantities[p.id]??0)*p.priceCents)}</strong></div>)}
         <div className="fulfillment-tabs"><button className={fulfillment==="SHIPPING"?"active":""} onClick={()=>setFulfillment("SHIPPING")}><Truck/> DOMICILIO</button><button className={fulfillment==="HIKE_PICKUP"?"active":""} onClick={()=>setFulfillment("HIKE_PICKUP")}><ShoppingBag/> EN UN HIKE</button></div>
-        {fulfillment==="SHIPPING"?<div className="shipping-form"><input placeholder="Nombre de quien recibe" value={address.recipient} onChange={(e)=>setAddress({...address,recipient:e.target.value})}/><input placeholder="+52 222 123 4567" value={address.phone} onChange={(e)=>setAddress({...address,phone:e.target.value.replace(/[\s()-]/g,"")})}/><input placeholder="Calle" value={address.street} onChange={(e)=>setAddress({...address,street:e.target.value})}/><div><input placeholder="Número exterior" value={address.exterior} onChange={(e)=>setAddress({...address,exterior:e.target.value})}/><input placeholder="Interior" value={address.interior} onChange={(e)=>setAddress({...address,interior:e.target.value})}/></div><input placeholder="Colonia" value={address.colony} onChange={(e)=>setAddress({...address,colony:e.target.value})}/><input placeholder="Ciudad o municipio" value={address.city} onChange={(e)=>setAddress({...address,city:e.target.value})}/><div><input placeholder="Estado" value={address.state} onChange={(e)=>setAddress({...address,state:e.target.value})}/><input inputMode="numeric" maxLength={5} placeholder="Código postal" value={address.postalCode} onChange={(e)=>setAddress({...address,postalCode:e.target.value.replace(/\D/g,"")})}/></div><textarea placeholder="Referencias para la entrega" value={address.references} onChange={(e)=>setAddress({...address,references:e.target.value})}/><small>Envío gratis desde $500 MXN. Entrega estimada de 1 a 2 días hábiles en Cholula y Puebla.</small></div>:<select className="hike-pickup-select" value={pickupHikeId} onChange={(e)=>setPickupHikeId(e.target.value)}><option value="">Selecciona un hike</option>{hikes.map((hike)=><option value={hike.id} key={hike.id}>{hike.name} · {hike.date}</option>)}</select>}
+        {fulfillment==="SHIPPING"?<div className="shipping-form"><input placeholder="Nombre de quien recibe" value={address.recipient} onChange={(e)=>setAddress({...address,recipient:e.target.value})}/><input placeholder="+52 222 123 4567" value={address.phone} onChange={(e)=>setAddress({...address,phone:e.target.value.replace(/[\s()-]/g,"")})}/><input placeholder="Calle" value={address.street} onChange={(e)=>setAddress({...address,street:e.target.value})}/><div><input placeholder="Número exterior" value={address.exterior} onChange={(e)=>setAddress({...address,exterior:e.target.value})}/><input placeholder="Interior" value={address.interior} onChange={(e)=>setAddress({...address,interior:e.target.value})}/></div><input placeholder="Colonia" value={address.colony} onChange={(e)=>setAddress({...address,colony:e.target.value})}/><input placeholder="Ciudad o municipio" value={address.city} onChange={(e)=>setAddress({...address,city:e.target.value})}/><div><input placeholder="Estado" value={address.state} onChange={(e)=>setAddress({...address,state:e.target.value})}/><input inputMode="numeric" maxLength={5} placeholder="Código postal" value={address.postalCode} onChange={(e)=>setAddress({...address,postalCode:e.target.value.replace(/\D/g,"")})}/></div><textarea placeholder="Referencias para la entrega" value={address.references} onChange={(e)=>setAddress({...address,references:e.target.value})}/><small>Envío gratis desde $500 MXN. Entrega estimada de 1 a 2 días hábiles en Cholula y Puebla.</small></div>:<div className="hike-pickup-options">
+          <span>TUS HIKES CONFIRMADOS</span>
+          {bookedHikes.length?<div>{bookedHikes.map((hike)=><button type="button" className={pickupHikeId===hike.id?"active":""} onClick={()=>setPickupHikeId(hike.id)} key={hike.id}><span>{pickupHikeId===hike.id&&<Check aria-hidden="true"/>}{hike.name}</span><small>{hike.date}</small></button>)}</div>:<p>No tienes un hike confirmado. Elige una aventura para reservarla y agregar ahí tus productos.</p>}
+          {otherHikes.length>0&&<div className="other-hike-links"><span>PRÓXIMAS AVENTURAS</span>{otherHikes.map((hike)=><Link href={`/reservar/${hike.slug}`} key={hike.id}><span>{hike.name}<small>{hike.date}</small></span><ArrowRight aria-hidden="true"/></Link>)}</div>}
+        </div>}
         <div className="payment-tabs"><button disabled={!cardPaymentsEnabled} className={payment==="card"?"active":""} onClick={()=>setPayment("card")}>{cardPaymentsEnabled?"TARJETA":"TARJETA · PRÓXIMAMENTE"}</button><button className={payment==="transfer"?"active":""} onClick={()=>setPayment("transfer")}>TRANSFERENCIA</button></div>
         {payment==="transfer"&&<><div className="bank-box"><span>DATOS PARA TRANSFERENCIA</span><strong>Banco Mutt</strong><p>THE DOGGY GANG EXPERIENCIAS<br/>CLABE 012 345 678901234 5</p></div><label className="receipt-upload">{receipt?"ARCHIVO · "+receipt.name:"SUBIR COMPROBANTE"}<input type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e)=>setReceipt(e.target.files?.[0]??null)}/></label></>}
         <dl><div><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div><div><dt>Entrega</dt><dd>{shipping?money(shipping):"Gratis"}</dd></div><div><dt>Total</dt><dd>{money(total)} MXN</dd></div></dl>
-        {message&&<p className="wizard-error">{message}</p>}<button className="button button-primary full-button" disabled={busy||!selected.length} onClick={()=>void checkout()}>{busy?"PROCESANDO…":"COMPRAR · "+money(total)}</button>
+        {message&&<p className="wizard-error">{message}</p>}<button className="button button-primary full-button" disabled={busy||!selected.length||(fulfillment==="HIKE_PICKUP"&&!pickupHikeId)} onClick={()=>void checkout()}>{busy?"PROCESANDO…":fulfillment==="HIKE_PICKUP"&&!pickupHikeId?"ELIGE UN HIKE":"COMPRAR · "+money(total)}</button>
       </aside>
     </section>
   </main>;

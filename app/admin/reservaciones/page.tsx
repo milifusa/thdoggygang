@@ -1,4 +1,5 @@
-import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Download } from "lucide-react";
 import { requireStaffSession } from "../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { AdminMobileNav, AdminNav } from "../admin-nav";
@@ -10,7 +11,7 @@ export default async function ReservationsAdminPage() {
   await requireStaffSession("/admin/reservaciones");
   const supabase = await createSupabaseServerClient();
   const [{ data: bookings }, { data: next }] = await Promise.all([
-    supabase.from("bookings").select("id,booking_number,status,total_cents,created_at,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id),check_ins(id)").neq("status","CANCELLED").order("created_at", { ascending: false }).limit(300),
+    supabase.from("bookings").select("id,booking_number,status,total_cents,created_at,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id,signed_at,pdf_path),check_ins(id)").neq("status","CANCELLED").order("created_at", { ascending: false }).limit(300),
     supabase.from("hikes").select("id").gte("starts_at", new Date().toISOString()).is("deleted_at", null).order("starts_at").limit(1).maybeSingle(),
   ]);
   return <main className="admin-page"><AdminNav active="/admin/reservaciones" hikeId={next?.id} /><section className="admin-content"><AdminMobileNav />
@@ -25,7 +26,7 @@ export default async function ReservationsAdminPage() {
           <div><span>CONTACTO</span><strong>{profileValue?.email ?? "Sin correo"}</strong><strong>{profileValue?.phone ?? "Sin teléfono"}</strong><strong>{adminDate(booking.created_at)}</strong></div>
           <div><span>PERSONAS</span>{booking.booking_participants.map((p) => { const s = p.snapshot as {first_name?:string;last_name?:string}; return <strong key={p.id}>{s.first_name} {s.last_name}</strong>; })}</div>
           <div><span>PERRITOS</span>{booking.booking_dogs.length ? booking.booking_dogs.map((d) => { const s=d.snapshot as {name?:string;breed?:string}; return <strong key={d.id}>{s.name}{s.breed ? ` · ${s.breed}` : ""}</strong>; }) : <strong>Sin perritos</strong>}</div>
-          <div><span>OPERACIÓN</span><strong>{booking.transport_reservations.length} lugares de transporte</strong><strong>{booking.signed_waivers.length} responsivas</strong><strong>{booking.check_ins.length} check-ins</strong></div>
+          <div><span>OPERACIÓN</span><strong>{booking.transport_reservations.length} lugares de transporte</strong><strong>{new Set(booking.signed_waivers.map((waiver) => waiver.pdf_path)).size} responsivas</strong><strong>{booking.check_ins.length} check-ins</strong>{Array.from(new Map(booking.signed_waivers.map((waiver) => [waiver.pdf_path, waiver])).values()).map((waiver) => <Link className="admin-waiver-download" href={`/api/admin/waivers/${waiver.id}/download`} key={waiver.id}><Download aria-hidden="true" /> DESCARGAR PDF</Link>)}</div>
         </div></details>;
       })}
     </section>
