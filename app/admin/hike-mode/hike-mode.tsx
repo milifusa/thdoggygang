@@ -1,720 +1,182 @@
 "use client";
+
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  BusFront,
-  Check,
-  CircleCheck,
-  Dog,
-  LayoutDashboard,
-  PawPrint,
-  QrCode,
-  Search,
-  TriangleAlert,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, BusFront, Check, CircleAlert, CircleCheck, CloudDownload, Dog, House, PackageCheck, Phone, QrCode, RefreshCw, Search, Signal, SignalZero, UserRoundCheck, X } from "lucide-react";
+import type { HikeBooking, HikeModeData, OfflineOperation } from "../../lib/hike-mode-types";
+import { enqueueOperation, getDeviceId, getHikePackage, listOperations, removeOperation, saveHikePackage, updateOperation } from "../../lib/offline/hike-db";
+import { verifySignedPayload } from "../../lib/security/signed-token";
 
-type Screen =
-  | "home"
-  | "scanner"
-  | "booking"
-  | "success"
-  | "search"
-  | "dogs"
-  | "transport"
-  | "alerts";
-type CheckinMethod = "QR" | "MANUAL";
-type LiveBooking = {
-  id: string;
-  booking_number: string;
-  status: string;
-  hike_id: string;
-  booking_participants: Array<{
-    id: string;
-    snapshot: { first_name?: string; last_name?: string; is_minor?: boolean };
-  }>;
-  booking_dogs: Array<{
-    id: string;
-    snapshot: {
-      name?: string;
-      breed?: string;
-      reactivity?: string;
-      notes?: string;
-    };
-  }>;
-  transport_reservations: Array<{
-    id: string;
-    booking_participant_id: string;
-  }>;
-  check_ins: Array<{ id: string; booking_participant_id: string }>;
-};
+type Filter = "ALL" | "PENDING" | "CHECKED" | "ALERTS" | "TRANSPORT" | "DELIVERIES";
 
-export type HikeModeData = {
-  hike: {
-    id: string;
-    name: string;
-    starts_at: string;
-    capacity: number;
-    max_dogs: number | null;
-  };
-  availableHikes: Array<{ id: string; name: string; startsAt: string }>;
-  bookings: LiveBooking[];
-};
+function personName(person?: HikeBooking["booking_participants"][number]) {
+  return `${person?.snapshot.first_name ?? ""} ${person?.snapshot.last_name ?? ""}`.trim() || "Persona sin nombre";
+}
+function bookingName(booking: HikeBooking) { return personName(booking.booking_participants[0]); }
+function hasDogAlert(booking: HikeBooking) { return booking.booking_dogs.some((dog) => Boolean(dog.snapshot.reactivity || dog.snapshot.medical_conditions || dog.snapshot.medications || dog.snapshot.notes)); }
+function formatTime(value?: string | null) {
+  if (!value) return "Sin sincronizar";
+  return new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
 
-export function HikeMode({
-  demo,
-  data,
-}: {
-  demo: boolean;
-  data: HikeModeData | null;
-}) {
-  const [screen, setScreen] = useState<Screen>("home");
-  const [present, setPresent] = useState(["mishele", "eduardo", "maximo"]);
-  const [ack, setAck] = useState(false);
-  const [cameraError, setCameraError] = useState("");
-  const [liveBooking, setLiveBooking] = useState<LiveBooking | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<LiveBooking[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [checkinMethod, setCheckinMethod] = useState<CheckinMethod>("QR");
-  const [alreadyUsedAt, setAlreadyUsedAt] = useState<string | null>(null);
+export function HikeMode({ demo, data: initialData }: { demo: boolean; data: HikeModeData | null }) {
+  const [data, setData] = useState(initialData);
+  const [online, setOnline] = useState(true);
+  const [preparing, setPreparing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("ALL");
+  const [selected, setSelected] = useState<HikeBooking | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [pending, setPending] = useState<OfflineOperation[]>([]);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [deviceId, setDeviceId] = useState("");
   const video = useRef<HTMLVideoElement>(null);
   const scanLoop = useRef<number | null>(null);
-  useEffect(
-    () => () => {
-      const stream = video.current?.srcObject as MediaStream | null;
-      stream?.getTracks().forEach((track) => track.stop());
-      if (scanLoop.current) cancelAnimationFrame(scanLoop.current);
-    },
-    [],
-  );
-  const openScanner = async () => {
-    setScreen("scanner");
-    setCameraError("");
+
+  const hydrateQueue = useCallback(async (hikeId: string) => setPending(await listOperations(hikeId)), []);
+  const loadPackage = useCallback(async (hikeId: string, currentDeviceId: string, quiet = false) => {
+    if (!navigator.onLine || demo) return null;
+    if (!quiet) setPreparing(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
-      if (video.current) {
-        video.current.srcObject = stream;
-        await video.current.play();
-        const Detector = (
-          window as unknown as {
-            BarcodeDetector?: new (options: { formats: string[] }) => {
-              detect: (
-                source: HTMLVideoElement,
-              ) => Promise<Array<{ rawValue: string }>>;
-            };
-          }
-        ).BarcodeDetector;
-        if (Detector) {
-          const detector = new Detector({ formats: ["qr_code"] });
-          const scan = async () => {
-            if (!video.current || video.current.readyState < 2) {
-              scanLoop.current = requestAnimationFrame(scan);
-              return;
-            }
-            try {
-              const code = (await detector.detect(video.current)).find((item) =>
-                item.rawValue.startsWith("tdg:checkin:"),
-              );
-              if (code) {
-                await showBooking(code.rawValue);
-                return;
-              }
-            } catch {
-              /* keep the camera responsive while it focuses */
-            }
-            scanLoop.current = requestAnimationFrame(scan);
-          };
-          scanLoop.current = requestAnimationFrame(scan);
-        } else {
-          setCameraError(
-            "Este navegador no puede leer códigos QR con la cámara. Usa la búsqueda manual.",
-          );
-        }
+      const response = await fetch(`/api/hike-mode/package?hike=${encodeURIComponent(hikeId)}&device=${encodeURIComponent(currentDeviceId)}`, { cache: "no-store" });
+      const payload = await response.json() as HikeModeData & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No pudimos preparar el hike.");
+      await saveHikePackage(payload);
+      setData(payload);
+      setLastSync(new Date().toISOString());
+      setMessage("Paquete operativo listo para trabajar sin señal.");
+      return payload;
+    } catch (error) {
+      if (!quiet) setMessage(error instanceof Error ? error.message : "No pudimos descargar el paquete operativo.");
+      return null;
+    } finally { if (!quiet) setPreparing(false); }
+  }, [demo]);
+
+  const syncQueue = useCallback(async () => {
+    if (!data?.authorization || !navigator.onLine || syncing) return;
+    const queued = (await listOperations(data.hike.id)).filter((operation) => operation.state !== "SYNCED");
+    if (!queued.length) { setLastSync(new Date().toISOString()); return; }
+    setSyncing(true);
+    for (const operation of queued) await updateOperation({ ...operation, state: "SYNCING", error: undefined });
+    try {
+      const response = await fetch("/api/hike-mode/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ authorization: data.authorization, operations: queued }) });
+      const payload = await response.json() as { error?: string; syncedAt?: string; results?: Array<{ operationId: string; ok: boolean; error?: string }> };
+      if (!response.ok) throw new Error(payload.error ?? "No pudimos sincronizar.");
+      for (const result of payload.results ?? []) {
+        const operation = queued.find((item) => item.operationId === result.operationId);
+        if (!operation) continue;
+        if (result.ok) await removeOperation(operation.operationId);
+        else await updateOperation({ ...operation, state: "CONFLICT", error: result.error ?? "Requiere revisión" });
       }
-    } catch {
-      setCameraError(
-        "No pudimos abrir la cámara. Revisa el permiso o busca la reservación manualmente.",
-      );
-    }
-  };
-  const stopCamera = () => {
-    const stream = video.current?.srcObject as MediaStream | null;
-    stream?.getTracks().forEach((track) => track.stop());
-    if (scanLoop.current) cancelAnimationFrame(scanLoop.current);
-    scanLoop.current = null;
-  };
-  const showBooking = async (token?: string) => {
-    stopCamera();
-    setCameraError("");
-    setCheckinMethod("QR");
-    if (!demo && token) {
-      const response = await fetch("/api/checkin/lookup", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const payload = (await response.json()) as {
-        booking?: LiveBooking | LiveBooking[];
-        alreadyUsedAt?: string | null;
-        error?: string;
-      };
-      if (!response.ok || !payload.booking) {
-        setCameraError(payload.error ?? "No encontramos esta reservación.");
-        setScreen("scanner");
-        return;
-      }
-      const booking = Array.isArray(payload.booking)
-        ? payload.booking[0]
-        : payload.booking;
-      setLiveBooking(booking);
-      setAlreadyUsedAt(payload.alreadyUsedAt ?? null);
-      const checkedParticipantIds = new Set(
-        booking.check_ins?.map((checkIn) => checkIn.booking_participant_id) ?? [],
-      );
-      setPresent(
-        booking.booking_participants
-          .filter((participant) => !checkedParticipantIds.has(participant.id))
-          .map((participant) => participant.id),
-      );
-    }
-    setScreen("booking");
-  };
-  const toggle = (id: string) =>
-    setPresent((items) =>
-      items.includes(id) ? items.filter((item) => item !== id) : [...items, id],
-    );
-  const openSearchResult = (booking: LiveBooking) => {
-    setLiveBooking(booking);
-    setAlreadyUsedAt(null);
-    setCheckinMethod("MANUAL");
-    const checkedParticipantIds = new Set(
-      booking.check_ins?.map((checkIn) => checkIn.booking_participant_id) ?? [],
-    );
-    setPresent(
-      booking.booking_participants
-        .filter((participant) => !checkedParticipantIds.has(participant.id))
-        .map((participant) => participant.id),
-    );
-    setScreen("booking");
-  };
-  const search = async () => {
-    if (demo || searchQuery.trim().length < 2) return;
-    setSearching(true);
-    setSearched(true);
-    setCameraError("");
-    const response = await fetch(
-      `/api/checkin/search?q=${encodeURIComponent(searchQuery)}${data?.hike.id ? `&hike=${encodeURIComponent(data.hike.id)}` : ""}`,
-    );
-    const payload = (await response.json()) as {
-      bookings?: LiveBooking[];
-      error?: string;
+      setLastSync(payload.syncedAt ?? new Date().toISOString());
+      await hydrateQueue(data.hike.id);
+    } catch (error) {
+      for (const operation of queued) await updateOperation({ ...operation, state: "PENDING", error: error instanceof Error ? error.message : "Pendiente de sincronización" });
+      await hydrateQueue(data.hike.id);
+    } finally { setSyncing(false); }
+  }, [data, hydrateQueue, syncing]);
+
+  useEffect(() => {
+    let active = true;
+    const start = async () => {
+      setOnline(navigator.onLine);
+      const id = await getDeviceId();
+      if (!active) return;
+      setDeviceId(id);
+      if ("serviceWorker" in navigator) await navigator.serviceWorker.register("/hike-mode-sw.js").catch(() => null);
+      if (!initialData?.hike.id) return;
+      const cached = await getHikePackage(initialData.hike.id);
+      if (cached && active) setData(cached);
+      await hydrateQueue(initialData.hike.id);
+      if (navigator.onLine) await loadPackage(initialData.hike.id, id, true);
     };
-    if (!response.ok) setCameraError(payload.error ?? "No pudimos buscar.");
-    else setSearchResults(payload.bookings ?? []);
-    setSearching(false);
+    void start();
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => { active = false; window.removeEventListener("online", onOnline); window.removeEventListener("offline", onOffline); };
+  }, [hydrateQueue, initialData?.hike.id, loadPackage]);
+  useEffect(() => { const syncWhenOnline=()=>{void syncQueue();};window.addEventListener("online",syncWhenOnline);return()=>window.removeEventListener("online",syncWhenOnline);}, [syncQueue]);
+  useEffect(() => () => { const stream = video.current?.srcObject as MediaStream | null; stream?.getTracks().forEach((track) => track.stop()); if (scanLoop.current) cancelAnimationFrame(scanLoop.current); }, []);
+
+  const checkedIds = useMemo(() => new Set(data?.bookings.flatMap((booking) => booking.check_ins.map((checkIn) => checkIn.booking_participant_id)) ?? []), [data]);
+  const expected = data?.bookings.reduce((sum, booking) => sum + booking.booking_participants.length, 0) ?? 0;
+  const checked = checkedIds.size;
+  const alerts = data?.bookings.filter(hasDogAlert) ?? [];
+  const transport = data?.bookings.reduce((sum, booking) => sum + booking.transport_reservations.length, 0) ?? 0;
+  const deliveries = useMemo(() => data?.deliveries.filter((delivery) => delivery.status !== "DELIVERED") ?? [], [data?.deliveries]);
+  const visibleBookings = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("es-MX");
+    return (data?.bookings ?? []).filter((booking) => {
+      const content = [booking.booking_number, bookingName(booking), booking.profile?.email, booking.profile?.phone, ...booking.booking_dogs.map((dog) => dog.snapshot.name)].join(" ").toLocaleLowerCase("es-MX");
+      if (normalized && !content.includes(normalized)) return false;
+      const isChecked = booking.booking_participants.every((person) => checkedIds.has(person.id));
+      if (filter === "PENDING") return !isChecked;
+      if (filter === "CHECKED") return isChecked;
+      if (filter === "ALERTS") return hasDogAlert(booking);
+      if (filter === "TRANSPORT") return booking.transport_reservations.length > 0;
+      if (filter === "DELIVERIES") return deliveries.some((delivery) => delivery.bookingId === booking.id);
+      return true;
+    });
+  }, [checkedIds, data?.bookings, deliveries, filter, query]);
+
+  const queueCheckins = async (booking: HikeBooking, participantIds: string[]) => {
+    const operations: OfflineOperation[] = participantIds.filter((id) => !checkedIds.has(id)).map((participantId) => ({ operationId: crypto.randomUUID(), hikeId: booking.hike_id, bookingId: booking.id, participantId, type: "CHECK_IN", deviceId, clientTimestamp: new Date().toISOString(), payload: {}, state: "PENDING" }));
+    if (!operations.length) { setMessage("Esta reservación ya tiene todos sus check-ins."); return; }
+    for (const operation of operations) await enqueueOperation(operation);
+    setData((current) => current ? ({ ...current, bookings: current.bookings.map((item) => item.id === booking.id ? ({ ...item, check_ins: [...item.check_ins, ...operations.map((operation) => ({ id: operation.operationId, booking_participant_id: operation.participantId!, checked_in_at: operation.clientTimestamp }))] }) : item) }) : current);
+    await hydrateQueue(booking.hike_id);
+    setSelected(null);
+    setMessage(`${operations.length} check-in${operations.length === 1 ? "" : "s"} guardado${operations.length === 1 ? "" : "s"}.`);
   };
-  const confirm = async () => {
-    if (!demo && liveBooking) {
-      const response = await fetch("/api/checkin/confirm", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          hikeId: liveBooking.hike_id,
-          bookingId: liveBooking.id,
-          participantIds: present,
-          method: checkinMethod,
-          clientOperationId: crypto.randomUUID(),
-        }),
-      });
-      if (!response.ok) {
-        setCameraError("No pudimos guardar el check-in. Intenta otra vez.");
-        return;
-      }
-    }
-    setScreen("success");
-    window.setTimeout(() => {
-      setAck(false);
-      setLiveBooking(null);
-      setAlreadyUsedAt(null);
-      setScreen("home");
-    }, 1500);
+  const markDelivered = async (delivery: HikeModeData["deliveries"][number]) => {
+    if (!data) return;
+    const operation: OfflineOperation = { operationId: crypto.randomUUID(), hikeId: data.hike.id, bookingId: delivery.bookingId || undefined, orderItemId: delivery.orderItemId, type: "PRODUCT_DELIVERY", deviceId, clientTimestamp: new Date().toISOString(), payload: { deliveryLocation: data.hike.meeting_point ?? data.hike.location_name }, state: "PENDING" };
+    await enqueueOperation(operation);
+    setData({ ...data, deliveries: data.deliveries.map((item) => item.orderItemId === delivery.orderItemId ? { ...item, status: "DELIVERED", deliveredAt: operation.clientTimestamp } : item) });
+    await hydrateQueue(data.hike.id);
   };
-  const operationalBookings = data?.bookings ?? [];
-  const expectedCount = demo
-    ? 40
-    : operationalBookings.reduce(
-        (sum, booking) => sum + booking.booking_participants.length,
-        0,
-      );
-  const checkedInCount = demo
-    ? 38
-    : operationalBookings.reduce(
-        (sum, booking) => sum + booking.check_ins.length,
-        0,
-      );
-  const dogCount = demo
-    ? 26
-    : operationalBookings.reduce(
-        (sum, booking) => sum + booking.booking_dogs.length,
-        0,
-      );
-  const transportCount = demo
-    ? 18
-    : operationalBookings.reduce(
-        (sum, booking) => sum + booking.transport_reservations.length,
-        0,
-      );
-  const dogRows = operationalBookings.flatMap((booking) => {
-    const lead = booking.booking_participants[0]?.snapshot;
-    const family = `${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim();
-    return booking.booking_dogs.map((dog) => ({
-      ...dog,
-      bookingNumber: booking.booking_number,
-      family,
-    }));
-  });
-  const transportRows = operationalBookings.filter(
-    (booking) => booking.transport_reservations.length > 0,
-  );
-  const alertRows = operationalBookings.flatMap((booking) => {
-    const lead = booking.booking_participants[0]?.snapshot;
-    const family = `${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim();
-    const paymentAlert =
-      booking.status === "PENDING_PAYMENT"
-        ? [{
-            id: `${booking.id}-payment`,
-            title: "Pago pendiente",
-            detail: `${booking.booking_number} · ${family}`,
-          }]
-        : [];
-    const dogAlerts = booking.booking_dogs
-      .filter((dog) => dog.snapshot.reactivity || dog.snapshot.notes)
-      .map((dog) => ({
-        id: dog.id,
-        title: dog.snapshot.name ?? "Perrito con indicaciones",
-        detail: dog.snapshot.reactivity || dog.snapshot.notes || "Revisar indicaciones.",
-      }));
-    return [...paymentAlert, ...dogAlerts];
-  });
-  const progress = expectedCount
-    ? Math.min(100, Math.round((checkedInCount / expectedCount) * 100))
-    : 0;
-  const checkinPeople = liveBooking
-    ? liveBooking.booking_participants.map((participant, index) => ({
-        id: participant.id,
-        name: `${participant.snapshot.first_name ?? ""} ${participant.snapshot.last_name ?? ""}`.trim(),
-        alreadyChecked: liveBooking.check_ins?.some(
-          (checkIn) => checkIn.booking_participant_id === participant.id,
-        ) ?? false,
-        detail: `${index === 0 ? "Titular" : "Acompañante"}${participant.snapshot.is_minor ? " · Menor" : ""}`,
-      }))
-    : [
-        { id: "mishele", name: "Mishele Lojan", detail: "Titular", alreadyChecked: false },
-        { id: "eduardo", name: "Eduardo Flores", detail: "Adulto", alreadyChecked: false },
-        {
-          id: "maximo",
-          name: "Máximo Flores",
-          detail: "Menor · Tutor: Mishele",
-          alreadyChecked: false,
-        },
-      ];
-  const firstDog = liveBooking?.booking_dogs[0]?.snapshot;
-  const requiresAck = demo || Boolean(firstDog?.reactivity || firstDog?.notes);
-  const leadLastName = checkinPeople[0]?.name.split(" ").at(-1) ?? "Manada";
-  const allAlreadyChecked = Boolean(
-    liveBooking && checkinPeople.length && checkinPeople.every((person) => person.alreadyChecked),
-  );
-  return (
-    <main className="hike-mode">
-      <header>
-        <Link className="hike-exit" href="/admin" aria-label="Salir al panel de administración">
-          <LayoutDashboard aria-hidden="true" />
-          <span>SALIR AL PANEL</span>
-        </Link>
-        <div>
-          <span>MODO HIKE</span>
-          {data?.availableHikes.length && data.availableHikes.length > 1 ? (
-            <select
-              aria-label="Seleccionar hike"
-              value={data.hike.id}
-              onChange={(event) => {
-                window.location.href = `/admin/hike-mode?hike=${encodeURIComponent(event.target.value)}`;
-              }}
-            >
-              {data.availableHikes.map((hike) => (
-                <option value={hike.id} key={hike.id}>{hike.name}</option>
-              ))}
-            </select>
-          ) : (
-            <strong>{data?.hike.name ?? "Sendero del Duende"}</strong>
-          )}
-        </div>
-        <div className="live-dot">
-          <i /> EN VIVO
-        </div>
-      </header>
-      <section className="hike-counter">
-        <div>
-          <strong>{checkedInCount}</strong>
-          <span>/ {expectedCount} CHECK-INS</span>
-        </div>
-        <div className="counter-bar">
-          <i style={{ width: `${progress}%` }} />
-        </div>
-      </section>
-      {screen === "home" && (
-        <section className="hike-home">
-          <div className="hike-stats">
-            <article>
-              <strong>{expectedCount}</strong>
-              <span>ESPERADOS</span>
-            </article>
-            <article>
-              <strong>{checkedInCount}</strong>
-              <span>CHECK-IN</span>
-            </article>
-            <article>
-              <strong>{dogCount}</strong>
-              <span>PERRITOS</span>
-            </article>
-            <article>
-              <strong>{transportCount}</strong>
-              <span>TRANSPORTE</span>
-            </article>
-          </div>
-          <button className="scan-main" onClick={openScanner}>
-            <span>
-              <QrCode aria-hidden="true" />
-            </span>
-            <strong>ESCANEAR QR</strong>
-            <small>Apunta al código de la reservación</small>
-          </button>
-          <div className="hike-actions">
-            <button onClick={() => setScreen("search")}>
-              <span>
-                <Search aria-hidden="true" />
-              </span>
-              <strong>BUSCAR PERSONA</strong>
-            </button>
-            <button onClick={() => setScreen("dogs")}>
-              <span>
-                <PawPrint aria-hidden="true" />
-              </span>
-              <strong>VER PERRITOS</strong>
-            </button>
-            <button onClick={() => setScreen("transport")}>
-              <span>
-                <BusFront aria-hidden="true" />
-              </span>
-              <strong>TRANSPORTE</strong>
-            </button>
-            <button onClick={() => setScreen("alerts")}>
-              <span>
-                <TriangleAlert aria-hidden="true" />
-              </span>
-              <strong>
-                ALERTAS <i>{demo ? 4 : alertRows.length}</i>
-              </strong>
-            </button>
-          </div>
-        </section>
-      )}
-      {screen === "dogs" && (
-        <section className="hike-operation-list">
-          <button onClick={() => setScreen("home")}>
-            <ArrowLeft aria-hidden="true" /> VOLVER
-          </button>
-          <span>PERRITOS DEL HIKE</span>
-          <h1>{dogCount} perritos en la manada.</h1>
-          {(demo ? [{ id: "mona", snapshot: { name: "Mona", breed: "Golden retriever", reactivity: "Dar espacio al formar el grupo." }, bookingNumber: "TDG-1048", family: "Mishele Lojan" }] : dogRows).map((dog) => (
-            <article key={dog.id}>
-              <PawPrint aria-hidden="true" />
-              <div>
-                <strong>{dog.snapshot.name ?? "Perrito"}</strong>
-                <small>{dog.snapshot.breed || "Raza no indicada"} · {dog.bookingNumber}</small>
-                {(dog.snapshot.reactivity || dog.snapshot.notes) && (
-                  <p>{dog.snapshot.reactivity || dog.snapshot.notes}</p>
-                )}
-              </div>
-              <span>{dog.family}</span>
-            </article>
-          ))}
-          {!demo && dogRows.length === 0 && (
-            <p className="hike-empty">No hay perritos en reservaciones confirmadas para este hike.</p>
-          )}
-        </section>
-      )}
-      {screen === "transport" && (
-        <section className="hike-operation-list">
-          <button onClick={() => setScreen("home")}>
-            <ArrowLeft aria-hidden="true" /> VOLVER
-          </button>
-          <span>TRANSPORTE</span>
-          <h1>{transportCount} lugares solicitados.</h1>
-          {(demo ? operationalBookings.slice(0, 0) : transportRows).map((booking) => {
-            const lead = booking.booking_participants[0]?.snapshot;
-            return (
-              <article key={booking.id}>
-                <BusFront aria-hidden="true" />
-                <div>
-                  <strong>{lead?.first_name} {lead?.last_name}</strong>
-                  <small>{booking.booking_number}</small>
-                </div>
-                <span>{booking.transport_reservations.length} LUGARES</span>
-              </article>
-            );
-          })}
-          {(demo || transportRows.length === 0) && (
-            <p className="hike-empty">
-              {demo ? "18 lugares de transporte en la vista demostrativa." : "Nadie solicitó transporte para este hike."}
-            </p>
-          )}
-        </section>
-      )}
-      {screen === "alerts" && (
-        <section className="hike-operation-list">
-          <button onClick={() => setScreen("home")}>
-            <ArrowLeft aria-hidden="true" /> VOLVER
-          </button>
-          <span>ALERTAS OPERATIVAS</span>
-          <h1>{demo ? 4 : alertRows.length} puntos por revisar.</h1>
-          {(demo ? [{ id: "demo-alert", title: "Mona", detail: "Sensible a grupos grandes al inicio. Darle espacio durante la formación." }] : alertRows).map((alert) => (
-            <article className="operation-alert" key={alert.id}>
-              <TriangleAlert aria-hidden="true" />
-              <div>
-                <strong>{alert.title}</strong>
-                <p>{alert.detail}</p>
-              </div>
-            </article>
-          ))}
-          {!demo && alertRows.length === 0 && (
-            <div className="hike-clear">
-              <CircleCheck aria-hidden="true" /> No hay alertas para este hike.
-            </div>
-          )}
-        </section>
-      )}
-      {screen === "scanner" && (
-        <section className="scanner-screen">
-          <div className="scanner-view">
-            <video ref={video} playsInline muted />
-            <div className="scan-frame">
-              <i />
-              <i />
-              <i />
-              <i />
-            </div>
-            {cameraError && <p>{cameraError}</p>}
-          </div>
-          <p>Centra el QR dentro del recuadro</p>
-          {demo && (
-            <button className="demo-scan" onClick={() => showBooking()}>
-              SIMULAR QR DE RESERVACIÓN
-            </button>
-          )}
-          <button
-            className="manual-link"
-            onClick={() => {
-              stopCamera();
-              setScreen("search");
-            }}
-          >
-            ¿No tienen QR? Buscar manualmente →
-          </button>
-        </section>
-      )}
-      {screen === "search" && (
-        <section className="manual-search">
-          <div className="manual-search-nav">
-            <button onClick={() => setScreen("home")}>
-              <ArrowLeft aria-hidden="true" /> VOLVER AL MODO HIKE
-            </button>
-            <Link href="/admin">
-              <LayoutDashboard aria-hidden="true" /> IR AL PANEL ADMIN
-            </Link>
-          </div>
-          <span>CHECK-IN MANUAL</span>
-          <h1>
-            Busca a alguien
-            <br />
-            de la manada.
-          </h1>
-          <label>
-            <Search aria-hidden="true" />
-            <input
-              autoFocus
-              value={searchQuery}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-                setSearched(false);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void search();
-              }}
-              placeholder="Nombre, reservación o perrito"
-            />
-            <button onClick={search}>{searching ? "…" : "BUSCAR"}</button>
-          </label>
-          {cameraError && <p className="hike-error">{cameraError}</p>}
-          {demo ? (
-            <button className="search-result" onClick={() => showBooking()}>
-              <span className="profile-initials">ML</span>
-              <div>
-                <strong>Mishele Lojan</strong>
-                <small>TDG-1048 · 3 personas · Mona</small>
-              </div>
-              <i>
-                <ArrowRight aria-hidden="true" />
-              </i>
-            </button>
-          ) : (
-            <>
-            {searchResults.map((booking) => {
-              const lead = booking.booking_participants[0]?.snapshot;
-              return (
-                <button
-                  className="search-result"
-                  key={booking.id}
-                  onClick={() => openSearchResult(booking)}
-                >
-                  <span className="profile-initials">
-                    {lead?.first_name?.[0]}
-                    {lead?.last_name?.[0]}
-                  </span>
-                  <div>
-                    <strong>
-                      {lead?.first_name} {lead?.last_name}
-                    </strong>
-                    <small>
-                      {booking.booking_number} ·{" "}
-                      {booking.booking_participants.length} personas ·{" "}
-                      {booking.booking_dogs.length} perritos
-                    </small>
-                  </div>
-                  <i>
-                    <ArrowRight aria-hidden="true" />
-                  </i>
-                </button>
-              );
-            })}
-            {searched && !searching && searchResults.length === 0 && (
-              <p className="hike-empty">No encontramos coincidencias en este hike.</p>
-            )}
-            </>
-          )}
-        </section>
-      )}
-      {screen === "booking" && (
-        <section className="checkin-card">
-          <button className="checkin-back" onClick={() => setScreen("home")}>
-            <ArrowLeft aria-hidden="true" /> CANCELAR
-          </button>
-          <div className="valid-qr">
-            <CircleCheck aria-hidden="true" /> RESERVACIÓN ENCONTRADA
-          </div>
-          {alreadyUsedAt && (
-            <div className="used-qr-warning">
-              <TriangleAlert aria-hidden="true" /> Este QR ya se utilizó el{" "}
-              {new Intl.DateTimeFormat("es-MX", {
-                dateStyle: "medium",
-                timeStyle: "short",
-                timeZone: "America/Mexico_City",
-              }).format(new Date(alreadyUsedAt))}.
-            </div>
-          )}
-          <p>RESERVACIÓN {liveBooking?.booking_number ?? "TDG-1048"}</p>
-          <h1>Familia {leadLastName}</h1>
-          <div className="checkin-meta">
-            <span>{checkinPeople.length} PERSONAS</span>
-            <span>{liveBooking?.booking_dogs.length ?? 1} PERRITO</span>
-            <span>
-              {liveBooking?.status === "PENDING_PAYMENT" ? (
-                <>
-                  <TriangleAlert aria-hidden="true" /> PAGO PENDIENTE
-                </>
-              ) : (
-                <>
-                  <CircleCheck aria-hidden="true" /> PAGADO
-                </>
-              )}
-            </span>
-          </div>
-          <h2>¿Quién llegó?</h2>
-          {checkinPeople.map(({ id, name, detail, alreadyChecked }) => (
-            <button
-              className={`check-person ${present.includes(id) ? "selected" : ""}`}
-              onClick={() => toggle(id)}
-              disabled={alreadyChecked}
-              key={id}
-            >
-              <i>{(present.includes(id) || alreadyChecked) && <Check aria-hidden="true" />}</i>
-              <span>
-                <strong>{name}</strong>
-                <small>{detail}{alreadyChecked ? " · Check-in realizado" : ""}</small>
-              </span>
-            </button>
-          ))}
-          {requiresAck && (
-            <div className="dog-alert">
-              <div>
-                <span>
-                  <TriangleAlert aria-hidden="true" /> IMPORTANTE
-                </span>
-                <strong>
-                  <Dog aria-hidden="true" /> {firstDog?.name ?? "Mona"}
-                </strong>
-                <p>
-                  {firstDog?.reactivity ||
-                    firstDog?.notes ||
-                    "Sensible a grupos grandes al inicio. Darle espacio durante la formación."}
-                </p>
-              </div>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={ack}
-                  onChange={(event) => setAck(event.target.checked)}
-                />{" "}
-                ENTENDIDO
-              </label>
-            </div>
-          )}
-          {cameraError && <p className="hike-error">{cameraError}</p>}
-          {allAlreadyChecked ? (
-            <div className="hike-clear">
-              <CircleCheck aria-hidden="true" /> Todos ya realizaron check-in.
-            </div>
-          ) : (
-            <button
-              className="confirm-checkin"
-              disabled={(requiresAck && !ack) || present.length === 0}
-              onClick={confirm}
-            >
-              CONFIRMAR {present.length} CHECK-INS →
-            </button>
-          )}
-        </section>
-      )}
-      {screen === "success" && (
-        <section className="checkin-success">
-          <div>
-            <CircleCheck aria-hidden="true" />
-          </div>
-          <h1>
-            ¡Listos para
-            <br />
-            la aventura!
-          </h1>
-          <p>{present.length} personas registradas</p>
-          <span>Preparando siguiente escaneo…</span>
-        </section>
-      )}
-    </main>
-  );
+  const stopScanner = () => { const stream = video.current?.srcObject as MediaStream | null; stream?.getTracks().forEach((track) => track.stop()); if (scanLoop.current) cancelAnimationFrame(scanLoop.current); scanLoop.current = null; };
+  const handleQr = async (token: string) => {
+    if (!data) return;
+    const payload = await verifySignedPayload(token, data.publicKey);
+    if (!payload || payload.purpose !== "checkin") { setMessage("El QR no es válido o ya venció."); return; }
+    if (payload.hikeId !== data.hike.id) { setMessage("Este QR pertenece a otro hike."); return; }
+    const booking = data.bookings.find((item) => item.id === payload.bookingId && item.qrToken === token);
+    if (!booking) { setMessage("El QR no está incluido en el paquete operativo vigente."); return; }
+    stopScanner(); setScannerOpen(false); setSelected(booking);
+  };
+  const openScanner = async () => {
+    setMessage(""); setScannerOpen(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+      if (!video.current) return;
+      video.current.srcObject = stream; await video.current.play();
+      const Detector = (window as unknown as { BarcodeDetector?: new (options: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector;
+      if (!Detector) { setMessage("Este navegador no permite leer QR con la cámara. Usa la búsqueda."); return; }
+      const detector = new Detector({ formats: ["qr_code"] });
+      const scan = async () => { if (!video.current || video.current.readyState < 2) { scanLoop.current = requestAnimationFrame(scan); return; } const match = (await detector.detect(video.current).catch(() => [])).find((code) => code.rawValue.startsWith("tdg:v2.")); if (match) { await handleQr(match.rawValue); return; } scanLoop.current = requestAnimationFrame(scan); };
+      scanLoop.current = requestAnimationFrame(scan);
+    } catch { setMessage("No pudimos abrir la cámara. Revisa el permiso o usa la búsqueda."); }
+  };
+
+  if (!data) return <main className="field-mode-empty"><CircleAlert /><h1>No hay un hike disponible.</h1><Link href="/admin">VOLVER AL ADMINISTRADOR</Link></main>;
+  const hikeDate = new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(data.hike.starts_at));
+  return <main className="field-mode">
+    <header className="field-header"><Link href="/admin" aria-label="Volver al administrador"><House /></Link><div><span>MODO HIKE</span><select value={data.hike.id} onChange={(event) => { window.location.href = `/admin/hike-mode?hike=${event.target.value}`; }}>{data.availableHikes.map((hike) => <option value={hike.id} key={hike.id}>{hike.name}</option>)}</select><small>{hikeDate} · {data.hike.location_name}</small></div><button className={online ? "connection-online" : "connection-offline"} onClick={() => void syncQueue()}>{online ? <Signal /> : <SignalZero />}<span>{online ? "EN LÍNEA" : "SIN SEÑAL"}</span></button></header>
+    <section className="field-package-bar"><div><strong>{data.preparedAt ? "PAQUETE OFFLINE LISTO" : "PREPARA ESTE HIKE"}</strong><span>{pending.length} cambios pendientes · última sincronización {formatTime(lastSync ?? data.preparedAt)}</span></div><button disabled={preparing || !online} onClick={() => void loadPackage(data.hike.id, deviceId)}>{preparing ? <RefreshCw className="spin" /> : <CloudDownload />}{preparing ? "PREPARANDO" : "PREPARAR OFFLINE"}</button></section>
+    <section className="field-kpis"><article><UserRoundCheck /><div><strong>{checked}/{expected}</strong><span>CHECK-INS</span></div></article><article><Dog /><div><strong>{data.bookings.reduce((sum, booking) => sum + booking.booking_dogs.length, 0)}</strong><span>PERRITOS</span></div></article><article><BusFront /><div><strong>{transport}</strong><span>TRANSPORTE</span></div></article><article className={alerts.length ? "has-alert" : ""}><CircleAlert /><div><strong>{alerts.length}</strong><span>ALERTAS</span></div></article><article><PackageCheck /><div><strong>{deliveries.length}</strong><span>ENTREGAS</span></div></article></section>
+    <section className="field-tools"><label><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nombre, reservación, correo, teléfono o perrito" /></label><nav aria-label="Filtros operativos">{([['ALL','Todos'],['PENDING','Pendientes'],['CHECKED','Check-in'],['ALERTS','Alertas'],['TRANSPORT','Transporte'],['DELIVERIES','Entregas']] as Array<[Filter,string]>).map(([value,label]) => <button className={filter === value ? "active" : ""} onClick={() => { setFilter(value); if (value === 'DELIVERIES') setDeliveryOpen(true); }} key={value}>{label}</button>)}</nav></section>
+    {message && <div className="field-message"><CircleAlert /><span>{message}</span><button onClick={() => setMessage("")}><X /></button></div>}
+    <section className="field-results"><div className="field-section-title"><div><span>LLEGADAS</span><h1>{filter === "PENDING" ? "Pendientes por llegar" : "Reservaciones del hike"}</h1></div><strong>{visibleBookings.length}</strong></div><div className="field-booking-list">{visibleBookings.map((booking) => { const complete = booking.booking_participants.every((person) => checkedIds.has(person.id)); return <button className={complete ? "checked" : ""} onClick={() => setSelected(booking)} key={booking.id}><span className="booking-state">{complete ? <CircleCheck /> : <span>{booking.booking_participants.filter((person) => !checkedIds.has(person.id)).length}</span>}</span><span className="booking-person"><strong>{bookingName(booking)}</strong><small>{booking.booking_number} · {booking.booking_participants.length} personas · {booking.booking_dogs.length} perritos</small></span><span className="booking-flags">{hasDogAlert(booking) && <i><CircleAlert /> ALERTA</i>}{booking.transport_reservations.length > 0 && <i><BusFront /> {booking.transport_reservations.length}</i>}{deliveries.some((delivery) => delivery.bookingId === booking.id) && <i><PackageCheck /> ENTREGA</i>}</span><ArrowLeft className="row-arrow" /></button>; })}{!visibleBookings.length && <div className="field-no-results"><Search /><strong>Sin resultados</strong><span>Prueba otro nombre o cambia los filtros.</span></div>}</div></section>
+    <button className="field-scan-sticky" onClick={() => void openScanner()}><QrCode /><span>ESCANEAR QR</span></button>
+    {scannerOpen && <div className="field-modal field-scanner-modal"><section><header><button onClick={() => { stopScanner(); setScannerOpen(false); }}><X /></button><div><span>CHECK-IN</span><h2>Escanear QR</h2></div></header><div className="field-camera"><video ref={video} muted playsInline /><i /></div><p>Centra el código de la reservación dentro del recuadro. Funciona aun sin señal si preparaste el hike.</p></section></div>}
+    {selected && <div className="field-modal"><section className="field-booking-sheet"><header><button onClick={() => setSelected(null)}><X /></button><div><span>{selected.booking_number}</span><h2>{bookingName(selected)}</h2></div></header>{hasDogAlert(selected) && <div className="field-dog-alert"><CircleAlert /><div><strong>INDICACIONES DE PERRITOS</strong>{selected.booking_dogs.filter((dog) => dog.snapshot.reactivity || dog.snapshot.medical_conditions || dog.snapshot.medications || dog.snapshot.notes).map((dog) => <p key={dog.id}><b>{dog.snapshot.name ?? "Perrito"}:</b> {[dog.snapshot.reactivity,dog.snapshot.medical_conditions,dog.snapshot.medications,dog.snapshot.notes].filter(Boolean).join(" · ")}</p>)}</div></div>}<div className="field-people"><span>ASISTENTES</span>{selected.booking_participants.map((person) => <article key={person.id}><span>{checkedIds.has(person.id) ? <CircleCheck /> : <span />}</span><div><strong>{personName(person)}</strong><small>{person.snapshot.is_minor ? "Menor" : "Adulto"}{selected.signed_waivers.some((waiver) => waiver.booking_participant_id === person.id) ? " · Responsiva firmada" : " · Responsiva pendiente"}</small></div></article>)}</div><div className="field-sheet-actions"><button onClick={() => void queueCheckins(selected, selected.booking_participants.map((person) => person.id))}><Check /> CONFIRMAR CHECK-IN PENDIENTE</button>{selected.booking_participants.some((person) => person.snapshot.emergency_contact_phone) && <a href={`tel:${selected.booking_participants.find((person) => person.snapshot.emergency_contact_phone)?.snapshot.emergency_contact_phone}`}><Phone /> CONTACTO DE EMERGENCIA</a>}</div></section></div>}
+    {deliveryOpen && <div className="field-modal"><section className="field-booking-sheet field-delivery-sheet"><header><button onClick={() => setDeliveryOpen(false)}><X /></button><div><span>PRODUCTOS</span><h2>Entregas en este hike</h2></div></header>{data.deliveries.map((delivery) => <article key={delivery.orderItemId}><PackageCheck /><div><strong>{delivery.quantity} × {delivery.description}</strong><small>{data.bookings.find((booking) => booking.id === delivery.bookingId)?.booking_number ?? "Pedido independiente"}</small></div><button disabled={delivery.status === "DELIVERED"} onClick={() => void markDelivered(delivery)}>{delivery.status === "DELIVERED" ? "ENTREGADO" : "MARCAR ENTREGA"}</button></article>)}{!data.deliveries.length && <div className="field-no-results"><PackageCheck /><strong>No hay entregas pendientes</strong></div>}</section></div>}
+  </main>;
 }

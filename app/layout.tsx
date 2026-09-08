@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(process.env.APP_ORIGIN ?? 'https://www.thedoggygang.com'),
   title: 'The Doggy Gang | Aventuras en manada',
   description: 'Hikes, naturaleza y experiencias para compartir con tu mejor amigo.',
+  manifest: '/manifest.webmanifest',
   openGraph: { title: 'The Doggy Gang | Aventuras en manada', description: 'Hikes, naturaleza y experiencias para compartir con tu mejor amigo.', images: ['/brand/profile-trail-sun.png'] },
 };
 

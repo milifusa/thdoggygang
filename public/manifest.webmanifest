@@ -1,0 +1,11 @@
+{
+  "name": "The Doggy Gang · Hike Mode",
+  "short_name": "Hike Mode",
+  "start_url": "/admin/hike-mode",
+  "display": "standalone",
+  "background_color": "#f7f4ed",
+  "theme_color": "#f5ba5f",
+  "icons": [
+    { "src": "/brand/logo-circular-blue.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

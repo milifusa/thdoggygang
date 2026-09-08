@@ -8,6 +8,7 @@ const schema = z.object({
   dogIds: z.array(z.string().uuid()),
   transportPersonIds: z.array(z.string().uuid()),
   productSelections: z.array(z.object({ productId: z.string().uuid(), variant: z.string().max(80), quantity: z.number().int().min(1).max(20) })).max(30).default([]),
+  currentStep: z.enum(['manada','personas','perritos','transporte','productos','responsiva','pago','confirmacion']).default('personas'),
 });
 
 export async function POST(request: Request) {
@@ -56,6 +57,6 @@ export async function POST(request: Request) {
   }
   const { data: booking } = await supabase.from('bookings').select('total_cents').eq('id', data).single();
   const totalCents = (booking?.total_cents ?? 0) + productSubtotal;
-  await supabase.from('bookings').update({ subtotal_cents: totalCents, total_cents: totalCents, updated_at: new Date().toISOString() }).eq('id', data);
+  await supabase.from('bookings').update({ subtotal_cents: totalCents, total_cents: totalCents, current_step: parsed.data.currentStep, last_activity_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', data);
   return Response.json({ bookingId: data, totalCents });
 }

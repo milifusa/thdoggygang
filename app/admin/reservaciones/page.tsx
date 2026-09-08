@@ -1,34 +1,38 @@
 import Link from "next/link";
-import { ChevronRight, Download } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronRight, FileSignature, PackageCheck, Search, TicketCheck } from "lucide-react";
 import { requireStaffSession } from "../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { AdminMobileNav, AdminNav } from "../admin-nav";
 import { adminDate, bookingStatus, money, profileName } from "../admin-utils";
+import { BulkReminderButton, ReminderButton } from "./reservation-actions";
 
 export const dynamic = "force-dynamic";
+type Payment={status:string;method:string;amount_cents:number};
+type Order={id:string;status:string;payments:Payment[];order_items:Array<{id:string;item_type:string;quantity:number;order_item_fulfillments:Array<{status:string}>|{status:string}|null}>};
+type Booking={id:string;booking_number:string;status:string;total_cents:number;created_at:string;updated_at:string;last_activity_at:string;last_reminder_at:string|null;current_step:string;profile:{first_name:string;last_name:string;email:string|null;phone:string|null}|null|Array<{first_name:string;last_name:string;email:string|null;phone:string|null}>;hike:{id:string;name:string;starts_at:string}|null|Array<{id:string;name:string;starts_at:string}>;booking_participants:Array<{id:string}>;booking_dogs:Array<{id:string}>;transport_reservations:Array<{id:string}>;signed_waivers:Array<{id:string}>;check_ins:Array<{id:string}>;orders:Order[]|Order|null};
+const one=<T,>(value:T|T[]|null|undefined)=>Array.isArray(value)?value[0]??null:value??null;
 
-export default async function ReservationsAdminPage() {
+export default async function ReservationsAdminPage({searchParams}:{searchParams:Promise<{view?:string;q?:string;hike?:string;payment?:string;from?:string;to?:string}>}){
   await requireStaffSession("/admin/reservaciones");
-  const supabase = await createSupabaseServerClient();
-  const [{ data: bookings }, { data: next }] = await Promise.all([
-    supabase.from("bookings").select("id,booking_number,status,total_cents,created_at,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id,signed_at,pdf_path),check_ins(id)").neq("status","CANCELLED").order("created_at", { ascending: false }).limit(300),
-    supabase.from("hikes").select("id").gte("starts_at", new Date().toISOString()).is("deleted_at", null).order("starts_at").limit(1).maybeSingle(),
+  const supabase=await createSupabaseServerClient();const filters=await searchParams;
+  const [{data:rawBookings},{data:hikes},{data:next}]=await Promise.all([
+    supabase.from("bookings").select("id,booking_number,status,total_cents,created_at,updated_at,last_activity_at,last_reminder_at,current_step,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id),booking_dogs(id),transport_reservations(id),signed_waivers(id),check_ins(id),orders(id,status,payments(status,method,amount_cents),order_items(id,item_type,quantity,order_item_fulfillments(status)))").order("created_at",{ascending:false}).limit(500),
+    supabase.from("hikes").select("id,name,starts_at").is("deleted_at",null).order("starts_at",{ascending:false}).limit(100),
+    supabase.from("hikes").select("id").gte("starts_at",new Date().toISOString()).is("deleted_at",null).order("starts_at").limit(1).maybeSingle(),
   ]);
-  return <main className="admin-page"><AdminNav active="/admin/reservaciones" hikeId={next?.id} /><section className="admin-content"><AdminMobileNav />
-    <header><div><p>CLIENTES Y ASISTENTES</p><h1>Reservaciones.</h1></div></header>
-    <section className="admin-table admin-module-panel"><div className="admin-section-head"><div><p>HISTORIAL</p><h2>{bookings?.length ?? 0} reservaciones</h2></div></div>
-      {bookings?.map((booking) => {
-        const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
-        const profileValue = Array.isArray(booking.profile) ? booking.profile[0] : booking.profile;
-        return <details className="admin-booking" key={booking.id}><summary className="admin-row admin-row-wide">
-          <span>{booking.booking_number}</span><strong>{profileName(booking.profile)}</strong><small>{hike?.name ?? "Hike"} · {booking.booking_participants.length} personas · {booking.booking_dogs.length} perritos</small><strong>{money(booking.total_cents)}</strong><em className={booking.status === "CONFIRMED" ? "paid" : ""}>{bookingStatus(booking.status)}</em><ChevronRight />
-        </summary><div className="admin-booking-detail">
-          <div><span>CONTACTO</span><strong>{profileValue?.email ?? "Sin correo"}</strong><strong>{profileValue?.phone ?? "Sin teléfono"}</strong><strong>{adminDate(booking.created_at)}</strong></div>
-          <div><span>PERSONAS</span>{booking.booking_participants.map((p) => { const s = p.snapshot as {first_name?:string;last_name?:string}; return <strong key={p.id}>{s.first_name} {s.last_name}</strong>; })}</div>
-          <div><span>PERRITOS</span>{booking.booking_dogs.length ? booking.booking_dogs.map((d) => { const s=d.snapshot as {name?:string;breed?:string}; return <strong key={d.id}>{s.name}{s.breed ? ` · ${s.breed}` : ""}</strong>; }) : <strong>Sin perritos</strong>}</div>
-          <div><span>OPERACIÓN</span><strong>{booking.transport_reservations.length} lugares de transporte</strong><strong>{new Set(booking.signed_waivers.map((waiver) => waiver.pdf_path)).size} responsivas</strong><strong>{booking.check_ins.length} check-ins</strong>{Array.from(new Map(booking.signed_waivers.map((waiver) => [waiver.pdf_path, waiver])).values()).map((waiver) => <Link className="admin-waiver-download" href={`/api/admin/waivers/${waiver.id}/download`} key={waiver.id}><Download aria-hidden="true" /> DESCARGAR PDF</Link>)}</div>
-        </div></details>;
-      })}
-    </section>
+  const bookings=(rawBookings??[]) as unknown as Booking[];const now=new Date().getTime();const view=(filters.view??"ACTIVE").toUpperCase();const term=(filters.q??"").trim().toLowerCase();
+  const paymentOf=(booking:Booking)=>{const order=one(booking.orders);return order?.payments?.[0]??null;};
+  const groupOf=(booking:Booking)=>{const hike=one(booking.hike);if(booking.status==="DRAFT")return"DRAFT";if(booking.status==="CANCELLED")return"CANCELLED";if(booking.status==="COMPLETED"||(hike&&new Date(hike.starts_at).getTime()<now))return"PAST";return"ACTIVE";};
+  const counts=Object.fromEntries(["ACTIVE","PAST","DRAFT","CANCELLED"].map((key)=>[key,bookings.filter((booking)=>groupOf(booking)===key).length]));
+  const visible=bookings.filter((booking)=>{const profile=one(booking.profile);const hike=one(booking.hike);const payment=paymentOf(booking);if(groupOf(booking)!==view)return false;if(term&&!`${booking.booking_number} ${profile?.first_name} ${profile?.last_name} ${profile?.email} ${profile?.phone} ${hike?.name}`.toLowerCase().includes(term))return false;if(filters.hike&&hike?.id!==filters.hike)return false;if(filters.payment&&payment?.status!==filters.payment)return false;if(filters.from&&hike&&new Date(hike.starts_at)<new Date(filters.from))return false;if(filters.to&&hike&&new Date(hike.starts_at)>new Date(`${filters.to}T23:59:59`))return false;return true;});
+  const pendingPayments=bookings.filter((booking)=>["PENDING_PAYMENT"].includes(booking.status)||["PENDING","UNDER_REVIEW"].includes(paymentOf(booking)?.status??"")).length;
+  const unsigned=bookings.filter((booking)=>groupOf(booking)==="ACTIVE"&&booking.signed_waivers.length<booking.booking_participants.length).length;
+  const pendingDeliveries=bookings.reduce((sum,booking)=>{const order=one(booking.orders);return sum+(order?.order_items??[]).filter((item)=>item.item_type==="PRODUCT"&&one(item.order_item_fulfillments)?.status!=="DELIVERED").length;},0);
+  const draftIds=visible.filter((booking)=>booking.status==="DRAFT").map((booking)=>booking.id);
+  return <main className="admin-page"><AdminNav active="/admin/reservaciones" hikeId={next?.id}/><section className="admin-content"><AdminMobileNav/><header><div><p>CENTRO DE OPERACIONES</p><h1>Reservaciones.</h1></div><BulkReminderButton bookingIds={draftIds}/></header>
+    <section className="reservation-kpis"><article><TicketCheck/><span>ACTIVAS</span><strong>{counts.ACTIVE}</strong></article><article className={pendingPayments?"warn":""}><AlertCircle/><span>PAGOS PENDIENTES</span><strong>{pendingPayments}</strong></article><article className={unsigned?"warn":""}><FileSignature/><span>RESPONSIVAS</span><strong>{unsigned}</strong></article><article><PackageCheck/><span>ENTREGAS</span><strong>{pendingDeliveries}</strong></article></section>
+    <nav className="reservation-tabs">{[["ACTIVE","ACTIVAS"],["PAST","PASADAS"],["DRAFT","BORRADORES"],["CANCELLED","CANCELADAS"]].map(([key,label])=><Link className={view===key?"active":""} href={`/admin/reservaciones?view=${key}`} key={key}>{label}<span>{counts[key]}</span></Link>)}</nav>
+    <form className="reservation-filters"><label className="reservation-search"><Search/><input name="q" defaultValue={filters.q} placeholder="Cliente, correo, teléfono o número de reservación"/></label><select name="hike" defaultValue={filters.hike??""}><option value="">Todos los hikes</option>{hikes?.map((hike)=><option value={hike.id} key={hike.id}>{hike.name}</option>)}</select><select name="payment" defaultValue={filters.payment??""}><option value="">Todos los pagos</option><option value="PAID">Pagado</option><option value="UNDER_REVIEW">Por revisar</option><option value="PENDING">Pendiente</option><option value="FAILED">Fallido</option><option value="REFUNDED">Reembolsado</option></select><input type="date" name="from" defaultValue={filters.from}/><input type="date" name="to" defaultValue={filters.to}/><input type="hidden" name="view" value={view}/><button>FILTRAR</button></form>
+    <section className="reservation-table"><div className="reservation-table-head"><span>CLIENTE / RESERVACIÓN</span><span>HIKE</span><span>MANADA</span><span>PAGO</span><span>OPERACIÓN</span><span/></div>{visible.map((booking)=>{const profile=one(booking.profile);const hike=one(booking.hike);const payment=paymentOf(booking);const order=one(booking.orders);const delivered=(order?.order_items??[]).filter((item)=>item.item_type==="PRODUCT"&&one(item.order_item_fulfillments)?.status==="DELIVERED").length;const products=(order?.order_items??[]).filter((item)=>item.item_type==="PRODUCT").length;return <article key={booking.id}><div><small>{booking.booking_number}</small><strong>{profileName(booking.profile)}</strong><span>{profile?.email??profile?.phone??"Sin contacto"}</span><em className={booking.status==="CONFIRMED"?"paid":booking.status==="CANCELLED"?"cancelled":""}>{bookingStatus(booking.status)}</em>{booking.status==="DRAFT"&&<small>Paso: {booking.current_step} · actividad {adminDate(booking.last_activity_at)}</small>}</div><div><strong>{hike?.name??"Hike"}</strong><span>{hike?adminDate(hike.starts_at):"Sin fecha"}</span></div><div><strong>{booking.booking_participants.length} personas</strong><span>{booking.booking_dogs.length} perritos · {booking.transport_reservations.length} transportes</span></div><div><strong>{money(payment?.amount_cents??booking.total_cents)}</strong><span>{payment?.method??"Sin método"} · {payment?.status??"SIN PAGO"}</span></div><div><span>{booking.signed_waivers.length}/{booking.booking_participants.length} firmas</span><span>{booking.check_ins.length} check-ins</span>{products>0&&<span>{delivered}/{products} entregas</span>}</div><div className="reservation-row-actions">{booking.status==="DRAFT"&&<ReminderButton bookingId={booking.id}/>}<Link href={`/admin/reservaciones/${booking.id}`} aria-label={`Abrir ${booking.booking_number}`}><ChevronRight/></Link></div></article>;})}{!visible.length&&<div className="reservation-empty"><CheckCircle2/><strong>No hay reservaciones en esta vista.</strong><span>Prueba otro filtro o rango de fechas.</span></div>}</section>
   </section></main>;
 }

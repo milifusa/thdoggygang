@@ -7,6 +7,7 @@ import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, X } from "luc
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 import type { Product } from "../../lib/products";
+import type { BookingResume } from "./page";
 
 const steps = [
   "Personas",
@@ -88,35 +89,37 @@ export function BookingWizard({
   context,
   products,
   cardPaymentsEnabled,
+  resume,
 }: {
   adventure: Adventure;
   context: BookingContext;
   products: Product[];
   cardPaymentsEnabled: boolean;
+  resume?: BookingResume;
 }) {
   const people = context.people;
   const dogs = context.dogs;
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(resume?.step ?? 0);
   const [selectedPeople, setSelectedPeople] = useState(
-    people[0] ? [people[0].id] : [],
+    resume?.personIds.length ? resume.personIds : people[0] ? [people[0].id] : [],
   );
-  const [selectedDogs, setSelectedDogs] = useState(dogs[0] ? [dogs[0].id] : []);
-  const [transport, setTransport] = useState(false);
+  const [selectedDogs, setSelectedDogs] = useState(resume?.dogIds.length ? resume.dogIds : dogs[0] ? [dogs[0].id] : []);
+  const [transport, setTransport] = useState(Boolean(resume?.transportPersonIds.length));
   const [transportPeople, setTransportPeople] = useState(
-    people[0] ? [people[0].id] : [],
+    resume?.transportPersonIds.length ? resume.transportPersonIds : people[0] ? [people[0].id] : [],
   );
-  const [productQuantities, setProductQuantities] = useState<Record<string,number>>({});
+  const [productQuantities, setProductQuantities] = useState<Record<string,number>>(Object.fromEntries(resume?.productSelections.map((item)=>[item.productId,item.quantity])??[]));
   const [productVariants, setProductVariants] = useState<Record<string,string>>(
-    Object.fromEntries(products.map((product)=>[product.id,product.variants[0]??""])),
+    Object.fromEntries(products.map((product)=>[product.id,resume?.productSelections.find((item)=>item.productId===product.id)?.variant??product.variants[0]??""])),
   );
   const [signatureData, setSignatureData] = useState<string | null>(null);
-  const [waiverSaved, setWaiverSaved] = useState(false);
-  const [accepted, setAccepted] = useState(false);
+  const [waiverSaved, setWaiverSaved] = useState(Boolean(resume?.waiverSigned));
+  const [accepted, setAccepted] = useState(Boolean(resume?.waiverSigned));
   const [payment, setPayment] = useState<"card" | "transfer">(cardPaymentsEnabled ? "card" : "transfer");
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [transferPending, setTransferPending] = useState(false);
   const [processing, setProcessing] = useState(false);
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [bookingId, setBookingId] = useState<string | null>(resume?.bookingId ?? null);
   const [syncMessage, setSyncMessage] = useState("");
   const hikeSubtotal = useMemo(
     () => calculateHikeSubtotal(adventure, selectedPeople.length, selectedDogs.length),
@@ -154,6 +157,7 @@ export function BookingWizard({
           ? transportPeople.filter((id) => selectedPeople.includes(id))
           : [],
         productSelections: products.filter((product)=>(productQuantities[product.id]??0)>0).map((product)=>({productId:product.id,variant:productVariants[product.id]??"",quantity:productQuantities[product.id]})),
+        currentStep: ['perritos','transporte','productos','responsiva','pago','confirmacion','confirmacion'][step] ?? 'personas',
       }),
     });
     const payload = (await response.json()) as {
@@ -249,7 +253,7 @@ export function BookingWizard({
       : step === 1
         ? selectedDogs.length > 0
         : step === 4
-          ? Boolean(signatureData) && accepted
+          ? Boolean(signatureData || waiverSaved) && accepted
           : step === 5 && context.mode === "live" && payment === "transfer"
             ? Boolean(receiptFile)
             : true;
