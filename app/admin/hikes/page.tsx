@@ -35,12 +35,12 @@ type HikeRow = {
     signed_waivers: Array<{ id: string }>;
     check_ins: Array<{ id: string }>;
   }>;
-  transport_configurations: Array<{ mode: string; capacity: number | null }>;
+  transport_configurations: Array<{ mode: string; capacity: number | null }> | { mode: string; capacity: number | null } | null;
   hike_galleries: Array<{
     id: string;
     published_at: string | null;
     photos: Array<{ id: string }>;
-  }>;
+  }> | { id: string; published_at: string | null; photos: Array<{ id: string }> } | null;
 };
 type PaymentRow = {
   status: string;
@@ -92,12 +92,10 @@ export default async function HikesAdminPage({
   ]);
   const hikes = (hikeData ?? []) as unknown as HikeRow[];
   const payments = (paymentData ?? []) as unknown as PaymentRow[];
+  const galleryOf = (hike: HikeRow) => Array.isArray(hike.hike_galleries) ? hike.hike_galleries[0] : hike.hike_galleries;
+  const transportOf = (hike: HikeRow) => Array.isArray(hike.transport_configurations) ? hike.transport_configurations[0] : hike.transport_configurations;
   const photoHike = new Map<string, string>();
-  hikes.forEach((h) =>
-    h.hike_galleries?.forEach((g) =>
-      g.photos?.forEach((p) => photoHike.set(p.id, h.id)),
-    ),
-  );
+  hikes.forEach((hike) => galleryOf(hike)?.photos?.forEach((photo) => photoHike.set(photo.id, hike.id)));
   const metrics = new Map(
     hikes.map((h) => {
       const active = h.bookings.filter((b) =>
@@ -215,8 +213,9 @@ export default async function HikesAdminPage({
         <div>
           {items.map((h) => {
             const m = metrics.get(h.id)!;
-            const transport = h.transport_configurations?.[0];
-            const photos = h.hike_galleries?.[0]?.photos?.length ?? 0;
+            const transport = transportOf(h);
+            const gallery = galleryOf(h);
+            const photos = gallery?.photos?.length ?? 0;
             const availability =
               m.available === 0
                 ? "COMPLETO"
@@ -293,7 +292,7 @@ export default async function HikesAdminPage({
                     <small>
                       {m.photoRevenue
                         ? `${money(m.photoRevenue)} en ventas`
-                        : h.hike_galleries?.[0]?.published_at
+                        : gallery?.published_at
                           ? "galería publicada"
                           : "galería pendiente"}
                     </small>
