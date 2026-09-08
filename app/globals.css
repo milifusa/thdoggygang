@@ -965,6 +965,7 @@ footer small {
 .wizard-page {
   min-height: 100svh;
   background: #f7f5f0;
+  overflow-x: clip;
 }
 .wizard-header {
   height: 68px;
@@ -976,8 +977,14 @@ footer small {
   border-bottom: 1px solid #ddd;
 }
 .close-wizard {
-  font-size: 30px;
-  font-weight: 300;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+}
+.close-wizard svg {
+  width: 23px;
+  height: 23px;
 }
 .wizard-progress {
   height: 58px;
@@ -1011,6 +1018,9 @@ footer small {
 }
 .wizard-progress .active i {
   background: var(--yellow);
+}
+.wizard-mobile-status {
+  display: none;
 }
 .wizard-layout {
   max-width: 1280px;
@@ -1108,6 +1118,12 @@ footer small {
   background: var(--yellow);
   border-color: var(--yellow);
 }
+.select-card > i svg,
+.choice-grid button > i svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 3;
+}
 .dog-select img {
   width: 50px;
   height: 50px;
@@ -1124,6 +1140,14 @@ footer small {
   font-weight: 900;
   letter-spacing: 0.1em;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.add-row svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.5;
 }
 .unchanged-box {
   border-left: 4px solid var(--yellow);
@@ -1521,6 +1545,16 @@ footer small {
   gap: 12px;
   margin-top: 25px;
 }
+.confirmation-actions .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.confirmation-actions .button svg {
+  width: 14px;
+  height: 14px;
+}
 .outline-button {
   background: #fff;
   border: 1px solid #111;
@@ -1529,38 +1563,161 @@ footer small {
   background: var(--cream);
 }
 @media (max-width: 850px) {
-  .wizard-progress {
-    padding: 0 16px;
+  .wizard-header {
+    height: 58px;
+    padding: 0 18px;
+    position: sticky;
+    top: 0;
+    z-index: 40;
   }
-  .wizard-progress span {
+  .wizard-header .wordmark {
+    font-size: 14px;
+  }
+  .close-wizard {
+    width: 40px;
+    height: 40px;
+  }
+  .wizard-progress {
     display: none;
   }
-  .wizard-progress > div {
-    justify-content: center;
+  .wizard-mobile-status {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 16px;
+    background: var(--yellow);
+    padding: 13px 18px 18px;
+    position: sticky;
+    top: 58px;
+    z-index: 35;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
+  }
+  .wizard-mobile-heading,
+  .wizard-mobile-total {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .wizard-mobile-heading span,
+  .wizard-mobile-total span {
+    font-size: 7px;
+    font-weight: 900;
+    letter-spacing: 0.13em;
+  }
+  .wizard-mobile-heading strong {
+    font-size: 19px;
+    line-height: 1.05;
+    margin-top: 3px;
+  }
+  .wizard-mobile-total {
+    text-align: right;
+    align-items: end;
+  }
+  .wizard-mobile-total span {
+    max-width: 145px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wizard-mobile-total strong {
+    font-size: 13px;
+    margin-top: 4px;
+    white-space: nowrap;
+  }
+  .wizard-dog-track {
+    grid-column: 1 / -1;
+    height: 9px;
+    position: relative;
+    margin: 3px 21px 0;
+  }
+  .wizard-dog-path {
+    position: absolute;
+    inset: 3px 0 auto;
+    height: 3px;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.62);
+  }
+  .wizard-dog-path::before {
+    content: "";
+    display: block;
+    width: var(--wizard-progress);
+    height: 100%;
+    border-radius: inherit;
+    background: var(--wild-blue);
+    transition: width 420ms ease;
+  }
+  .wizard-dog-track img {
+    position: absolute;
+    z-index: 1;
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    left: var(--wizard-progress);
+    top: 50%;
+    transform: translate(-50%, -50%);
+    transition: left 420ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    animation: wizard-dog-walk 1.35s ease-in-out infinite;
   }
   .wizard-layout {
     grid-template-columns: 1fr;
-    padding: 42px 20px 90px;
+    padding: 34px 18px 148px;
+    gap: 0;
   }
   .wizard-summary {
-    position: relative;
-    top: 0;
-    grid-row: 1;
-  }
-  .wizard-summary > img {
-    height: 110px;
-  }
-  .wizard-summary > div {
-    padding: 14px 18px;
-  }
-  .wizard-summary dl {
     display: none;
   }
-  .wizard-summary .draft-saved {
+  .wizard-kicker {
     display: none;
   }
   .wizard-main h1 {
-    font-size: 50px;
+    font-size: clamp(41px, 12.5vw, 56px);
+    line-height: 0.96;
+    margin-bottom: 17px;
+  }
+  .wizard-lead {
+    font-size: 16px;
+    line-height: 1.45;
+    margin: 0 0 24px;
+  }
+  .select-list {
+    gap: 13px;
+  }
+  .select-card {
+    min-height: 88px;
+    padding: 14px;
+    border: 2px solid #c9c6bf;
+    border-radius: 12px;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.08);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .select-card.selected {
+    border-color: var(--wild-blue);
+    background: #fffaf0;
+    box-shadow: 5px 5px 0 var(--yellow);
+  }
+  .select-card > i,
+  .choice-grid button > i {
+    width: 30px;
+    height: 30px;
+  }
+  .add-row {
+    min-height: 44px;
+    margin-top: 17px;
+  }
+  .choice-grid button {
+    min-height: 145px;
+    border-width: 2px;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .choice-grid button.selected {
+    border-color: var(--wild-blue);
+    background: #fffaf0;
+  }
+  .waiver-document {
+    max-height: 220px;
+  }
+  .signature-wrap canvas {
+    height: 125px;
   }
   .confirmation-card {
     grid-template-columns: 1fr;
@@ -1569,14 +1726,34 @@ footer small {
     padding: 35px;
   }
   .wizard-actions {
-    position: sticky;
+    position: fixed;
+    left: 0;
+    right: 0;
     bottom: 0;
-    background: #f7f5f0;
-    padding: 14px 0;
-    z-index: 10;
+    z-index: 60;
+    width: 100%;
+    margin: 0;
+    gap: 12px;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.97);
+    border-top: 1px solid #d4d1ca;
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(12px);
   }
   .wizard-actions .button {
+    flex: 1;
+    min-height: 54px;
     width: auto;
+    font-size: 10px;
+  }
+  .back-button {
+    min-width: 76px;
+    min-height: 54px;
+    border: 1px solid #b9b6af;
+    background: #fff;
+  }
+  .back-button:disabled {
+    display: none;
   }
 }
 @media (max-width: 520px) {
@@ -1596,14 +1773,36 @@ footer small {
     gap: 12px;
   }
   .wizard-actions .button {
-    font-size: 9px;
-    padding: 0 13px;
+    font-size: 10px;
+    padding: 0 15px;
   }
   .card-form > div {
     grid-template-columns: 1fr;
   }
   .confirmation {
     padding-top: 45px;
+  }
+}
+
+@keyframes wizard-dog-walk {
+  0%,
+  100% {
+    translate: 0 -1px;
+    rotate: -2deg;
+  }
+  50% {
+    translate: 0 2px;
+    rotate: 2deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-dog-track img {
+    animation: none;
+    transition: none;
+  }
+  .wizard-dog-path::before {
+    transition: none;
   }
 }
 
@@ -3715,6 +3914,10 @@ footer {
   font-size: 28px;
   color: #9a6a17;
 }
+.gang-empty > span svg {
+  width: 28px;
+  height: 28px;
+}
 .gang-empty p {
   color: var(--muted);
   margin: 10px 0 16px;
@@ -3729,6 +3932,25 @@ footer {
   font-weight: 950;
   letter-spacing: 0.08em;
   cursor: pointer;
+}
+.gang-empty button,
+.account-heading button,
+.people-grid button,
+.dog-profile-card button,
+.gang-form-actions .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.gang-empty button svg,
+.account-heading button svg,
+.people-grid button svg,
+.dog-profile-card button svg,
+.gang-form-actions .button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.5;
 }
 .gang-dialog-backdrop {
   position: fixed;
@@ -3747,6 +3969,7 @@ footer {
   background: #fff;
   border-radius: 16px;
   box-shadow: 0 20px 70px rgba(0, 0, 0, 0.3);
+  overscroll-behavior: contain;
 }
 .gang-dialog > header {
   position: sticky;
@@ -3782,6 +4005,14 @@ footer {
   border-radius: 50%;
   font-size: 22px;
   cursor: pointer;
+}
+.gang-dialog > header button svg {
+  width: 19px;
+  height: 19px;
+  margin: auto;
+}
+.gang-scroll-cue {
+  display: none;
 }
 .gang-form {
   padding: 30px;
@@ -3949,20 +4180,89 @@ footer {
     height: 610px;
   }
   .gang-dialog-backdrop {
-    padding: 10px;
+    padding: 0;
+    place-items: stretch;
+    overflow: hidden;
   }
   .gang-dialog {
-    max-height: calc(100svh - 20px);
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  .gang-dialog > header,
+  .gang-dialog > header {
+    position: relative;
+    flex: 0 0 auto;
+    padding: 18px 18px 16px;
+  }
+  .gang-dialog > header h2 {
+    font-size: 29px;
+    margin-bottom: 6px;
+  }
+  .gang-dialog > header span {
+    display: block;
+    max-width: calc(100vw - 78px);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .gang-dialog > header button {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+  }
+  .gang-scroll-cue {
+    display: block;
+    flex: 0 0 auto;
+    background: var(--wild-blue);
+    color: #fff;
+    padding: 9px 18px;
+    font-size: 7px;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-align: center;
+  }
   .gang-form {
-    padding: 22px;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 22px 18px 110px;
   }
   .gang-form-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
   .full-field {
     grid-column: auto;
+  }
+  .gang-form input,
+  .gang-form select,
+  .gang-form textarea {
+    min-height: 52px;
+    font-size: 16px;
+  }
+  .gang-form-actions {
+    position: absolute;
+    z-index: 3;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    min-height: 86px;
+    padding: 12px 18px max(12px, env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.97);
+    border-top: 1px solid #d4d1ca;
+    box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(12px);
+  }
+  .gang-form-actions .button {
+    min-height: 54px;
+    padding: 0 18px;
   }
 }
 @media (max-width: 420px) {

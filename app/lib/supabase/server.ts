@@ -9,7 +9,16 @@ export async function createSupabaseServerClient() {
   return createServerClient(url, key, {
     cookies: {
       getAll: () => cookieStore.getAll(),
-      setAll: (values) => { values.forEach(({ name, value, options }) => cookieStore.set(name, value, options)); },
+      setAll: (values) => {
+        try {
+          values.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options),
+          );
+        } catch {
+          // Server Components cannot write cookies. The request proxy refreshes
+          // and persists the session before protected pages are rendered.
+        }
+      },
     },
   });
 }

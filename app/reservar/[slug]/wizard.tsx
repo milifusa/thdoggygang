@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { CircleCheck } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Plus, X } from "lucide-react";
 import type { Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 
@@ -236,6 +236,12 @@ export function BookingWizard({
           : step === 4 && context.mode === "live" && payment === "transfer"
             ? Boolean(receiptFile)
             : true;
+  const progress = `${Math.round((step / (steps.length - 1)) * 100)}%`;
+  const goBack = () => {
+    if (step <= 4) setWaiverSaved(false);
+    setStep((current) => Math.max(0, current - 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   return (
     <main className="wizard-page">
@@ -248,7 +254,7 @@ export function BookingWizard({
           className="close-wizard"
           aria-label="Cerrar"
         >
-          ×
+          <X aria-hidden="true" />
         </Link>
       </header>
       <div className="wizard-progress" aria-label={`Paso ${step + 1} de 6`}>
@@ -261,6 +267,29 @@ export function BookingWizard({
           </div>
         ))}
       </div>
+      {step < 5 && (
+        <section
+          className="wizard-mobile-status"
+          aria-label={`Paso ${step + 1} de 6: ${steps[step]}`}
+        >
+          <div className="wizard-mobile-heading">
+            <span>PASO {step + 1} DE 6</span>
+            <strong>{steps[step]}</strong>
+          </div>
+          <div className="wizard-mobile-total">
+            <span>{adventure.title}</span>
+            <strong>${total.toLocaleString("es-MX")} MXN</strong>
+          </div>
+          <div
+            className="wizard-dog-track"
+            style={{ "--wizard-progress": progress } as CSSProperties}
+            aria-hidden="true"
+          >
+            <span className="wizard-dog-path" />
+            <img src="/brand/logo-circular-blue.png" alt="" />
+          </div>
+        </section>
+      )}
 
       {step < 5 ? (
         <div className="wizard-layout">
@@ -281,6 +310,7 @@ export function BookingWizard({
                     {people.map((person) => (
                       <button
                         type="button"
+                        aria-pressed={selectedPeople.includes(person.id)}
                         className={`select-card ${selectedPeople.includes(person.id) ? "selected" : ""}`}
                         key={person.id}
                         onClick={() =>
@@ -294,7 +324,9 @@ export function BookingWizard({
                           <strong>{person.name}</strong>
                           <small>{person.detail}</small>
                         </span>
-                        <i>{selectedPeople.includes(person.id) ? "OK" : ""}</i>
+                        <i aria-hidden="true">
+                          {selectedPeople.includes(person.id) && <Check />}
+                        </i>
                       </button>
                     ))}
                   </div>
@@ -312,7 +344,7 @@ export function BookingWizard({
                     )
                   }
                 >
-                  ＋ AGREGAR OTRA PERSONA
+                  <Plus aria-hidden="true" /> AGREGAR OTRA PERSONA
                 </button>
               </>
             )}
@@ -332,6 +364,7 @@ export function BookingWizard({
                     {dogs.map((dog) => (
                       <button
                         type="button"
+                        aria-pressed={selectedDogs.includes(dog.id)}
                         className={`select-card dog-select ${selectedDogs.includes(dog.id) ? "selected" : ""}`}
                         key={dog.id}
                         onClick={() =>
@@ -343,7 +376,9 @@ export function BookingWizard({
                           <strong>{dog.name}</strong>
                           <small>{dog.detail}</small>
                         </span>
-                        <i>{selectedDogs.includes(dog.id) ? "OK" : ""}</i>
+                        <i aria-hidden="true">
+                          {selectedDogs.includes(dog.id) && <Check />}
+                        </i>
                       </button>
                     ))}
                   </div>
@@ -377,7 +412,7 @@ export function BookingWizard({
                     )
                   }
                 >
-                  ＋ AGREGAR PERRITO
+                  <Plus aria-hidden="true" /> AGREGAR PERRITO
                 </button>
               </>
             )}
@@ -395,23 +430,25 @@ export function BookingWizard({
                 <div className="choice-grid">
                   <button
                     type="button"
+                    aria-pressed={!transport}
                     onClick={() => setTransport(false)}
                     className={!transport ? "selected" : ""}
                   >
                     <span>AUTO</span>
                     <strong>Llegamos por nuestra cuenta</strong>
                     <small>Te compartiremos el punto exacto.</small>
-                    <i>{!transport ? "OK" : ""}</i>
+                    <i aria-hidden="true">{!transport && <Check />}</i>
                   </button>
                   <button
                     type="button"
+                    aria-pressed={transport}
                     onClick={() => setTransport(true)}
                     className={transport ? "selected" : ""}
                   >
                     <span>BUS</span>
                     <strong>Necesitamos transporte</strong>
                     <small>Desde Angelópolis · $200 por persona.</small>
-                    <i>{transport ? "OK" : ""}</i>
+                    <i aria-hidden="true">{transport && <Check />}</i>
                   </button>
                 </div>
                 {transport && (
@@ -558,13 +595,10 @@ export function BookingWizard({
               <button
                 type="button"
                 disabled={step === 0 || processing}
-                onClick={() => {
-                  if (step <= 4) setWaiverSaved(false);
-                  setStep((current) => current - 1);
-                }}
+                onClick={goBack}
                 className="back-button"
               >
-                ← ATRÁS
+                ATRÁS
               </button>
               <button
                 type="button"
@@ -575,8 +609,8 @@ export function BookingWizard({
                 {processing
                   ? "GUARDANDO…"
                   : step === 4
-                    ? `PAGAR $${total.toLocaleString("es-MX")} MXN →`
-                    : "CONTINUAR →"}
+                    ? `PAGAR $${total.toLocaleString("es-MX")} MXN`
+                    : "CONTINUAR"}
               </button>
             </div>
           </section>
@@ -710,7 +744,7 @@ function Confirmation({
       </div>
       <div className="confirmation-actions">
         <Link className="button button-dark" href="/mi-manada">
-          VER MIS AVENTURAS →
+          VER MIS AVENTURAS <ArrowRight aria-hidden="true" />
         </Link>
         <button
           className="button outline-button"
@@ -748,7 +782,7 @@ function TransferPending({ adventure }: { adventure: Adventure }) {
         </p>
       </div>
       <Link className="button button-dark" href="/mi-manada">
-        VER MIS AVENTURAS →
+        VER MIS AVENTURAS <ArrowRight aria-hidden="true" />
       </Link>
     </section>
   );

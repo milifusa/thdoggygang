@@ -36,6 +36,18 @@ npm run dev
 
 La `SUPABASE_SERVICE_ROLE_KEY` y la llave de cifrado del QR sólo pueden existir del lado servidor. Los originales de fotos, comprobantes y responsivas permanecen privados y deben entregarse mediante signed URLs después de autorizar al usuario.
 
+### Correos de acceso con Resend
+
+En producción, Supabase Auth debe enviar sus correos mediante el SMTP de Resend. Primero se verifica el dominio `thedoggygang.com` en Resend y después, en Supabase → Authentication → SMTP Settings, se configuran:
+
+- Host: `smtp.resend.com`
+- Puerto: `465`
+- Usuario: `resend`
+- Contraseña: una API key de Resend guardada únicamente en el panel de Supabase
+- Remitente sugerido: `The Doggy Gang <acceso@thedoggygang.com>`
+
+Las plantillas de acceso, confirmación, invitación y recuperación están versionadas en `supabase/templates`. La API key nunca debe incluirse en el repositorio ni en variables públicas de la aplicación.
+
 ## Pagos
 
 El flujo de tarjeta crea un Stripe Checkout alojado y verifica `checkout.session.completed` mediante `Stripe-Signature`. El flujo de transferencia sube el comprobante al bucket privado, lo deja en revisión y permite que ADMIN lo apruebe. Ambos métodos confirman la reservación y generan un token QR cifrado; la base sólo usa su hash para validarlo.
