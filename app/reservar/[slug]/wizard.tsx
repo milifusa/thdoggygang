@@ -3,14 +3,16 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Check, CircleCheck, Plus, X } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
+import type { Product } from "../../lib/products";
 
 const steps = [
   "Personas",
   "Perritos",
   "Transporte",
+  "Productos",
   "Responsivas",
   "Pago",
   "Listo",
@@ -84,10 +86,12 @@ function SignaturePad({
 export function BookingWizard({
   adventure,
   context,
+  products,
   cardPaymentsEnabled,
 }: {
   adventure: Adventure;
   context: BookingContext;
+  products: Product[];
   cardPaymentsEnabled: boolean;
 }) {
   const people = context.people;
@@ -100,6 +104,10 @@ export function BookingWizard({
   const [transport, setTransport] = useState(false);
   const [transportPeople, setTransportPeople] = useState(
     people[0] ? [people[0].id] : [],
+  );
+  const [productQuantities, setProductQuantities] = useState<Record<string,number>>({});
+  const [productVariants, setProductVariants] = useState<Record<string,string>>(
+    Object.fromEntries(products.map((product)=>[product.id,product.variants[0]??""])),
   );
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [waiverSaved, setWaiverSaved] = useState(false);
@@ -114,9 +122,13 @@ export function BookingWizard({
     () => calculateHikeSubtotal(adventure, selectedPeople.length, selectedDogs.length),
     [adventure, selectedPeople.length, selectedDogs.length],
   );
+  const productsSubtotal = useMemo(
+    () => products.reduce((sum,product)=>sum+(productQuantities[product.id]??0)*(product.priceCents/100),0),
+    [products,productQuantities],
+  );
   const total = useMemo(
-    () => hikeSubtotal + (transport ? transportPeople.length * adventure.transportPrice : 0),
-    [hikeSubtotal, transport, transportPeople.length, adventure.transportPrice],
+    () => hikeSubtotal + (transport ? transportPeople.length * adventure.transportPrice : 0) + productsSubtotal,
+    [hikeSubtotal, transport, transportPeople.length, adventure.transportPrice,productsSubtotal],
   );
   const toggle = (
     id: string,
@@ -141,6 +153,7 @@ export function BookingWizard({
         transportPersonIds: transport
           ? transportPeople.filter((id) => selectedPeople.includes(id))
           : [],
+        productSelections: products.filter((product)=>(productQuantities[product.id]??0)>0).map((product)=>({productId:product.id,variant:productVariants[product.id]??"",quantity:productQuantities[product.id]})),
       }),
     });
     const payload = (await response.json()) as {
@@ -156,11 +169,11 @@ export function BookingWizard({
     setProcessing(true);
     setSyncMessage("");
     try {
-      const savedBookingId = step === 4 ? bookingId : await persistDraft();
-      if (step === 4 && context.mode === "live" && !savedBookingId)
+      const savedBookingId = step === 5 ? bookingId : await persistDraft();
+      if (step === 5 && context.mode === "live" && !savedBookingId)
         throw new Error("No encontramos tu borrador. Vuelve al paso anterior.");
       if (
-        step === 3 &&
+        step === 4 &&
         context.mode === "live" &&
         savedBookingId &&
         signatureData &&
@@ -179,7 +192,7 @@ export function BookingWizard({
           throw new Error(payload.error ?? "No pudimos guardar la responsiva.");
         setWaiverSaved(true);
       }
-      if (step === 4 && context.mode === "live") {
+      if (step === 5 && context.mode === "live") {
         if (payment === "card") {
           const response = await fetch("/api/checkout/stripe", {
             method: "POST",
@@ -213,12 +226,12 @@ export function BookingWizard({
             payload.error ?? "No pudimos recibir el comprobante.",
           );
         setTransferPending(true);
-        setStep(5);
+        setStep(6);
         return;
       }
-      if (step === 4)
+      if (step === 5)
         await new Promise((resolve) => window.setTimeout(resolve, 700));
-      setStep((current) => Math.min(5, current + 1));
+      setStep((current) => Math.min(6, current + 1));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setSyncMessage(
@@ -235,14 +248,14 @@ export function BookingWizard({
       ? selectedPeople.length > 0
       : step === 1
         ? selectedDogs.length > 0
-        : step === 3
+        : step === 4
           ? Boolean(signatureData) && accepted
-          : step === 4 && context.mode === "live" && payment === "transfer"
+          : step === 5 && context.mode === "live" && payment === "transfer"
             ? Boolean(receiptFile)
             : true;
   const progress = `${Math.round((step / (steps.length - 1)) * 100)}%`;
   const goBack = () => {
-    if (step <= 4) setWaiverSaved(false);
+    if (step <= 5) setWaiverSaved(false);
     setStep((current) => Math.max(0, current - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -261,7 +274,7 @@ export function BookingWizard({
           <X aria-hidden="true" />
         </Link>
       </header>
-      <div className="wizard-progress" aria-label={`Paso ${step + 1} de 6`}>
+      <div className="wizard-progress" aria-label={`Paso ${step + 1} de ${steps.length}`}>
         {steps.map((label, index) => (
           <div className={index <= step ? "active" : ""} key={label}>
             <i />
@@ -271,13 +284,13 @@ export function BookingWizard({
           </div>
         ))}
       </div>
-      {step < 5 && (
+      {step < 6 && (
         <section
           className="wizard-mobile-status"
-          aria-label={`Paso ${step + 1} de 6: ${steps[step]}`}
+          aria-label={`Paso ${step + 1} de ${steps.length}: ${steps[step]}`}
         >
           <div className="wizard-mobile-heading">
-            <span>PASO {step + 1} DE 6</span>
+            <span>PASO {step + 1} DE {steps.length}</span>
             <strong>{steps[step]}</strong>
           </div>
           <div className="wizard-mobile-total">
@@ -295,10 +308,10 @@ export function BookingWizard({
         </section>
       )}
 
-      {step < 5 ? (
+      {step < 6 ? (
         <div className="wizard-layout">
           <section className="wizard-main">
-            <p className="wizard-kicker">PASO {step + 1} DE 6</p>
+            <p className="wizard-kicker">PASO {step + 1} DE {steps.length}</p>
             {step === 0 && (
               <>
                 <h1>
@@ -484,6 +497,30 @@ export function BookingWizard({
             {step === 3 && (
               <>
                 <h1>
+                  Equipo para
+                  <br />
+                  la aventura.
+                </h1>
+                <p className="wizard-lead">
+                  Puedes agregar productos a tu reservación y te los entregaremos en este hike.
+                </p>
+                {products.length ? <div className="wizard-product-grid">
+                  {products.map((product)=>{
+                    const quantity=productQuantities[product.id]??0;
+                    return <article className={quantity>0?"selected":""} key={product.id}>
+                      <img src={product.image} alt={product.name}/>
+                      <div><span>{product.category}</span><h3>{product.name}</h3><p>{product.description}</p><strong>${(product.priceCents/100).toLocaleString("es-MX")} MXN</strong></div>
+                      {product.variants.length>0&&<label>ELIGE OPCIÓN<select value={productVariants[product.id]??product.variants[0]} onChange={(event)=>setProductVariants((current)=>({...current,[product.id]:event.target.value}))}>{product.variants.map((variant)=><option key={variant}>{variant}</option>)}</select></label>}
+                      <div className="product-quantity"><button type="button" aria-label={`Quitar ${product.name}`} disabled={quantity===0} onClick={()=>setProductQuantities((current)=>({...current,[product.id]:Math.max(0,quantity-1)}))}><Minus/></button><span>{quantity}</span><button type="button" aria-label={`Agregar ${product.name}`} disabled={quantity>=product.stock} onClick={()=>setProductQuantities((current)=>({...current,[product.id]:quantity+1}))}><Plus/></button></div>
+                    </article>;
+                  })}
+                </div>:<div className="wizard-empty"><ShoppingBag/><p>No hay productos disponibles en este momento.</p></div>}
+                <p className="product-pickup-note">Los productos se entregan durante el check-in del hike.</p>
+              </>
+            )}
+            {step === 4 && (
+              <>
+                <h1>
                   Un acuerdo
                   <br />
                   para cuidarnos.
@@ -528,7 +565,7 @@ export function BookingWizard({
                 </label>
               </>
             )}
-            {step === 4 && (
+            {step === 5 && (
               <>
                 <h1>
                   Último paso.
@@ -613,7 +650,7 @@ export function BookingWizard({
               >
                 {processing
                   ? "GUARDANDO…"
-                  : step === 4
+                  : step === 5
                     ? `PAGAR $${total.toLocaleString("es-MX")} MXN`
                     : "CONTINUAR"}
               </button>
@@ -652,6 +689,12 @@ export function BookingWizard({
                   <dd>
                     ${(transportPeople.length * adventure.transportPrice).toLocaleString("es-MX")}
                   </dd>
+                </div>
+              )}
+              {productsSubtotal > 0 && (
+                <div>
+                  <dt>Productos</dt>
+                  <dd>${productsSubtotal.toLocaleString("es-MX")}</dd>
                 </div>
               )}
               <div className="summary-total">

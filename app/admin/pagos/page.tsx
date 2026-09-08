@@ -11,7 +11,7 @@ export default async function PaymentsAdminPage() {
   await requireStaffSession("/admin/pagos");
   const supabase = await createSupabaseServerClient();
   const [{ data: payments }, { data: next }] = await Promise.all([
-    supabase.from("payments").select("id,provider,method,status,amount_cents,paid_at,created_at,order:orders(order_number,booking:bookings(booking_number,profile:profiles(first_name,last_name),hike:hikes(name)))").order("created_at", { ascending: false }).limit(300),
+    supabase.from("payments").select("id,provider,method,status,amount_cents,paid_at,created_at,order:orders(order_number,profile:profiles(first_name,last_name),order_items(item_type,description),booking:bookings(booking_number,profile:profiles(first_name,last_name),hike:hikes(name)))").order("created_at", { ascending: false }).limit(300),
     supabase.from("hikes").select("id").gte("starts_at", new Date().toISOString()).is("deleted_at", null).order("starts_at").limit(1).maybeSingle(),
   ]);
   const paid = payments?.filter((item) => item.status === "PAID").reduce((sum, item) => sum + item.amount_cents, 0) ?? 0;
@@ -22,7 +22,8 @@ export default async function PaymentsAdminPage() {
     <section className="admin-table admin-module-panel"><div className="admin-section-head"><div><p>MOVIMIENTOS</p><h2>Historial de pagos</h2></div></div>
       <div className="admin-payment-list">{payments?.map((payment) => {
         const order = Array.isArray(payment.order) ? payment.order[0] : payment.order; const booking = Array.isArray(order?.booking) ? order.booking[0] : order?.booking; const hike = Array.isArray(booking?.hike) ? booking.hike[0] : booking?.hike;
-        return <article key={payment.id}><div><strong>{profileName(booking?.profile)}</strong><small>{hike?.name ?? "Compra de fotografías"} · {order?.order_number}</small></div><span>{payment.method === "CARD" ? "TARJETA" : "TRANSFERENCIA"}</span><strong>{money(payment.amount_cents)}</strong><em className={payment.status === "PAID" ? "paid" : ""}>{paymentStatus(payment.status)}</em><small>{adminDate(payment.paid_at ?? payment.created_at)}</small>{payment.status === "UNDER_REVIEW" ? <ApprovePaymentButton paymentId={payment.id} /> : payment.status === "PAID" ? <CircleCheck /> : <AlertTriangle />}</article>;
+        const hasProducts=order?.order_items?.some((item)=>item.item_type==="PRODUCT");
+        return <article key={payment.id}><div><strong>{profileName(booking?.profile ?? order?.profile)}</strong><small>{hike?.name ?? (hasProducts?"Pedido de productos":"Compra de fotografías")} · {order?.order_number}</small></div><span>{payment.method === "CARD" ? "TARJETA" : "TRANSFERENCIA"}</span><strong>{money(payment.amount_cents)}</strong><em className={payment.status === "PAID" ? "paid" : ""}>{paymentStatus(payment.status)}</em><small>{adminDate(payment.paid_at ?? payment.created_at)}</small>{payment.status === "UNDER_REVIEW" ? <ApprovePaymentButton paymentId={payment.id} /> : payment.status === "PAID" ? <CircleCheck /> : <AlertTriangle />}</article>;
       })}</div>
     </section>
   </section></main>;

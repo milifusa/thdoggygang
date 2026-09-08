@@ -13,8 +13,9 @@ export default async function Home() {
       <header className="site-header">
         <Link className="wordmark" href="/" aria-label="The Doggy Gang, inicio">THE DOGGY <span>GANG</span></Link>
         <nav className="desktop-nav" aria-label="Navegación principal">
-          <a href="#aventuras">Aventuras</a><a href="#manada">La manada</a><a href="#como-funciona">¿Cómo funciona?</a>
+          <a href="#aventuras">Aventuras</a><Link href="/tienda">Tienda</Link><a href="#manada">La manada</a><a href="#como-funciona">¿Cómo funciona?</a>
         </nav>
+        <Link className="mobile-store-link" href="/tienda">TIENDA</Link>
         <Link className="header-account" href="/ingresar">MI CUENTA <span aria-hidden="true">→</span></Link>
       </header>
 
@@ -85,7 +86,7 @@ export default async function Home() {
       <section className="quote-band"><p>“{content.quote}”</p><span>{content.quoteAttribution}</span></section>
       <footer>
         <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>{content.footerText}</p>
-        <div><a href={content.footerInstagramUrl} target="_blank" rel="noreferrer">Instagram</a><a href={content.footerWhatsappUrl}>WhatsApp</a><a href={content.footerTermsUrl}>Términos</a></div><small>© 2026 THE DOGGY GANG</small>
+        <div><Link href="/tienda">Tienda</Link><a href={content.footerInstagramUrl} target="_blank" rel="noreferrer">Instagram</a><a href={content.footerWhatsappUrl}>WhatsApp</a><a href={content.footerTermsUrl}>Términos</a></div><small>© 2026 THE DOGGY GANG</small>
       </footer>
     </main>
   );

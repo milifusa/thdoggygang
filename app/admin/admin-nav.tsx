@@ -7,6 +7,7 @@ import {
   House,
   Mountain,
   PanelsTopLeft,
+  ShoppingBag,
   ReceiptText,
 } from "lucide-react";
 
@@ -16,6 +17,7 @@ const sections = [
   { href: "/admin/reservaciones", label: "Reservaciones", icon: ReceiptText },
   { href: "/admin/pagos", label: "Pagos", icon: BadgeDollarSign },
   { href: "/admin/fotos", label: "Fotografías", icon: Camera },
+  { href: "/admin/productos", label: "Productos", icon: ShoppingBag },
   { href: "/admin/reportes", label: "Reportes", icon: ChartNoAxesCombined },
   { href: "/admin/sitio", label: "Sitio", icon: PanelsTopLeft },
 ] as const;

@@ -15,6 +15,7 @@ export async function POST(_: Request, { params }: { params: Promise<{ id: strin
   await service.from('payments').update({ status: 'PAID', paid_at: new Date().toISOString() }).eq('id', payment.id);
   await service.from('payment_receipts').update({ reviewed_by: admin.id, reviewed_at: new Date().toISOString() }).eq('payment_id', payment.id);
   await service.from('orders').update({ status: 'PAID' }).eq('id', payment.order_id);
+  await service.rpc('commit_product_inventory', { p_order_id: payment.order_id });
   if (bookingId) { await service.from('bookings').update({ status: 'CONFIRMED', confirmed_at: new Date().toISOString() }).eq('id', bookingId); await ensureBookingQrToken(bookingId); }
   await service.from('audit_logs').insert({ actor_profile_id: admin.id, action: 'TRANSFER_PAYMENT_APPROVED', entity_type: 'payment', entity_id: payment.id, metadata: { booking_id: bookingId } });
   return Response.json({ ok: true });

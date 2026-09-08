@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     if (orderId) {
       await service.from('payments').update({ status: 'PAID', paid_at: new Date().toISOString(), raw_status: event.type }).eq('provider', 'stripe').eq('provider_payment_id', event.data.object.id);
       await service.from('orders').update({ status: 'PAID' }).eq('id', orderId);
+      await service.rpc('commit_product_inventory', { p_order_id: orderId });
       if (bookingId) {
         await service.from('bookings').update({ status: 'CONFIRMED', confirmed_at: new Date().toISOString() }).eq('id', bookingId);
         await ensureBookingQrToken(bookingId);

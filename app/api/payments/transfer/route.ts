@@ -10,7 +10,7 @@ export async function POST(request: Request) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'Tu sesión expiró.' }, { status: 401 });
-  const { data: booking } = await supabase.from('bookings').select('id, booking_number, profile_id, total_cents, currency, status, hike:hikes(name), booking_participants(id)').eq('id', bookingId).single();
+  const { data: booking } = await supabase.from('bookings').select('id, booking_number, profile_id, total_cents, currency, status, hike:hikes(name), booking_participants(id), booking_product_selections(product_id,variant,quantity,unit_price_cents,product:products(name))').eq('id', bookingId).single();
   if (!booking || booking.status === 'CANCELLED') return Response.json({ error: 'Reservación no disponible.' }, { status: 404 });
   const { count: signedCount } = await supabase.from('signed_waivers').select('id', { count: 'exact', head: true }).eq('booking_id', booking.id);
   if ((signedCount ?? 0) < booking.booking_participants.length) return Response.json({ error: 'Falta firmar la responsiva.' }, { status: 409 });
@@ -21,7 +21,9 @@ export async function POST(request: Request) {
     const result = await service.from('orders').insert({ order_number: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, profile_id: booking.profile_id, booking_id: booking.id, status: 'PENDING', total_cents: booking.total_cents, currency: booking.currency }).select('id').single();
     if (result.error || !result.data) return Response.json({ error: 'No pudimos crear la orden.' }, { status: 500 });
     order = result.data;
-    await service.from('order_items').insert({ order_id: order.id, item_type: 'HIKE', reference_id: booking.id, description: hike?.name ?? 'Aventura The Doggy Gang', quantity: 1, unit_price_cents: booking.total_cents });
+    const productSubtotal = booking.booking_product_selections.reduce((sum, item) => sum + item.quantity * item.unit_price_cents, 0);
+    const items = [{ order_id: order.id, item_type: 'HIKE', reference_id: booking.id, description: hike?.name ?? 'Aventura The Doggy Gang', quantity: 1, unit_price_cents: booking.total_cents - productSubtotal }, ...booking.booking_product_selections.map((item) => { const product = Array.isArray(item.product) ? item.product[0] : item.product; return { order_id: order!.id, item_type: 'PRODUCT', reference_id: item.product_id, description: `${product?.name ?? 'Producto'}${item.variant ? ` · ${item.variant}` : ''}`, quantity: item.quantity, unit_price_cents: item.unit_price_cents }; })];
+    await service.from('order_items').insert(items);
   }
   const extension = receipt.type === 'application/pdf' ? 'pdf' : receipt.type === 'image/png' ? 'png' : 'jpg';
   const storagePath = `${booking.profile_id}/${booking.id}/${crypto.randomUUID()}.${extension}`;

@@ -10,7 +10,7 @@ export default async function ReservationsAdminPage() {
   await requireStaffSession("/admin/reservaciones");
   const supabase = await createSupabaseServerClient();
   const [{ data: bookings }, { data: next }] = await Promise.all([
-    supabase.from("bookings").select("id,booking_number,status,total_cents,created_at,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id),check_ins(id)").order("created_at", { ascending: false }).limit(300),
+    supabase.from("bookings").select("id,booking_number,status,total_cents,created_at,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id),check_ins(id)").neq("status","CANCELLED").order("created_at", { ascending: false }).limit(300),
     supabase.from("hikes").select("id").gte("starts_at", new Date().toISOString()).is("deleted_at", null).order("starts_at").limit(1).maybeSingle(),
   ]);
   return <main className="admin-page"><AdminNav active="/admin/reservaciones" hikeId={next?.id} /><section className="admin-content"><AdminMobileNav />

@@ -15,7 +15,7 @@ export default async function AdminDashboard() {
   const now = new Date().toISOString();
   const [{ data: hikes }, { data: pendingPayments }, { data: recentBookings }, { count: photoCount }] = await Promise.all([
     supabase.from("hikes").select("id,name,slug,starts_at,location_name,capacity,cover_path").gte("starts_at", now).is("deleted_at", null).order("starts_at").limit(10),
-    supabase.from("payments").select("id,amount_cents,created_at,order:orders(order_number,booking:bookings(booking_number,profile:profiles(first_name,last_name)))").eq("status", "UNDER_REVIEW").order("created_at", { ascending: false }).limit(5),
+    supabase.from("payments").select("id,amount_cents,created_at,order:orders(order_number,profile:profiles(first_name,last_name),booking:bookings(booking_number,profile:profiles(first_name,last_name)))").eq("status", "UNDER_REVIEW").order("created_at", { ascending: false }).limit(5),
     supabase.from("bookings").select("id,status,total_cents,hike_id").in("status", ["CONFIRMED", "PENDING_PAYMENT"]).order("created_at", { ascending: false }).limit(250),
     supabase.from("photos").select("id", { count: "exact", head: true }),
   ]);
@@ -57,6 +57,7 @@ export default async function AdminDashboard() {
               <Link href="/admin/hikes"><strong>Hikes</strong><span>Edita contenido, precios y transporte.</span></Link>
               <Link href="/admin/reservaciones"><strong>Reservaciones</strong><span>Consulta personas, perritos y estatus.</span></Link>
               <Link href="/admin/fotos"><strong>Fotografías</strong><span>Carga, publica y vende recuerdos.</span></Link>
+              <Link href="/admin/productos"><strong>Productos</strong><span>Administra catálogo, precios e inventario.</span></Link>
               <Link href="/admin/reportes"><strong>Reportes</strong><span>Descarga manifiestos y conciliación.</span></Link>
               <Link href="/admin/sitio"><strong>Sitio</strong><span>Edita imágenes y textos del landing.</span></Link>
             </div>
@@ -66,7 +67,7 @@ export default async function AdminDashboard() {
             {pendingPayments?.length ? pendingPayments.map((payment) => {
               const order = Array.isArray(payment.order) ? payment.order[0] : payment.order;
               const booking = Array.isArray(order?.booking) ? order.booking[0] : order?.booking;
-              return <article key={payment.id}><strong><AlertTriangle aria-hidden="true" /> {profileName(booking?.profile)}</strong><p>Transferencia por {money(payment.amount_cents)}.</p><ApprovePaymentButton paymentId={payment.id} /></article>;
+              return <article key={payment.id}><strong><AlertTriangle aria-hidden="true" /> {profileName(booking?.profile ?? order?.profile)}</strong><p>Transferencia por {money(payment.amount_cents)}.</p><ApprovePaymentButton paymentId={payment.id} /></article>;
             }) : <div className="admin-clear-state"><CircleCheck aria-hidden="true" /><p>No hay pagos por revisar.</p></div>}
             <Link className="admin-text-link" href="/admin/pagos">VER TODOS LOS PAGOS</Link>
           </div>
