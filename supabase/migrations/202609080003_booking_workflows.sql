@@ -116,7 +116,7 @@ insert into public.waiver_templates (id, name) values ('00000000-0000-4000-8000-
 insert into public.waiver_versions (id, template_id, version, body, body_hash)
 values ('00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000101', 1,
   'Declaro que participo voluntariamente, que la información proporcionada es correcta y que seguiré las indicaciones de seguridad, cuidado del entorno y bienestar de los perritos.',
-  encode(digest('Responsiva general de aventura v1', 'sha256'), 'hex'))
+  encode(extensions.digest('Responsiva general de aventura v1', 'sha256'), 'hex'))
 on conflict (id) do nothing;
 
 insert into public.hikes (slug, name, description, starts_at, location_name, price_cents, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, recommended_dog_sizes, includes, packing_list, rules, cancellation_policy, cover_path, published)

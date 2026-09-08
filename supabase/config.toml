@@ -1,0 +1,10 @@
+project_id = "thdoggygang"
+
+[auth]
+site_url = "https://thdoggygang.vercel.app"
+additional_redirect_urls = [
+  "http://localhost:3000/**",
+  "https://thdoggygang.vercel.app/**",
+  "https://www.thedoggygang.com/**",
+]
+enable_signup = true
