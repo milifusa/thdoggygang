@@ -30,9 +30,17 @@ export async function loadBookingContext(): Promise<BookingContext> {
     supabase.from('dogs').select('id, name, breed, birth_date, photo_path').eq('owner_profile_id', profile.id).is('deleted_at', null).order('created_at'),
   ]);
   const age = (birthDate: string | null) => birthDate ? Math.max(0, new Date().getFullYear() - new Date(birthDate).getFullYear()) : null;
+  const dogOptions = await Promise.all((dogs ?? []).map(async (dog) => {
+    let image = 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=300&q=80';
+    if (dog.photo_path) {
+      const { data: signedPhoto } = await supabase.storage.from('dog-photos').createSignedUrl(dog.photo_path, 60 * 60);
+      if (signedPhoto?.signedUrl) image = signedPhoto.signedUrl;
+    }
+    return { id: dog.id, name: dog.name, detail: `${dog.breed ?? 'Perrito'}${age(dog.birth_date) ? ` · ${age(dog.birth_date)} años` : ''}`, image };
+  }));
   return {
     mode: 'live', authenticated: true,
     people: (people ?? []).map((person, index) => ({ id: person.id, name: `${person.first_name} ${person.last_name}`.trim(), detail: `${index === 0 ? 'Titular' : 'Acompañante'} · ${person.is_minor ? 'Menor' : 'Adulto'}`, initials: `${person.first_name?.[0] ?? ''}${person.last_name?.[0] ?? ''}`.toUpperCase() })),
-    dogs: (dogs ?? []).map((dog) => ({ id: dog.id, name: dog.name, detail: `${dog.breed ?? 'Perrito'}${age(dog.birth_date) ? ` · ${age(dog.birth_date)} años` : ''}`, image: dog.photo_path ?? 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=300&q=80' })),
+    dogs: dogOptions,
   };
 }

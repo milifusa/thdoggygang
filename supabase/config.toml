@@ -8,3 +8,19 @@ additional_redirect_urls = [
   "https://www.thedoggygang.com/**",
 ]
 enable_signup = true
+
+[auth.email.template.magic_link]
+subject = "Tu acceso a The Doggy Gang"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.invite]
+subject = "Bienvenida a The Doggy Gang"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.confirmation]
+subject = "Confirma tu correo | The Doggy Gang"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "Recupera tu acceso | The Doggy Gang"
+content_path = "./supabase/templates/recovery.html"

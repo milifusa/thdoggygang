@@ -77,10 +77,18 @@ export default function Home() {
           </ol>
         </div>
       </section>
+      <section className="instagram-feed" id="instagram">
+        <div className="instagram-heading"><div><p className="eyebrow">DESDE LA MONTAÑA</p><h2>Así se vive<br />en la manada.</h2></div><div><p>Rutas reales, perros libres para explorar y recuerdos compartidos desde Puebla.</p><a href="https://www.instagram.com/the_doggy_gangmx/" target="_blank" rel="noreferrer">SEGUIR @THE_DOGGY_GANGMX →</a></div></div>
+        <div className="instagram-grid">
+          <iframe title="Próximas rutas de The Doggy Gang" src="https://www.instagram.com/p/DcfMAamMgFB/embed/captioned/" loading="lazy" allow="encrypted-media" />
+          <iframe title="Sendero del Duende de The Doggy Gang" src="https://www.instagram.com/reel/DcyxwONxgfK/embed/captioned/" loading="lazy" allow="encrypted-media" />
+          <iframe title="Entre montañas con The Doggy Gang" src="https://www.instagram.com/reel/Dci9RxaRr7X/embed/captioned/" loading="lazy" allow="encrypted-media" />
+        </div>
+      </section>
       <section className="quote-band"><p>“Los mejores caminos se recorren con huellas al lado.”</p><span>THE DOGGY GANG · PUEBLA, MX</span></section>
       <footer>
         <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>Aventuras reales. Perritos felices. Una gran manada.</p>
-        <div><a href="#aventuras">Instagram</a><a href="#aventuras">WhatsApp</a><a href="#aventuras">Términos</a></div><small>© 2026 THE DOGGY GANG</small>
+        <div><a href="https://www.instagram.com/the_doggy_gangmx/" target="_blank" rel="noreferrer">Instagram</a><a href="#aventuras">WhatsApp</a><a href="#aventuras">Términos</a></div><small>© 2026 THE DOGGY GANG</small>
       </footer>
     </main>
   );

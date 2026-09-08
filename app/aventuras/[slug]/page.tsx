@@ -38,7 +38,7 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
             <div><h3>Esto incluye</h3><ul><li>Guías de The Doggy Gang</li><li>Kit de bienvenida</li><li>Hidratación durante la ruta</li><li>Galería digital de recuerdos</li></ul></div>
             <div><h3>Que no se te olvide</h3><ul><li>Correa fija y placa</li><li>Agua para tu perrito</li><li>Calzado con buena tracción</li><li>Bolsitas y snacks</li></ul></div>
           </div>
-          <div className="recommendation"><span>🐾</span><div><strong>¿Esta ruta es para mi perrito?</strong><p>Recomendada para perros sociables, sanos y con condición para caminar al menos 2.5 horas. Tamaños pequeños bien acondicionados también son bienvenidos.</p></div></div>
+          <div className="recommendation"><span>DG</span><div><strong>¿Esta ruta es para mi perrito?</strong><p>Recomendada para perros sociables, sanos y con condición para caminar al menos 2.5 horas. Tamaños pequeños bien acondicionados también son bienvenidos.</p></div></div>
           <div className="rules-block"><h3>Antes de caminar juntos</h3><details open><summary>Reglas de la manada</summary><p>Todos los perritos deben permanecer con correa. Pedimos respeto por el entorno, los ritmos del grupo y las indicaciones de guías.</p></details><details><summary>Cancelaciones</summary><p>Puedes transferir tu lugar hasta 72 horas antes. Las rutas pueden reprogramarse por condiciones meteorológicas.</p></details></div>
         </div>
         <aside className="booking-card">
