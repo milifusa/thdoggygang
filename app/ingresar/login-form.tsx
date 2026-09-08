@@ -1,21 +1,28 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   mexicoNationalDigits,
   normalizeMexicoPhone,
 } from "../lib/mexico-phone";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
+import type { LoginContent } from "../lib/login-content";
 
 export function LoginForm({
   configured,
   nextPath,
   initialMessage = "",
+  content,
+  desktopImage,
+  mobileImage,
 }: {
   configured: boolean;
   nextPath: string;
   initialMessage?: string;
+  content: LoginContent;
+  desktopImage: string;
+  mobileImage: string;
 }) {
   const [method, setMethod] = useState<"email" | "phone">("email");
   const [value, setValue] = useState("");
@@ -123,57 +130,62 @@ export function LoginForm({
   };
 
   return (
-    <main className="login-page">
+    <main
+      className="login-page"
+      style={
+        {
+          "--login-desktop-image": `url(${desktopImage})`,
+          "--login-mobile-image": `url(${mobileImage})`,
+          "--login-position": content.imagePosition,
+        } as CSSProperties
+      }
+    >
       <section className="login-photo">
         <Link className="wordmark" href="/">
           THE DOGGY <span>GANG</span>
         </Link>
         <div>
-          <p>“Cada aventura empieza con un sí.”</p>
+          {content.quoteVisible && <p>“{content.quote}”</p>}
           <span>THE DOGGY GANG</span>
         </div>
       </section>
       <section className="login-panel">
         <div>
-          <p className="eyebrow">BIENVENIDO A TU MANADA</p>
-          <h1>
-            Qué gusto
-            <br />
-            verte de nuevo.
-          </h1>
-          <p>Entra sin contraseñas. Te enviaremos un acceso seguro.</p>
+          <p className="eyebrow">{content.eyebrow}</p>
+          <h1>{content.title}</h1>
+          <p>{content.description}</p>
           <div className="login-tabs">
             <button
               type="button"
               onClick={() => changeMethod("email")}
               className={method === "email" ? "active" : ""}
             >
-              EMAIL
+              {content.emailTab}
             </button>
             <button
               type="button"
               onClick={() => changeMethod("phone")}
               className={method === "phone" ? "active" : ""}
             >
-              TELÉFONO
+              {content.phoneTab}
             </button>
           </div>
           <form onSubmit={submit}>
             {method === "email" ? (
               <label>
-                TU EMAIL
+                {content.emailLabel}
                 <input
                   required
                   value={value}
                   onChange={(event) => setValue(event.target.value)}
                   type="email"
                   autoComplete="email"
-                  placeholder="hola@email.com"
+                  placeholder={content.emailPlaceholder}
                 />
               </label>
             ) : (
               <label>
-                TU TELÉFONO
+                {content.phoneLabel}
                 <span className="mexico-phone">
                   <b>MX +52</b>
                   <input
@@ -188,7 +200,7 @@ export function LoginForm({
                     pattern="[0-9]{10}"
                     minLength={10}
                     maxLength={10}
-                    placeholder="2220000000"
+                    placeholder={content.phonePlaceholder}
                   />
                 </span>
                 <small>10 dígitos · sólo teléfonos de México</small>
@@ -196,7 +208,7 @@ export function LoginForm({
             )}
             {method === "phone" && sent && (
               <label>
-                CÓDIGO DE 6 DÍGITOS
+                {content.codeLabel}
                 <input
                   required
                   inputMode="numeric"
@@ -222,8 +234,8 @@ export function LoginForm({
                 : cooldown > 0 && (method === "email" || !sent)
                   ? `REENVIAR EN ${cooldown}s`
                   : method === "phone" && sent
-                    ? "VERIFICAR Y ENTRAR →"
-                    : "ENVIAR ACCESO →"}
+                    ? `${content.verifyCta} →`
+                    : `${method === "email" ? content.emailCta : content.phoneCta} →`}
             </button>
           </form>
           {message && (
@@ -232,7 +244,9 @@ export function LoginForm({
             </p>
           )}
           <small>
-            Al continuar aceptas nuestros términos y aviso de privacidad.
+            {content.legalText}{" "}
+            <Link href={content.termsUrl}>{content.termsLabel}</Link> y{" "}
+            <Link href={content.privacyUrl}>{content.privacyLabel}</Link>.
           </small>
         </div>
       </section>

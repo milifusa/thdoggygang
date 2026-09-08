@@ -17,7 +17,10 @@ export async function refreshSupabaseSession(request: NextRequest) {
         );
         response = NextResponse.next({ request });
         cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options),
+          response.cookies.set(name, value, {
+            ...options,
+            maxAge: 60 * 60 * 48,
+          }),
         );
         Object.entries(headers).forEach(([name, value]) =>
           response.headers.set(name, value),

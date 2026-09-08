@@ -15,8 +15,8 @@ const hikeSchema = z.object({
 async function adminClient() {
   const supabase = await createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await supabase.from('profiles').select('role').eq('auth_user_id', user.id).single();
-  return profile?.role === 'ADMIN' ? supabase : null;
+  const { data: profile } = await supabase.from('profiles').select('role,active').eq('auth_user_id', user.id).single();
+  return profile?.role === 'ADMIN' && profile.active ? supabase : null;
 }
 
 export async function POST(request: Request) {

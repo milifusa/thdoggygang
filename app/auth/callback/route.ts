@@ -18,7 +18,17 @@ export async function GET(request: Request) {
         ? await supabase.auth.exchangeCodeForSession(code)
         : { error: new Error('Missing authentication parameters.') };
     if (result.error) throw result.error;
-    return NextResponse.redirect(new URL(next, url.origin));
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: profile } = user
+      ? await supabase.from('profiles').select('role,active').eq('auth_user_id', user.id).maybeSingle()
+      : { data: null };
+    if (!profile?.active) throw new Error('Inactive account.');
+    const destination = profile.role === 'ADMIN'
+      ? '/admin'
+      : profile.role === 'GUIDE'
+        ? '/admin/hikes'
+        : next;
+    return NextResponse.redirect(new URL(destination, url.origin));
   } catch {
     const login = new URL('/ingresar', url.origin);
     login.searchParams.set('error', 'expired');

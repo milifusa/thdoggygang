@@ -1,8 +1,16 @@
 import Link from "next/link";
-import { CircleCheck, ShoppingBag } from "lucide-react";
+import {
+  CalendarDays,
+  CircleCheck,
+  Dog,
+  Images,
+  ShoppingBag,
+  Users,
+} from "lucide-react";
 import { requireClientSession } from "../lib/auth/guards";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { GangManager, type DogRecord, type PersonRecord } from "./gang-manager";
+import { hikeCoverUrl } from "../lib/data";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +46,7 @@ type HikeSummary = {
   name: string;
   starts_at: string;
   location_name: string;
+  cover_path: string | null;
 };
 type BookingRow = {
   id: string;
@@ -49,8 +58,6 @@ type BookingRow = {
   booking_dogs: Array<{ id: string }>;
 };
 
-const fallbackAdventure =
-  "https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=1200&q=88";
 const initials = (first: string, last: string) =>
   `${first[0] ?? ""}${last[0] ?? ""}`.toUpperCase();
 const date = (value: string) =>
@@ -93,7 +100,7 @@ export default async function MyGangPage({
       supabase
         .from("bookings")
         .select(
-          "id, status, created_at, total_cents, hike:hikes(id, slug, name, starts_at, location_name), booking_participants(id), booking_dogs(id)",
+          "id, status, created_at, total_cents, hike:hikes(id, slug, name, starts_at, location_name, cover_path), booking_participants(id), booking_dogs(id)",
         )
         .eq("profile_id", session.profile.id)
         .order("created_at", { ascending: false })
@@ -152,6 +159,35 @@ export default async function MyGangPage({
     );
   });
   const history = bookings.filter((booking) => booking !== nextBooking);
+  const galleryHikeIds = bookings
+    .filter((booking) => ["CONFIRMED", "COMPLETED"].includes(booking.status))
+    .map((booking) => hikeOf(booking)?.id)
+    .filter((id): id is string => Boolean(id));
+  const { data: galleries } = galleryHikeIds.length
+    ? await supabase
+        .from("hike_galleries")
+        .select(
+          "id,hike_id,photos:photos!photos_gallery_id_fkey(thumbnail_path,watermarked_path,access)",
+        )
+        .in("hike_id", galleryHikeIds)
+        .not("published_at", "is", null)
+    : { data: [] };
+  const recentGallery = galleries?.[0];
+  const recentPhoto = recentGallery?.photos?.[0];
+  let recentPhotoUrl = "";
+  if (recentPhoto) {
+    const { data: signed } = await supabase.storage
+      .from(
+        recentPhoto.access === "PAID" ? "hike-watermarked" : "hike-previews",
+      )
+      .createSignedUrl(
+        recentPhoto.access === "PAID"
+          ? recentPhoto.watermarked_path
+          : recentPhoto.thumbnail_path,
+        3600,
+      );
+    recentPhotoUrl = signed?.signedUrl ?? "";
+  }
   const firstName = session.profile.first_name || "aventurero";
   const fullName =
     `${session.profile.first_name} ${session.profile.last_name}`.trim();
@@ -179,7 +215,7 @@ export default async function MyGangPage({
           <a href="#perritos">
             <span>DG</span> Perritos
           </a>
-          <Link href="/galeria/sendero-del-duende">
+          <Link href="/mis-fotos">
             <span>FO</span> Mis fotos
           </Link>
         </nav>
@@ -208,6 +244,36 @@ export default async function MyGangPage({
             BUSCAR AVENTURA →
           </Link>
         </div>
+        <nav className="account-quick-actions" aria-label="Accesos rápidos">
+          <a href="#aventuras">
+            <CalendarDays />
+            <span>
+              <strong>Mis aventuras</strong>
+              <small>Reservas y accesos</small>
+            </span>
+          </a>
+          <a href="#personas">
+            <Users />
+            <span>
+              <strong>Personas</strong>
+              <small>{people.length} en tu manada</small>
+            </span>
+          </a>
+          <a href="#perritos">
+            <Dog />
+            <span>
+              <strong>Perritos</strong>
+              <small>{dogs.length} perfiles</small>
+            </span>
+          </a>
+          <Link href="/mis-fotos">
+            <Images />
+            <span>
+              <strong>Mis fotos</strong>
+              <small>{galleries?.length ?? 0} galerías</small>
+            </span>
+          </Link>
+        </nav>
         <section
           className={`next-adventure ${nextBooking ? "" : "empty-adventure"}`}
           id="aventuras"
@@ -215,7 +281,13 @@ export default async function MyGangPage({
           {nextBooking && hikeOf(nextBooking) ? (
             <>
               <div className="next-photo">
-                <img src={fallbackAdventure} alt={hikeOf(nextBooking)!.name} />
+                <img
+                  src={hikeCoverUrl(
+                    hikeOf(nextBooking)!.id,
+                    hikeOf(nextBooking)!.cover_path,
+                  )}
+                  alt={hikeOf(nextBooking)!.name}
+                />
                 <span>PRÓXIMA AVENTURA</span>
               </div>
               <div className="next-details">
@@ -255,7 +327,14 @@ export default async function MyGangPage({
                       ? "VER MI QR →"
                       : "VER DETALLE →"}
                   </Link>
-                  {nextBooking.status === "CONFIRMED" && <Link className="button next-shop-button" href={`/tienda?hike=${hikeOf(nextBooking)!.id}`}><ShoppingBag aria-hidden="true" /> COMPRAR ARTÍCULOS</Link>}
+                  {nextBooking.status === "CONFIRMED" && (
+                    <Link
+                      className="button next-shop-button"
+                      href={`/tienda?hike=${hikeOf(nextBooking)!.id}`}
+                    >
+                      <ShoppingBag aria-hidden="true" /> COMPRAR ARTÍCULOS
+                    </Link>
+                  )}
                 </div>
               </div>
             </>
@@ -298,7 +377,7 @@ export default async function MyGangPage({
             </div>
           </div>
           {history.length ? (
-            history.map((booking) => {
+            history.slice(0, 3).map((booking) => {
               const hike = hikeOf(booking);
               return hike ? (
                 <div className="history-row" key={booking.id}>
@@ -321,6 +400,21 @@ export default async function MyGangPage({
             </div>
           )}
         </section>
+        <section className="recent-photo-preview">
+          <div>
+            <p className="eyebrow">RECUERDOS RECIENTES</p>
+            <h2>Tus aventuras, siempre contigo.</h2>
+            <p>
+              Consulta las galerías publicadas de los hikes en los que
+              participaste.
+            </p>
+            <Link href="/mis-fotos">VER MIS FOTOS →</Link>
+          </div>
+          <img
+            src={recentPhotoUrl || "/brand/profile-trail-sun.png"}
+            alt="Recuerdo reciente de la manada"
+          />
+        </section>
       </section>
       <nav className="mobile-tabbar">
         <Link className="active" href="/mi-manada">
@@ -332,7 +426,7 @@ export default async function MyGangPage({
         <a href="#perritos">
           DG<span>Perritos</span>
         </a>
-        <Link href="/galeria/sendero-del-duende">
+        <Link href="/mis-fotos">
           FO<span>Fotos</span>
         </Link>
       </nav>

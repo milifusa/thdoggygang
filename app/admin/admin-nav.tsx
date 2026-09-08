@@ -12,6 +12,7 @@ import {
   Users,
   ShoppingBag,
   ReceiptText,
+  UserCog,
 } from "lucide-react";
 
 const sections = [
@@ -24,6 +25,7 @@ const sections = [
   { href: "/admin/productos", label: "Productos", icon: ShoppingBag },
   { href: "/admin/reportes", label: "Reportes", icon: ChartNoAxesCombined },
   { href: "/admin/sitio", label: "Sitio", icon: PanelsTopLeft },
+  { href: "/admin/equipo", label: "Equipo", icon: UserCog },
 ] as const;
 
 export function AdminNav({ active, hikeId }: { active: string; hikeId?: string | null }) {
