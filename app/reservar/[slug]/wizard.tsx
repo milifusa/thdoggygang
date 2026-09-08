@@ -285,6 +285,17 @@ export function BookingWizard({
         ))}
       </div>
       {step < 6 && (
+        <div className="wizard-desktop-dog-strip" aria-hidden="true">
+          <div
+            className="wizard-dog-track"
+            style={{ "--wizard-progress": progress } as CSSProperties}
+          >
+            <span className="wizard-dog-path" />
+            <img src="/brand/logo-circular-blue.png" alt="" />
+          </div>
+        </div>
+      )}
+      {step < 6 && (
         <section
           className="wizard-mobile-status"
           aria-label={`Paso ${step + 1} de ${steps.length}: ${steps[step]}`}
@@ -507,11 +518,38 @@ export function BookingWizard({
                 {products.length ? <div className="wizard-product-grid">
                   {products.map((product)=>{
                     const quantity=productQuantities[product.id]??0;
+                    const selectedVariant=productVariants[product.id]??product.variants[0]??"";
                     return <article className={quantity>0?"selected":""} key={product.id}>
-                      <img src={product.image} alt={product.name}/>
-                      <div><span>{product.category}</span><h3>{product.name}</h3><p>{product.description}</p><strong>${(product.priceCents/100).toLocaleString("es-MX")} MXN</strong></div>
-                      {product.variants.length>0&&<label>ELIGE OPCIÓN<select value={productVariants[product.id]??product.variants[0]} onChange={(event)=>setProductVariants((current)=>({...current,[product.id]:event.target.value}))}>{product.variants.map((variant)=><option key={variant}>{variant}</option>)}</select></label>}
-                      <div className="product-quantity"><button type="button" aria-label={`Quitar ${product.name}`} disabled={quantity===0} onClick={()=>setProductQuantities((current)=>({...current,[product.id]:Math.max(0,quantity-1)}))}><Minus/></button><span>{quantity}</span><button type="button" aria-label={`Agregar ${product.name}`} disabled={quantity>=product.stock} onClick={()=>setProductQuantities((current)=>({...current,[product.id]:quantity+1}))}><Plus/></button></div>
+                      <div className="product-visual">
+                        <img src={product.image} alt={product.name}/>
+                        {quantity>0&&<span>EN TU RESERVACIÓN</span>}
+                      </div>
+                      <div className="product-copy">
+                        <span>{product.category}</span>
+                        <h3>{product.name}</h3>
+                        <p>{product.description}</p>
+                        <strong>${(product.priceCents/100).toLocaleString("es-MX")} MXN</strong>
+                      </div>
+                      {product.variants.length>0&&<fieldset className="product-variants">
+                        <legend>ELIGE UNA OPCIÓN</legend>
+                        <div>
+                          {product.variants.map((variant)=><button
+                            type="button"
+                            key={variant}
+                            aria-pressed={selectedVariant===variant}
+                            className={selectedVariant===variant?"active":""}
+                            onClick={()=>setProductVariants((current)=>({...current,[product.id]:variant}))}
+                          >{variant}</button>)}
+                        </div>
+                      </fieldset>}
+                      <div className="product-buy-row">
+                        <span>CANTIDAD</span>
+                        <div className="product-quantity">
+                          <button type="button" aria-label={`Quitar ${product.name}`} disabled={quantity===0} onClick={()=>setProductQuantities((current)=>({...current,[product.id]:Math.max(0,quantity-1)}))}><Minus/></button>
+                          <span aria-live="polite">{quantity}</span>
+                          <button type="button" aria-label={`Agregar ${product.name}`} disabled={quantity>=product.stock} onClick={()=>setProductQuantities((current)=>({...current,[product.id]:quantity+1}))}><Plus/></button>
+                        </div>
+                      </div>
                     </article>;
                   })}
                 </div>:<div className="wizard-empty"><ShoppingBag/><p>No hay productos disponibles en este momento.</p></div>}
@@ -558,10 +596,15 @@ export function BookingWizard({
                 <label className="accept-row">
                   <input
                     type="checkbox"
+                    role="switch"
                     checked={accepted}
                     onChange={(event) => setAccepted(event.target.checked)}
-                  />{" "}
-                  He leído y acepto la responsiva de esta aventura.
+                  />
+                  <span className="accept-toggle" aria-hidden="true"><i>{accepted&&<Check />}</i></span>
+                  <span className="accept-copy">
+                    <strong>He leído y acepto la responsiva.</strong>
+                    <small>{accepted?"Aceptado. Ya puedes continuar.":"Activa este control para poder continuar."}</small>
+                  </span>
                 </label>
               </>
             )}

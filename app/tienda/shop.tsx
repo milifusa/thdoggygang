@@ -4,7 +4,7 @@ import { Minus,Plus,ShoppingBag,Truck } from "lucide-react";
 import type { Product } from "../lib/products";
 
 type HikeOption={id:string;name:string;date:string};
-const money=(cents:number)=>cents.toLocaleString("es-MX",{style:"currency",currency:"MXN"});
+const money=(cents:number)=>(cents/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"});
 
 export function Shop({products,hikes,cardPaymentsEnabled}:{products:Product[];hikes:HikeOption[];cardPaymentsEnabled:boolean}){
   const [quantities,setQuantities]=useState<Record<string,number>>({});
@@ -40,7 +40,38 @@ export function Shop({products,hikes,cardPaymentsEnabled}:{products:Product[];hi
   return <main className="shop-page">
     <section className="shop-hero"><p className="eyebrow light">EQUIPO DE HIKING</p><h1>Listos para<br/>caminar juntos.</h1><p>Equipo seleccionado para hacer más cómodas las aventuras de tu manada.</p></section>
     <section className="shop-shell">
-      <div className="shop-products">{products.map((product)=>{const quantity=quantities[product.id]??0;return <article key={product.id}><img src={product.image} alt={product.name}/><div><span>{product.category}</span><h2>{product.name}</h2><p>{product.description}</p><strong>{money(product.priceCents)} MXN</strong>{product.variants.length>0&&<label>COLOR<select value={variants[product.id]??product.variants[0]} onChange={(e)=>setVariants((current)=>({...current,[product.id]:e.target.value}))}>{product.variants.map((v)=><option key={v}>{v}</option>)}</select></label>}<div className="product-quantity"><button onClick={()=>change(product.id,-1,product.stock)} disabled={quantity===0} aria-label="Quitar"><Minus/></button><span>{quantity}</span><button onClick={()=>change(product.id,1,product.stock)} disabled={quantity>=product.stock} aria-label="Agregar"><Plus/></button></div><small>{product.stock} disponibles</small></div></article>;})}</div>
+      <div className="shop-products">{products.map((product)=>{
+        const quantity=quantities[product.id]??0;
+        const selectedVariant=variants[product.id]??product.variants[0]??"";
+        return <article className={quantity>0?"selected":""} key={product.id}>
+          <img src={product.image} alt={product.name}/>
+          <div>
+            <span>{product.category}</span>
+            <h2>{product.name}</h2>
+            <p>{product.description}</p>
+            <strong>{money(product.priceCents)} MXN</strong>
+            {product.variants.length>0&&<fieldset className="shop-variant-options">
+              <legend>ELIGE UNA OPCIÓN</legend>
+              <div>{product.variants.map((variant)=><button
+                type="button"
+                key={variant}
+                aria-pressed={selectedVariant===variant}
+                className={selectedVariant===variant?"active":""}
+                onClick={()=>setVariants((current)=>({...current,[product.id]:variant}))}
+              >{variant}</button>)}</div>
+            </fieldset>}
+            <div className="shop-product-action">
+              <span>CANTIDAD</span>
+              <div className="product-quantity">
+                <button type="button" onClick={()=>change(product.id,-1,product.stock)} disabled={quantity===0} aria-label={`Quitar ${product.name}`}><Minus/></button>
+                <span>{quantity}</span>
+                <button type="button" onClick={()=>change(product.id,1,product.stock)} disabled={quantity>=product.stock} aria-label={`Agregar ${product.name}`}><Plus/></button>
+              </div>
+            </div>
+            <small>{product.stock} disponibles</small>
+          </div>
+        </article>;
+      })}</div>
       <aside className="shop-checkout">
         <div className="shop-cart-title"><ShoppingBag/><div><span>TU PEDIDO</span><strong>{selected.reduce((sum,p)=>sum+(quantities[p.id]??0),0)} productos</strong></div></div>
         {selected.map((p)=><div className="shop-line" key={p.id}><span>{quantities[p.id]} × {p.name}{variants[p.id]?" · "+variants[p.id]:""}</span><strong>{money((quantities[p.id]??0)*p.priceCents)}</strong></div>)}
