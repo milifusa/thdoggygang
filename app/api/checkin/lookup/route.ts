@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!url || !serviceKey) return Response.json({ error: 'Servicio no configurado' }, { status: 503 });
   const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
   const tokenHash = await hashToken(parsed.data.token);
-  const { data, error } = await supabase.from('booking_checkin_tokens').select('id, revoked_at, used_at, booking:bookings(id, booking_number, status, hike_id, booking_participants(id, snapshot), booking_dogs(id, snapshot))').eq('token_hash', tokenHash).single();
+  const { data, error } = await supabase.from('booking_checkin_tokens').select('id, revoked_at, used_at, booking:bookings(id, booking_number, status, hike_id, booking_participants(id, snapshot), booking_dogs(id, snapshot), transport_reservations(id, booking_participant_id), check_ins(id, booking_participant_id))').eq('token_hash', tokenHash).single();
   if (error || !data || data.revoked_at) return Response.json({ error: 'No encontramos esta reservación' }, { status: 404 });
   const booking = Array.isArray(data.booking) ? data.booking[0] : data.booking;
   if (staff.role === 'GUIDE' && booking?.hike_id) {
