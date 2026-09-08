@@ -935,6 +935,9 @@ footer small {
 .photo-bulk-toolbar svg { width:13px; }
 .photo-admin-select { flex-direction:row!important; align-items:center; }
 .photo-admin-select input { width:19px; height:19px; min-height:0!important; }
+.photo-upload-progress { position:relative; min-height:38px; margin:0 0 14px; overflow:hidden; background:#e4e0d8; display:grid; place-items:center; }
+.photo-upload-progress>span { position:absolute; inset:0 auto 0 0; background:var(--yellow); transition:width .2s ease; }
+.photo-upload-progress>b { position:relative; z-index:1; font-size:8px; }
 
 .site-home-panel { margin-top:22px; }
 .login-cms-layout { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr); gap:20px; align-items:start; }
@@ -948,6 +951,8 @@ footer small {
 .login-image-fields b { min-height:35px; border:1px solid #bbb; display:flex; align-items:center; justify-content:center; gap:6px; }
 .login-image-fields b svg { width:14px; }
 .login-image-fields input[type=file] { position:absolute; opacity:0; width:1px; height:1px; }
+.login-image-fields label>button { min-height:32px; border:0; background:transparent; text-decoration:underline; display:flex; align-items:center; justify-content:center; gap:5px; font-size:6px; font-weight:900; }
+.login-image-fields label>button svg { width:12px; }
 .cms-toggle { display:flex!important; flex-direction:row!important; align-items:center; gap:8px!important; }
 .cms-toggle input { position:absolute; opacity:0; width:1px; height:1px; }
 .cms-toggle i { width:40px; height:22px; padding:3px; border-radius:99px; background:#bbb; }

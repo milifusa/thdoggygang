@@ -126,6 +126,17 @@ export function LoginContentForm({
     setDirty(true);
     setMessage("Valores originales cargados. Publica para aplicarlos.");
   }
+  async function restoreImage(kind: "desktop" | "mobile") {
+    setBusy(true);
+    const response = await fetch(`/api/admin/site/login/images?kind=${kind}`, {
+      method: "DELETE",
+    });
+    const result = (await response.json()) as { error?: string };
+    setBusy(false);
+    if (!response.ok)
+      return setMessage(result.error ?? "No pudimos restaurar la imagen.");
+    window.location.reload();
+  }
   return (
     <div className="login-cms-layout">
       <form
@@ -182,6 +193,9 @@ export function LoginContentForm({
                   ? `· ${(desktop.size / 1024 / 1024).toFixed(1)} MB`
                   : ""}
               </small>
+              <button type="button" onClick={() => void restoreImage("desktop")}>
+                <RotateCcw /> RESTAURAR ORIGINAL
+              </button>
             </label>
             <label>
               IMAGEN MOBILE · OPCIONAL
@@ -203,6 +217,9 @@ export function LoginContentForm({
                     metadata.mobileName ?? "Usa desktop si no se configura",
                   )}
               </small>
+              <button type="button" onClick={() => void restoreImage("mobile")}>
+                ELIMINAR IMAGEN MOBILE
+              </button>
             </label>
           </div>
           <label>
@@ -232,7 +249,8 @@ export function LoginContentForm({
             <input
               name="quoteVisible"
               type="checkbox"
-              defaultChecked={content.quoteVisible}
+              checked={content.quoteVisible}
+              onChange={() => {}}
             />
             <i />
             <b>Mostrar frase superior</b>

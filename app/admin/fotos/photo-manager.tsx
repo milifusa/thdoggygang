@@ -33,26 +33,54 @@ export function PhotoManager({
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setBusy("upload");
     setMessage("");
-    const form = new FormData(event.currentTarget);
-    form.set("hikeId", hikeId);
-    const response = await fetch("/api/admin/photos", {
-      method: "POST",
-      body: form,
-    });
-    const result = (await response.json()) as {
-      error?: string;
-      uploaded?: number;
-    };
-    setBusy("");
-    if (!response.ok)
-      return setMessage(result.error ?? "No pudimos cargar las fotos.");
-    setMessage(`${result.uploaded ?? 0} fotos procesadas y cargadas.`);
-    event.currentTarget.reset();
-    router.refresh();
+    const source = new FormData(formElement);
+    const files = source
+      .getAll("photos")
+      .filter((value): value is File => value instanceof File && value.size > 0);
+    if (!files.length || files.length > 100) {
+      setBusy("");
+      return setMessage("Selecciona entre 1 y 100 fotos.");
+    }
+    setProgress({ done: 0, total: files.length });
+    let done = 0;
+    try {
+      for (let index = 0; index < files.length; index += 4) {
+        const batch = files.slice(index, index + 4);
+        await Promise.all(
+          batch.map(async (file) => {
+            const body = new FormData();
+            body.set("hikeId", hikeId);
+            body.set("access", String(source.get("access") ?? "PAID"));
+            body.set("price", String(source.get("price") ?? "90"));
+            body.set("photos", file);
+            const response = await fetch("/api/admin/photos", {
+              method: "POST",
+              body,
+            });
+            const result = (await response.json()) as { error?: string };
+            if (!response.ok)
+              throw new Error(result.error ?? `No pudimos procesar ${file.name}.`);
+            done += 1;
+            setProgress({ done, total: files.length });
+          }),
+        );
+      }
+      setMessage(`${done} fotos procesadas y cargadas.`);
+      formElement.reset();
+      router.refresh();
+    } catch (error) {
+      setMessage(
+        `${done} de ${files.length} procesadas. ${error instanceof Error ? error.message : "Una foto no pudo cargarse."}`,
+      );
+    } finally {
+      setBusy("");
+    }
   }
   async function save(photo: AdminPhoto, form: HTMLFormElement) {
     setBusy(photo.id);
@@ -270,9 +298,17 @@ export function PhotoManager({
           />
         </label>
         <button className="button button-primary" disabled={busy === "upload"}>
-          {busy === "upload" ? "CARGANDO…" : "CARGAR"}
+          {busy === "upload"
+            ? `${progress.done} / ${progress.total} PROCESADAS`
+            : "CARGAR"}
         </button>
       </form>
+      {busy === "upload" && (
+        <div className="photo-upload-progress" aria-live="polite">
+          <span style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+          <b>{progress.done} / {progress.total} fotografías procesadas</b>
+        </div>
+      )}
       {message && <p className="admin-feedback">{message}</p>}
       {selected.length > 0 && (
         <div className="photo-bulk-toolbar">
