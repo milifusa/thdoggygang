@@ -5,7 +5,8 @@ export function mexicoNationalDigits(value: string) {
 }
 
 export function normalizeMexicoPhone(value: string) {
-  const national = mexicoNationalDigits(value);
-  return national.length === 10 ? `+52${national}` : null;
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 10) return `+52${digits}`;
+  if (digits.length === 12 && digits.startsWith('52')) return `+52${digits.slice(2)}`;
+  return null;
 }
-
