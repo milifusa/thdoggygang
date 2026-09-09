@@ -3,8 +3,14 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { getAdventures } from './lib/data';
 import { getLandingSettings } from './lib/landing-content';
 import { SiteHeader } from './components/SiteHeader';
+import type { Metadata } from 'next';
 
 export const revalidate = 60;
+export const metadata: Metadata = {
+  title: 'Hikes con perros en Puebla | The Doggy Gang',
+  description: 'Descubre hikes y rutas de senderismo pet friendly en Puebla y el centro de México. Reserva una aventura para caminar con tu perro en manada.',
+  alternates: { canonical: '/' },
+};
 
 export default async function Home() {
   const [adventures, landing] = await Promise.all([getAdventures(), getLandingSettings()]);

@@ -4,8 +4,15 @@ import { SiteHeader } from "../components/SiteHeader";
 import { getAdventures } from "../lib/data";
 
 export const metadata = {
-  title: "Todas las aventuras | The Doggy Gang",
-  description: "Explora todos los próximos hikes de The Doggy Gang.",
+  title: "Hikes con perros y rutas pet friendly | The Doggy Gang",
+  description:
+    "Explora próximos hikes con perros, rutas pet friendly, fechas, dificultad y precios. Reserva una aventura de senderismo en México.",
+  alternates: { canonical: "/aventuras" },
+  openGraph: {
+    title: "Próximos hikes con perros | The Doggy Gang",
+    description: "Rutas y experiencias de senderismo para disfrutar con tu perro.",
+    url: "/aventuras",
+  },
 };
 export const revalidate = 60;
 

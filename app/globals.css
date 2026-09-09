@@ -3875,6 +3875,7 @@ footer small {
 .shop-products h2 { margin: 0; font-size: 27px; }
 .shop-products p { margin: 0; color: #666; font-size: 11px; line-height: 1.5; min-height: 50px; }
 .shop-products strong { font-size: 15px; }
+.shop-product-detail-link { align-self: flex-start; color: var(--wild-blue); font-size: 9px; font-weight: 900; letter-spacing: .08em; text-decoration: underline; text-underline-offset: 4px; }
 .shop-products label { display: flex; flex-direction: column; gap: 5px; font-size: 7px; font-weight: 900; }
 .shop-products select { min-height: 38px; padding: 0 9px; border: 1px solid #bbb; background: #fff; }
 .shop-products small { color: #777; font-size: 8px; }

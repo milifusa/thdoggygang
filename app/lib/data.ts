@@ -7,6 +7,8 @@ export type Adventure = {
   id: string;
   slug: string;
   title: string;
+  startsAt: string;
+  durationMinutes: number;
   date: string;
   shortDate: string;
   time: string;
@@ -46,6 +48,8 @@ const demoAdventures: Adventure[] = [
     id: "demo-sendero",
     slug: "sendero-del-duende",
     title: "Sendero del Duende",
+    startsAt: "2026-09-20T13:00:00.000Z",
+    durationMinutes: 150,
     date: "20 de septiembre de 2026",
     shortDate: "20 SEP",
     time: "07:00 AM",
@@ -132,6 +136,8 @@ function mapHike(row: Record<string, unknown>): Adventure {
     id: String(row.id),
     slug: String(row.slug),
     title: String(row.name),
+    startsAt: startsAt.toISOString(),
+    durationMinutes,
     date: formatDate.format(startsAt),
     shortDate: `${day} ${month}`,
     time: new Intl.DateTimeFormat("es-MX", {

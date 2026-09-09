@@ -3,16 +3,30 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SiteHeader } from '../../components/SiteHeader';
 import { getAdventure } from '../../lib/data';
+import { SITE_ORIGIN } from '../../lib/site-url';
+
+const origin = SITE_ORIGIN;
+const concise = (value: string, length = 155) => value.length <= length ? value : `${value.slice(0, length - 1).trim()}…`;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const hike = await getAdventure(slug);
   if (!hike) return { title: 'Aventura no encontrada | The Doggy Gang' };
-  const image = hike.image.startsWith('http') ? hike.image : `${process.env.APP_ORIGIN ?? 'https://www.thedoggygang.com'}${hike.image}`;
+  const image = hike.image.startsWith('http') ? hike.image : `${origin}${hike.image}`;
+  const title = `${hike.title}: hike con perros en ${hike.location} | The Doggy Gang`;
+  const description = concise(`${hike.description} Consulta fecha, dificultad, precio y reserva este hike pet friendly en ${hike.location}.`);
   return {
-    title: `${hike.title} | The Doggy Gang`,
-    description: `${hike.date} · ${hike.location}. ${hike.description}`,
-    openGraph: { title: hike.title, description: `${hike.date} · ${hike.location}`, images: [{ url: image }] },
+    title,
+    description,
+    alternates: { canonical: `/aventuras/${hike.slug}` },
+    openGraph: {
+      type: 'website',
+      title,
+      description,
+      url: `/aventuras/${hike.slug}`,
+      images: [{ url: image, alt: `${hike.title}, hike con perros` }],
+    },
+    twitter: { card: 'summary_large_image', title, description, images: [image] },
   };
 }
 
@@ -20,8 +34,57 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const hike = await getAdventure(slug);
   if (!hike) notFound();
+  const url = `${origin}/aventuras/${hike.slug}`;
+  const image = hike.image.startsWith('http') ? hike.image : `${origin}${hike.image}`;
+  const endsAt = hike.durationMinutes
+    ? new Date(new Date(hike.startsAt).getTime() + hike.durationMinutes * 60_000).toISOString()
+    : undefined;
+  const structuredData = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Event',
+      '@id': `${url}#event`,
+      name: hike.title,
+      description: hike.description,
+      image: [image],
+      startDate: hike.startsAt,
+      ...(endsAt ? { endDate: endsAt } : {}),
+      eventStatus: 'https://schema.org/EventScheduled',
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      location: {
+        '@type': 'Place',
+        name: hike.location,
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: hike.location,
+          addressCountry: 'MX',
+        },
+      },
+      organizer: { '@id': `${origin}/#organization` },
+      maximumAttendeeCapacity: hike.spots,
+      offers: {
+        '@type': 'Offer',
+        url: `${origin}/reservar/${hike.slug}`,
+        price: hike.price.toFixed(2),
+        priceCurrency: 'MXN',
+        availability: hike.spots > 0
+          ? 'https://schema.org/InStock'
+          : 'https://schema.org/SoldOut',
+      },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Inicio', item: origin },
+        { '@type': 'ListItem', position: 2, name: 'Aventuras', item: `${origin}/aventuras` },
+        { '@type': 'ListItem', position: 3, name: hike.title, item: url },
+      ],
+    },
+  ];
   return (
     <main className="detail-page">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }} />
       <SiteHeader />
       <section className="detail-hero">
         <img src={hike.image} alt={`Un perrito disfrutando ${hike.title}`} />

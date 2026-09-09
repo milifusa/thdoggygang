@@ -37,6 +37,41 @@ const location = admin.headers.get("location") ?? "";
 if (!location.includes("/ingresar"))
   failures.push("/admin no protege la ruta con login.");
 
+const robots = await fetch(`${origin}/robots.txt`);
+const robotsText = await robots.text();
+if (!robots.ok || !robotsText.includes(`${origin}/sitemap.xml`))
+  failures.push("robots.txt no publica el sitemap canónico.");
+if (!robotsText.includes("Disallow: /admin/"))
+  failures.push("robots.txt no excluye el administrador.");
+
+const sitemap = await fetch(`${origin}/sitemap.xml`);
+const sitemapText = await sitemap.text();
+if (!sitemap.ok || !sitemapText.includes(`${origin}/aventuras`))
+  failures.push("sitemap.xml no incluye aventuras.");
+if (!sitemapText.includes(`${origin}/tienda`))
+  failures.push("sitemap.xml no incluye la tienda.");
+
+const sitemapUrls = [...sitemapText.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
+  (match) => match[1],
+);
+for (const [kind, pattern, schemaType] of [
+  ["hike", `${origin}/aventuras/`, '"@type":"Event"'],
+  ["producto", `${origin}/tienda/`, '"@type":"Product"'],
+]) {
+  const url = sitemapUrls.find((item) => item.startsWith(pattern));
+  if (!url) {
+    failures.push(`El sitemap no contiene ningún ${kind} individual.`);
+    continue;
+  }
+  const response = await fetch(url);
+  const html = await response.text();
+  if (!response.ok) failures.push(`${url} respondió ${response.status}.`);
+  if (!html.includes(schemaType))
+    failures.push(`${url} no contiene datos estructurados de ${kind}.`);
+  if (!html.includes(`rel="canonical" href="${url}"`))
+    failures.push(`${url} no contiene una URL canónica correcta.`);
+}
+
 if (failures.length) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
   process.exit(1);

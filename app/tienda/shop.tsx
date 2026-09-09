@@ -12,14 +12,8 @@ import {
 import type { Product } from "../lib/products";
 import { formatClabe, type BankTransferConfig } from "../lib/payment-types";
 import type { ShopSettings } from "../lib/shop-settings";
+import type { ShopHikeOption } from "../lib/shop-context";
 
-type HikeOption = {
-  id: string;
-  slug: string;
-  name: string;
-  date: string;
-  booked: boolean;
-};
 const money = (cents: number) =>
   (cents / 100).toLocaleString("es-MX", { style: "currency", currency: "MXN" });
 
@@ -30,17 +24,29 @@ export function Shop({
   cardPaymentsEnabled,
   bankTransfer,
   shopSettings,
+  heroTitle,
+  heroIntro,
+  heroEyebrow,
+  initialProductId,
+  showProductLinks = true,
 }: {
   products: Product[];
-  hikes: HikeOption[];
+  hikes: ShopHikeOption[];
   initialHikeId?: string;
   cardPaymentsEnabled: boolean;
   bankTransfer: BankTransferConfig | null;
   shopSettings: ShopSettings;
+  heroTitle?: string;
+  heroIntro?: string;
+  heroEyebrow?: string;
+  initialProductId?: string;
+  showProductLinks?: boolean;
 }) {
   const bookedHikes = hikes.filter((hike) => hike.booked);
   const otherHikes = hikes.filter((hike) => !hike.booked);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [quantities, setQuantities] = useState<Record<string, number>>(
+    initialProductId ? { [initialProductId]: 1 } : {},
+  );
   const [variants, setVariants] = useState<Record<string, string>>(
     Object.fromEntries(products.map((p) => [p.id, p.variants[0] ?? ""])),
   );
@@ -170,14 +176,10 @@ export function Shop({
   return (
     <main className="shop-page">
       <section className="shop-hero">
-        <p className="eyebrow light">EQUIPO DE HIKING</p>
-        <h1>
-          Listos para
-          <br />
-          caminar juntos.
-        </h1>
+        <p className="eyebrow light">{heroEyebrow ?? "EQUIPO DE HIKING"}</p>
+        {heroTitle ? <h1>{heroTitle}</h1> : <h1>Listos para<br />caminar juntos.</h1>}
         <p>
-          Equipo seleccionado para hacer más cómodas las aventuras de tu manada.
+          {heroIntro ?? "Equipo seleccionado para hacer más cómodas las aventuras de tu manada."}
         </p>
       </section>
       <section className="shop-shell">
@@ -196,6 +198,14 @@ export function Shop({
                   <span>{product.category}</span>
                   <h2>{product.name}</h2>
                   <p>{product.description}</p>
+                  {showProductLinks && (
+                    <Link
+                      className="shop-product-detail-link"
+                      href={`/tienda/${product.slug}`}
+                    >
+                      VER DETALLES
+                    </Link>
+                  )}
                   <strong>{money(product.priceCents)} MXN</strong>
                   {product.variants.length > 0 && (
                     <fieldset className="shop-variant-options">
