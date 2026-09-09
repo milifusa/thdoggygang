@@ -8,19 +8,33 @@ function Field({
   name,
   value,
   area = false,
+  required = true,
+  placeholder,
 }: {
   label: string;
   name: string;
   value: string;
   area?: boolean;
+  required?: boolean;
+  placeholder?: string;
 }) {
   return (
     <label>
       {label}
       {area ? (
-        <textarea required name={name} defaultValue={value} />
+        <textarea
+          required={required}
+          name={name}
+          defaultValue={value}
+          placeholder={placeholder}
+        />
       ) : (
-        <input required name={name} defaultValue={value} />
+        <input
+          required={required}
+          name={name}
+          defaultValue={value}
+          placeholder={placeholder}
+        />
       )}
     </label>
   );
@@ -324,11 +338,14 @@ export function SiteContentForm({
             label="URL WHATSAPP"
             name="footerWhatsappUrl"
             value={content.footerWhatsappUrl}
+            required={false}
+            placeholder="2221234567 o https://wa.me/522221234567"
           />
           <Field
             label="URL TÉRMINOS"
             name="footerTermsUrl"
             value={content.footerTermsUrl}
+            placeholder="/terminos"
           />
         </div>
       </section>

@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { adminClient } from "../hikes/route";
+import {
+  normalizeInstagramEmbed,
+  normalizeInstagramUrl,
+  normalizeLegalUrl,
+  normalizeWhatsappUrl,
+} from "../../../lib/public-links";
 
 const short = z.string().min(1).max(240);
 const paragraph = z.string().min(1).max(1500);
@@ -48,10 +54,43 @@ export async function PATCH(request: Request) {
   const supabase = await adminClient();
   if (!supabase)
     return Response.json({ error: "No autorizado." }, { status: 403 });
+  const instagramUrl = normalizeInstagramUrl(parsed.data.instagramUrl);
+  const footerInstagramUrl = normalizeInstagramUrl(
+    parsed.data.footerInstagramUrl,
+  );
+  const instagramEmbeds = parsed.data.instagramEmbeds.map(
+    normalizeInstagramEmbed,
+  );
+  const submittedWhatsapp = parsed.data.footerWhatsappUrl.trim();
+  const footerWhatsappUrl = normalizeWhatsappUrl(submittedWhatsapp);
+  if (
+    !instagramUrl ||
+    !footerInstagramUrl ||
+    instagramEmbeds.some((url) => !url) ||
+    (submittedWhatsapp &&
+      !submittedWhatsapp.startsWith("#") &&
+      !footerWhatsappUrl)
+  ) {
+    return Response.json(
+      {
+        error:
+          "Revisa los enlaces. Instagram debe usar instagram.com y WhatsApp debe ser un número de México o una URL oficial de WhatsApp.",
+      },
+      { status: 400 },
+    );
+  }
+  const content = {
+    ...parsed.data,
+    instagramUrl,
+    instagramEmbeds,
+    footerInstagramUrl,
+    footerWhatsappUrl,
+    footerTermsUrl: normalizeLegalUrl(parsed.data.footerTermsUrl),
+  };
   const { error } = await supabase.from("site_content").upsert(
     {
       id: "landing",
-      content: parsed.data,
+      content,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "id" },

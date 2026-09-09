@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "./config";
+import {
+  normalizeInstagramEmbed,
+  normalizeInstagramUrl,
+  normalizeLegalUrl,
+  normalizeWhatsappUrl,
+} from "./public-links";
 
 export type LandingStep = { title: string; body: string };
 export type LandingContent = {
@@ -123,16 +129,28 @@ export async function getLandingSettings(): Promise<LandingSettings> {
   const raw = (
     data?.content && typeof data.content === "object" ? data.content : {}
   ) as Partial<LandingContent>;
+  const storedInstagramUrl = normalizeInstagramUrl(raw.instagramUrl);
+  const storedFooterInstagramUrl = normalizeInstagramUrl(
+    raw.footerInstagramUrl,
+  );
+  const storedEmbeds = Array.isArray(raw.instagramEmbeds)
+    ? raw.instagramEmbeds.map(normalizeInstagramEmbed)
+    : [];
   const content = {
     ...defaultLandingContent,
     ...raw,
+    instagramUrl: storedInstagramUrl || defaultLandingContent.instagramUrl,
+    footerInstagramUrl:
+      storedFooterInstagramUrl || defaultLandingContent.footerInstagramUrl,
+    footerWhatsappUrl: normalizeWhatsappUrl(raw.footerWhatsappUrl),
+    footerTermsUrl: normalizeLegalUrl(raw.footerTermsUrl),
     howSteps:
       Array.isArray(raw.howSteps) && raw.howSteps.length === 3
         ? raw.howSteps
         : defaultLandingContent.howSteps,
     instagramEmbeds:
-      Array.isArray(raw.instagramEmbeds) && raw.instagramEmbeds.length === 3
-        ? raw.instagramEmbeds
+      storedEmbeds.length === 3 && storedEmbeds.every(Boolean)
+        ? storedEmbeds
         : defaultLandingContent.instagramEmbeds,
   };
   return {
