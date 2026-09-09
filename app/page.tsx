@@ -80,7 +80,7 @@ export default async function Home() {
       <section className="quote-band"><p>“{content.quote}”</p><span>{content.quoteAttribution}</span></section>
       <footer>
         <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>{content.footerText}</p>
-        <div><Link href="/tienda">Tienda</Link><a href={content.footerInstagramUrl} target="_blank" rel="noreferrer">Instagram</a><a href={content.footerWhatsappUrl}>WhatsApp</a><a href={content.footerTermsUrl}>Términos</a></div><small>© 2026 THE DOGGY GANG</small>
+        <div><Link href="/tienda">Tienda</Link><a href={content.footerInstagramUrl} target="_blank" rel="noreferrer">Instagram</a>{content.footerWhatsappUrl && <a href={content.footerWhatsappUrl}>WhatsApp</a>}<a href={content.footerTermsUrl}>Términos</a><Link href="/privacidad">Privacidad</Link></div><small>© 2026 THE DOGGY GANG</small>
       </footer>
     </main>
   );

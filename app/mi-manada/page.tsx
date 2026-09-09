@@ -105,8 +105,7 @@ export default async function MyGangPage({
           "id, status, created_at, total_cents, hike:hikes(id, slug, name, starts_at, location_name, cover_path), booking_participants(id), booking_dogs(id)",
         )
         .eq("profile_id", session.profile.id)
-        .order("created_at", { ascending: false })
-        .limit(12),
+        .order("created_at", { ascending: false }),
     ]);
 
   const people: PersonRecord[] = ((peopleData ?? []) as PersonRow[]).map(
@@ -154,14 +153,20 @@ export default async function MyGangPage({
   const bookings = (bookingsData ?? []) as BookingRow[];
   const hikeOf = (booking: BookingRow) =>
     Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
-  const nextBooking = bookings.find((booking) => {
-    const hike = hikeOf(booking);
-    return (
-      hike &&
-      new Date(hike.starts_at) >= new Date() &&
-      ["PENDING_PAYMENT", "CONFIRMED"].includes(booking.status)
-    );
-  });
+  const nextBooking = bookings
+    .filter((booking) => {
+      const hike = hikeOf(booking);
+      return (
+        hike &&
+        new Date(hike.starts_at) >= new Date() &&
+        ["PENDING_PAYMENT", "CONFIRMED"].includes(booking.status)
+      );
+    })
+    .sort(
+      (left, right) =>
+        +new Date(hikeOf(left)!.starts_at) -
+        +new Date(hikeOf(right)!.starts_at),
+    )[0];
   const history = bookings.filter((booking) => booking !== nextBooking);
   const galleryHikeIds = bookings
     .filter((booking) => ["CONFIRMED", "COMPLETED"].includes(booking.status))
@@ -382,7 +387,7 @@ export default async function MyGangPage({
             </div>
           </div>
           {history.length ? (
-            history.slice(0, 3).map((booking) => {
+            history.map((booking) => {
               const hike = hikeOf(booking);
               return hike ? (
                 <div className="history-row" key={booking.id}>
@@ -395,7 +400,9 @@ export default async function MyGangPage({
                     {booking.booking_participants.length} personas ·{" "}
                     {booking.booking_dogs.length} perritos
                   </small>
-                  <Link href={`/aventuras/${hike.slug}`}>VER →</Link>
+                  <Link href={`/mi-manada/aventuras/${hike.slug}`}>
+                    VER DETALLE →
+                  </Link>
                 </div>
               ) : null;
             })

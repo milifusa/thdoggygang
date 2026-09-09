@@ -82,8 +82,8 @@ export const defaultLandingContent: LandingContent = {
   quoteAttribution: "THE DOGGY GANG · PUEBLA, MX",
   footerText: "Aventuras reales. Perritos felices. Una gran manada.",
   footerInstagramUrl: "https://www.instagram.com/the_doggy_gangmx/",
-  footerWhatsappUrl: "#aventuras",
-  footerTermsUrl: "#aventuras",
+  footerWhatsappUrl: "",
+  footerTermsUrl: "/terminos",
 };
 
 export type LandingSettings = {

@@ -16,14 +16,19 @@ export default async function AdminDashboard() {
   const [
     { data: hikes },
     { data: pendingPayments },
-    { data: recentBookings },
+    { count: activeBookingCount },
+    { data: nextHikeBookings },
     { count: photoCount },
     { data: paidPayments },
   ] = await Promise.all([
     supabase
       .from("hikes")
-      .select("id,name,slug,starts_at,location_name,capacity,cover_path")
+      .select(
+        "id,name,slug,starts_at,location_name,capacity,cover_path,published,cancelled_at",
+      )
       .gte("starts_at", now)
+      .eq("published", true)
+      .is("cancelled_at", null)
       .is("deleted_at", null)
       .order("starts_at")
       .limit(10),
@@ -37,22 +42,26 @@ export default async function AdminDashboard() {
       .limit(5),
     supabase
       .from("bookings")
-      .select("id,status,total_cents,hike_id")
+      .select("id", { count: "exact", head: true })
       .in("status", ["CONFIRMED", "PENDING_PAYMENT"])
-      .order("created_at", { ascending: false })
-      .limit(250),
+      .is("cancelled_at", null),
+    supabase
+      .from("bookings")
+      .select("id,status,hike_id")
+      .in("status", ["CONFIRMED", "PENDING_PAYMENT"])
+      .is("cancelled_at", null),
     supabase.from("photos").select("id", { count: "exact", head: true }),
     supabase.from("payments").select("amount_cents").eq("status", "PAID"),
   ]);
   const nextHike = hikes?.[0] ?? null;
-  const nextBookings = (recentBookings ?? []).filter(
+  const nextBookings = (nextHikeBookings ?? []).filter(
     (booking) => booking.hike_id === nextHike?.id,
   );
   const confirmedIncome = (paidPayments ?? []).reduce(
     (sum, payment) => sum + payment.amount_cents,
     0,
   );
-  const pendingBookings = (recentBookings ?? []).filter(
+  const pendingBookings = (nextHikeBookings ?? []).filter(
     (booking) => booking.status === "PENDING_PAYMENT",
   ).length;
   const profile = session.mode === "live" ? session.profile : null;
@@ -77,17 +86,17 @@ export default async function AdminDashboard() {
           <article>
             <span>HIKES PRÓXIMOS</span>
             <strong>{hikes?.length ?? 0}</strong>
-            <small>publicados y borradores</small>
+            <small>publicados y activos</small>
           </article>
           <article>
             <span>RESERVAS ACTIVAS</span>
-            <strong>{recentBookings?.length ?? 0}</strong>
+            <strong>{activeBookingCount ?? 0}</strong>
             <small>{pendingBookings} con pago pendiente</small>
           </article>
           <article>
-            <span>INGRESOS CONFIRMADOS</span>
+            <span>INGRESOS HISTÓRICOS</span>
             <strong>{money(confirmedIncome)}</strong>
-            <small>reservaciones activas</small>
+            <small>todos los pagos confirmados</small>
           </article>
           <article>
             <span>FOTOS</span>

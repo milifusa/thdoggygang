@@ -11,8 +11,16 @@ export type TeamMember = {
   role: "ADMIN" | "GUIDE";
   active: boolean;
   created_at: string;
+  hike_ids: string[];
 };
-export function TeamManager({ members }: { members: TeamMember[] }) {
+export type TeamHike = { id: string; name: string; starts_at: string };
+export function TeamManager({
+  members,
+  hikes,
+}: {
+  members: TeamMember[];
+  hikes: TeamHike[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -50,6 +58,7 @@ export function TeamManager({ members }: { members: TeamMember[] }) {
         phone: data.get("phone") || null,
         role: data.get("role"),
         active: data.get("active") === "on",
+        hikeIds: data.getAll("hikeIds"),
       }),
     });
     const result = (await response.json()) as { error?: string };
@@ -126,7 +135,14 @@ export function TeamManager({ members }: { members: TeamMember[] }) {
               </label>
               <label>
                 TELÉFONO
-                <input name="phone" defaultValue={member.phone ?? ""} />
+                <input
+                  name="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]{10}"
+                  maxLength={10}
+                  defaultValue={member.phone?.replace(/^\+52/, "") ?? ""}
+                />
               </label>
               <label>
                 ROL
@@ -145,6 +161,24 @@ export function TeamManager({ members }: { members: TeamMember[] }) {
               <i />
               <b>Puede ingresar</b>
             </label>
+            <fieldset className="team-hike-access">
+              <legend>HIKES ASIGNADOS · SÓLO PARA GUÍAS</legend>
+              {hikes.length ? (
+                hikes.map((hike) => (
+                  <label key={hike.id}>
+                    <input
+                      type="checkbox"
+                      name="hikeIds"
+                      value={hike.id}
+                      defaultChecked={member.hike_ids.includes(hike.id)}
+                    />
+                    <span>{hike.name}</span>
+                  </label>
+                ))
+              ) : (
+                <small>No hay hikes próximos para asignar.</small>
+              )}
+            </fieldset>
             <button disabled={busy === member.id}>
               <Save /> GUARDAR CAMBIOS
             </button>

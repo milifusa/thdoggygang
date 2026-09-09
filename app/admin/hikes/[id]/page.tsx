@@ -96,10 +96,20 @@ export default async function HikeAdminDetail({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { id } = await params;
-  await requireStaffSession(`/admin/hikes/${id}`, true);
+  const session = await requireStaffSession(`/admin/hikes/${id}`, true);
   const tabValue = (await searchParams).tab;
   const tab = (tabs.includes(tabValue as Tab) ? tabValue : "resumen") as Tab;
   const supabase = await createSupabaseServerClient();
+  const isAdmin = session.mode !== "live" || session.profile.role === "ADMIN";
+  if (!isAdmin && session.mode === "live") {
+    const { data: assignment } = await supabase
+      .from("guide_hikes")
+      .select("hike_id")
+      .eq("hike_id", id)
+      .eq("profile_id", session.profile.id)
+      .maybeSingle();
+    if (!assignment) notFound();
+  }
   const [
     { data: hike },
     { data: bookingData },
@@ -216,9 +226,14 @@ export default async function HikeAdminDetail({
       };
     }),
   );
+  const visibleTabs = isAdmin
+    ? tabs
+    : tabs.filter(
+        (name) => !["pagos", "fotos", "configuracion"].includes(name),
+      );
   const nav = (
     <nav className="hike-detail-tabs">
-      {tabs.map((name) => (
+      {visibleTabs.map((name) => (
         <Link
           className={tab === name ? "active" : ""}
           href={`/admin/hikes/${id}?tab=${name}`}
@@ -249,7 +264,9 @@ export default async function HikeAdminDetail({
                   : "BORRADOR"}
             </span>
           </div>
-          <Link href={`/admin/hikes/${id}/editar`}>EDITAR HIKE</Link>
+          {isAdmin && (
+            <Link href={`/admin/hikes/${id}/editar`}>EDITAR HIKE</Link>
+          )}
         </header>
         {nav}
         {tab === "resumen" && (
@@ -474,18 +491,22 @@ export default async function HikeAdminDetail({
               </div>
               <Link href={`/galeria/${hike.slug}`}>VER GALERÍA</Link>
             </div>
-            <PhotoManager
-              hikeId={id}
-              photos={photos}
-              gallery={{
-                published: Boolean(gallery?.published_at),
-                defaultPriceCents: gallery?.default_photo_price_cents ?? 9000,
-                package5Cents: gallery?.package_5_price_cents ?? null,
-                package10Cents: gallery?.package_10_price_cents ?? null,
-                fullGalleryCents: gallery?.full_gallery_price_cents ?? null,
-                coverPhotoId: gallery?.cover_photo_id ?? null,
-              }}
-            />
+            {isAdmin ? (
+              <PhotoManager
+                hikeId={id}
+                photos={photos}
+                gallery={{
+                  published: Boolean(gallery?.published_at),
+                  defaultPriceCents: gallery?.default_photo_price_cents ?? 9000,
+                  package5Cents: gallery?.package_5_price_cents ?? null,
+                  package10Cents: gallery?.package_10_price_cents ?? null,
+                  fullGalleryCents: gallery?.full_gallery_price_cents ?? null,
+                  coverPhotoId: gallery?.cover_photo_id ?? null,
+                }}
+              />
+            ) : (
+              <p>La galería sólo puede ser modificada por un administrador.</p>
+            )}
           </section>
         )}
         {tab === "check-in" && (
@@ -510,7 +531,7 @@ export default async function HikeAdminDetail({
             </div>
           </section>
         )}
-        {tab === "configuracion" && (
+        {tab === "configuracion" && isAdmin && (
           <section className="admin-panel transport-detail">
             <Settings />
             <div>

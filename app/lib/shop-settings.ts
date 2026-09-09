@@ -14,7 +14,10 @@ export async function getShopSettings(): Promise<ShopSettings> {
       .maybeSingle();
     return {
       shippingFeeCents: data?.shipping_fee_cents ?? 8000,
-      freeShippingThresholdCents: data?.free_shipping_threshold_cents ?? 50000,
+      freeShippingThresholdCents:
+        data === null || data === undefined
+          ? 50000
+          : data.free_shipping_threshold_cents,
       shippingNote: data?.shipping_note ?? "Envío nacional dentro de México.",
     };
   } catch {

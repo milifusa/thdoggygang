@@ -83,14 +83,33 @@ export default async function HikesAdminPage({
   const isAdmin = session.mode !== "live" || session.profile.role === "ADMIN";
   const supabase = await createSupabaseServerClient();
   const query = await searchParams;
+  const guideHikeIds =
+    session.mode === "live" && session.profile.role === "GUIDE"
+      ? (
+          (
+            await supabase
+              .from("guide_hikes")
+              .select("hike_id")
+              .eq("profile_id", session.profile.id)
+          ).data ?? []
+        ).map((assignment) => assignment.hike_id)
+      : null;
+  let hikesQuery = supabase
+    .from("hikes")
+    .select(
+      "id,name,slug,starts_at,location_name,capacity,max_dogs,published,cancelled_at,cover_path,bookings(id,status,booking_participants(id),booking_dogs(id),transport_reservations(id),signed_waivers(id),check_ins(id)),transport_configurations(mode,capacity),hike_galleries(id,published_at,photos:photos!photos_gallery_id_fkey(id))",
+    )
+    .is("deleted_at", null)
+    .order("starts_at");
+  if (guideHikeIds)
+    hikesQuery = hikesQuery.in(
+      "id",
+      guideHikeIds.length
+        ? guideHikeIds
+        : ["00000000-0000-0000-0000-000000000000"],
+    );
   const [{ data: hikeData }, { data: paymentData }] = await Promise.all([
-    supabase
-      .from("hikes")
-      .select(
-        "id,name,slug,starts_at,location_name,capacity,max_dogs,published,cancelled_at,cover_path,bookings(id,status,booking_participants(id),booking_dogs(id),transport_reservations(id),signed_waivers(id),check_ins(id)),transport_configurations(mode,capacity),hike_galleries(id,published_at,photos:photos!photos_gallery_id_fkey(id))",
-      )
-      .is("deleted_at", null)
-      .order("starts_at"),
+    hikesQuery,
     supabase
       .from("payments")
       .select(
@@ -362,7 +381,7 @@ export default async function HikesAdminPage({
             <h1>Hikes.</h1>
           </div>
           <div className="admin-head-actions">
-            <Link href="/admin/hikes/nuevo">NUEVO HIKE</Link>
+            {isAdmin && <Link href="/admin/hikes/nuevo">NUEVO HIKE</Link>}
           </div>
         </header>
         <section className="kpi-grid admin-kpi-first hike-kpis">

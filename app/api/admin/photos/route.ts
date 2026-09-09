@@ -85,20 +85,18 @@ export async function POST(request: Request) {
     const previewPath = `${hike.id}/${id}.jpg`;
     const thumbnailPath = `${hike.id}/${id}-thumb.jpg`;
     try {
-      const { error: pendingError } = await service
-        .from("photos")
-        .insert({
-          id,
-          gallery_id: gallery.id,
-          original_path: originalPath,
-          thumbnail_path: thumbnailPath,
-          preview_path: previewPath,
-          watermarked_path: previewPath,
-          access: access.data,
-          price_cents: access.data === "PAID" ? priceCents : 0,
-          title: file.name.replace(/\.[^.]+$/, ""),
-          processing_status: "PROCESSING",
-        });
+      const { error: pendingError } = await service.from("photos").insert({
+        id,
+        gallery_id: gallery.id,
+        original_path: originalPath,
+        thumbnail_path: thumbnailPath,
+        preview_path: previewPath,
+        watermarked_path: previewPath,
+        access: access.data,
+        price_cents: access.data === "PAID" ? priceCents : 0,
+        title: file.name.replace(/\.[^.]+$/, ""),
+        processing_status: "PROCESSING",
+      });
       if (pendingError) throw pendingError;
       const original = Buffer.from(await file.arrayBuffer());
       const originalUpload = await service.storage
@@ -135,9 +133,16 @@ export async function POST(request: Request) {
         220,
         Math.round((previewInfo.width ?? 1200) * 0.34),
       );
-      const watermark = await sharp(logo)
+      const { data: watermarkPixels, info: watermarkInfo } = await sharp(logo)
         .resize({ width: watermarkWidth })
-        .ensureAlpha(0.58)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      for (let index = 3; index < watermarkPixels.length; index += 4)
+        watermarkPixels[index] = Math.round(watermarkPixels[index] * 0.58);
+      const watermark = await sharp(watermarkPixels, {
+        raw: watermarkInfo,
+      })
         .png()
         .toBuffer();
       const watermarked = await sharp(preview)
@@ -145,18 +150,14 @@ export async function POST(request: Request) {
         .jpeg({ quality: 82 })
         .toBuffer();
       await Promise.all([
-        service.storage
-          .from("hike-previews")
-          .upload(previewPath, preview, {
-            contentType: "image/jpeg",
-            upsert: false,
-          }),
-        service.storage
-          .from("hike-previews")
-          .upload(thumbnailPath, thumbnail, {
-            contentType: "image/jpeg",
-            upsert: false,
-          }),
+        service.storage.from("hike-previews").upload(previewPath, preview, {
+          contentType: "image/jpeg",
+          upsert: false,
+        }),
+        service.storage.from("hike-previews").upload(thumbnailPath, thumbnail, {
+          contentType: "image/jpeg",
+          upsert: false,
+        }),
         service.storage
           .from("hike-watermarked")
           .upload(previewPath, watermarked, {

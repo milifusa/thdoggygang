@@ -48,7 +48,7 @@
             <tr>
               <td style="padding: 36px 38px 16px">
                 <img
-                  src="https://thdoggygang.vercel.app/brand/logo-horizontal-blue.png"
+                  src="https://www.thedoggygang.com/brand/logo-horizontal-blue.png"
                   width="210"
                   alt="The Doggy Gang"
                   style="
@@ -93,7 +93,7 @@
                   aventuras y organizar a tu manada.
                 </p>
                 <a
-                  href="{{ .ConfirmationURL }}"
+                  href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=/mi-manada&amp;redirect_to={{ .RedirectTo }}"
                   style="
                     display: inline-block;
                     background: #fdc06e;

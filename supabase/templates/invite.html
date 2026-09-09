@@ -48,7 +48,7 @@
             <tr>
               <td style="padding: 36px 38px 16px">
                 <img
-                  src="https://thdoggygang.vercel.app/brand/logo-horizontal-blue.png"
+                  src="https://www.thedoggygang.com/brand/logo-horizontal-blue.png"
                   width="210"
                   alt="The Doggy Gang"
                   style="
@@ -93,7 +93,7 @@
                   Doggy Gang.
                 </p>
                 <a
-                  href="{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=invite&next=/admin"
+                  href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=invite&amp;next=/admin&amp;redirect_to={{ .RedirectTo }}"
                   style="
                     display: inline-block;
                     background: #fdc06e;

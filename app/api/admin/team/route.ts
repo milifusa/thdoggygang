@@ -19,10 +19,11 @@ const updateSchema = z.object({
   lastName: z.string().min(1).max(80),
   phone: z
     .string()
-    .regex(/^\d{10}$/)
+    .regex(/^(?:\+?52)?\d{10}$/)
     .nullable(),
   role: z.enum(["ADMIN", "GUIDE"]),
   active: z.boolean(),
+  hikeIds: z.array(z.string().uuid()).max(50).default([]),
 });
 export async function POST(request: Request) {
   const parsed = inviteSchema.safeParse(await request.json().catch(() => null));
@@ -56,7 +57,9 @@ export async function POST(request: Request) {
     .update({
       first_name: parsed.data.firstName,
       last_name: parsed.data.lastName,
-      phone: parsed.data.phone ? `+52${parsed.data.phone}` : null,
+      phone: parsed.data.phone
+        ? `+52${parsed.data.phone.replace(/^\+?52/, "")}`
+        : null,
       role: parsed.data.role,
       active: true,
     })
@@ -87,14 +90,32 @@ export async function PATCH(request: Request) {
       active: parsed.data.active,
     })
     .eq("id", parsed.data.id);
-  return error
-    ? Response.json(
-        {
-          error: error.message.includes("último administrador")
-            ? "Debe existir al menos un administrador activo."
-            : error.message,
-        },
-        { status: 400 },
-      )
-    : Response.json({ ok: true });
+  if (error)
+    return Response.json(
+      {
+        error: error.message.includes("último administrador")
+          ? "Debe existir al menos un administrador activo."
+          : error.message,
+      },
+      { status: 400 },
+    );
+  const { error: clearError } = await supabase
+    .from("guide_hikes")
+    .delete()
+    .eq("profile_id", parsed.data.id);
+  if (clearError)
+    return Response.json({ error: clearError.message }, { status: 400 });
+  if (parsed.data.role === "GUIDE" && parsed.data.hikeIds.length) {
+    const { error: assignmentError } = await supabase
+      .from("guide_hikes")
+      .insert(
+        parsed.data.hikeIds.map((hikeId) => ({
+          hike_id: hikeId,
+          profile_id: parsed.data.id,
+        })),
+      );
+    if (assignmentError)
+      return Response.json({ error: assignmentError.message }, { status: 400 });
+  }
+  return Response.json({ ok: true });
 }

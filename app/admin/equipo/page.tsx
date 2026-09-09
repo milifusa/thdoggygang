@@ -1,32 +1,40 @@
 import { requireStaffSession } from "../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { AdminMobileNav, AdminNav } from "../admin-nav";
-import { TeamManager, type TeamMember } from "./team-manager";
+import { TeamManager, type TeamHike, type TeamMember } from "./team-manager";
 
 export const dynamic = "force-dynamic";
 export default async function TeamPage() {
   await requireStaffSession("/admin/equipo");
   const supabase = await createSupabaseServerClient();
-  const [{ data: members }, { data: next }] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("id,first_name,last_name,email,phone,role,active,created_at")
-      .in("role", ["ADMIN", "GUIDE"])
-      .is("deleted_at", null)
-      .order("role")
-      .order("first_name"),
-    supabase
-      .from("hikes")
-      .select("id")
-      .gte("starts_at", new Date().toISOString())
-      .is("deleted_at", null)
-      .order("starts_at")
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const [{ data: members }, { data: hikes }, { data: assignments }] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id,first_name,last_name,email,phone,role,active,created_at")
+        .in("role", ["ADMIN", "GUIDE"])
+        .is("deleted_at", null)
+        .order("role")
+        .order("first_name"),
+      supabase
+        .from("hikes")
+        .select("id,name,starts_at")
+        .gte("starts_at", new Date().toISOString())
+        .is("deleted_at", null)
+        .order("starts_at")
+        .limit(50),
+      supabase.from("guide_hikes").select("hike_id,profile_id"),
+    ]);
+  const teamMembers = ((members ?? []) as TeamMember[]).map((member) => ({
+    ...member,
+    hike_ids: (assignments ?? [])
+      .filter((assignment) => assignment.profile_id === member.id)
+      .map((assignment) => assignment.hike_id),
+  }));
+  const teamHikes = (hikes ?? []) as TeamHike[];
   return (
     <main className="admin-page">
-      <AdminNav active="/admin/equipo" hikeId={next?.id} />
+      <AdminNav active="/admin/equipo" hikeId={teamHikes[0]?.id} />
       <section className="admin-content">
         <AdminMobileNav />
         <header>
@@ -65,7 +73,7 @@ export default async function TeamPage() {
               <h2>Administra el equipo</h2>
             </div>
           </div>
-          <TeamManager members={(members ?? []) as TeamMember[]} />
+          <TeamManager members={teamMembers} hikes={teamHikes} />
         </section>
       </section>
     </main>
