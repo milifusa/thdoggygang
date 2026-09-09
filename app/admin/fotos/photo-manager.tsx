@@ -10,9 +10,9 @@ import {
   Upload,
 } from "lucide-react";
 import {
-  prepareImageForUpload,
   readJsonResponse,
 } from "../../lib/client-image-upload";
+import { createSupabaseBrowserClient } from "../../lib/supabase/client";
 
 export type AdminPhoto = {
   id: string;
@@ -63,27 +63,66 @@ export function PhotoManager({
       return setMessage("Selecciona entre 1 y 100 fotos.");
     }
     setProgress({ done: 0, total: files.length });
-    setMessage("Preparando y optimizando las fotografías…");
+    setMessage("Subiendo originales privados en alta resolución…");
     let done = 0;
     try {
       for (let index = 0; index < files.length; index += 2) {
         const batch = files.slice(index, index + 2);
         await Promise.all(
           batch.map(async (file) => {
-            const prepared = await prepareImageForUpload(file);
-            const body = new FormData();
-            body.set("hikeId", hikeId);
-            body.set("access", String(source.get("access") ?? "PAID"));
-            body.set("price", String(source.get("price") ?? "90"));
-            body.set("photos", prepared);
-            const response = await fetch("/api/admin/photos", {
+            const access = String(source.get("access") ?? "PAID");
+            const priceCents = Math.round(
+              Number(source.get("price") ?? 90) * 100,
+            );
+            const response = await fetch("/api/admin/photos/upload-url", {
               method: "POST",
-              body,
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                hikeId,
+                fileName: file.name,
+                contentType: file.type,
+                size: file.size,
+                access,
+                priceCents,
+              }),
             });
-            const result = await readJsonResponse<{ error?: string }>(response);
+            const result = await readJsonResponse<{
+              error?: string;
+              photoId?: string;
+              path?: string;
+              token?: string;
+            }>(response);
             if (!response.ok)
               throw new Error(
                 result.error ?? `No pudimos procesar ${file.name}.`,
+              );
+            if (!result.photoId || !result.path || !result.token)
+              throw new Error(`No pudimos preparar ${file.name}.`);
+
+            const supabase = createSupabaseBrowserClient();
+            const { error: uploadError } = await supabase.storage
+              .from("hike-originals")
+              .uploadToSignedUrl(result.path, result.token, file, {
+                contentType: file.type,
+                cacheControl: "31536000",
+              });
+            if (uploadError) {
+              await fetch(`/api/admin/photos/${result.photoId}`, {
+                method: "DELETE",
+              });
+              throw new Error(`No pudimos subir el original de ${file.name}.`);
+            }
+
+            const processResponse = await fetch(
+              `/api/admin/photos/${result.photoId}/retry`,
+              { method: "POST" },
+            );
+            const processResult = await readJsonResponse<{ error?: string }>(
+              processResponse,
+            );
+            if (!processResponse.ok)
+              throw new Error(
+                processResult.error ?? `No pudimos procesar ${file.name}.`,
               );
             done += 1;
             setProgress({ done, total: files.length });
@@ -303,9 +342,9 @@ export function PhotoManager({
         <div>
           <strong>Cargar fotos</strong>
           <span>
-            Puedes subir hasta 100 imágenes, incluso archivos pesados de hasta
-            60 MB. Se optimizan antes de enviarse y se generan thumbnail,
-            preview y marca de agua; los archivos completos permanecen privados.
+            Puedes subir hasta 100 imágenes JPG, PNG o WebP de máximo 50 MB.
+            El original no se comprime y permanece privado; para la galería se
+            generan versiones ligeras y una vista con marca de agua.
           </span>
         </div>
         <label>
@@ -327,7 +366,7 @@ export function PhotoManager({
             multiple
             name="photos"
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
           />
         </label>
         <button className="button button-primary" disabled={busy === "upload"}>

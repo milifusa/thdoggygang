@@ -22,6 +22,16 @@ export async function PATCH(request: Request) {
   const supabase = await adminClient();
   if (!supabase)
     return Response.json({ error: "No autorizado." }, { status: 403 });
+  const { data: photos } =
+    parsed.data.action === "DELETE"
+      ? await supabase
+          .from("photos")
+          .select(
+            "original_path,preview_path,thumbnail_path,watermarked_path",
+          )
+          .in("id", parsed.data.ids)
+          .is("deleted_at", null)
+      : { data: null };
   const map: Record<string, unknown> =
     parsed.data.action === "DELETE"
       ? { deleted_at: new Date().toISOString() }
@@ -36,6 +46,21 @@ export async function PATCH(request: Request) {
     .from("photos")
     .update(map)
     .in("id", parsed.data.ids);
+  if (!error && parsed.data.action === "DELETE" && photos?.length)
+    await Promise.all([
+      supabase.storage
+        .from("hike-originals")
+        .remove(photos.map((photo) => photo.original_path)),
+      supabase.storage.from("hike-previews").remove(
+        photos.flatMap((photo) => [
+          photo.preview_path,
+          photo.thumbnail_path,
+        ]),
+      ),
+      supabase.storage
+        .from("hike-watermarked")
+        .remove(photos.map((photo) => photo.watermarked_path)),
+    ]);
   return error
     ? Response.json({ error: error.message }, { status: 400 })
     : Response.json({ ok: true });

@@ -50,10 +50,28 @@ export async function DELETE(
   const supabase = await adminClient();
   if (!supabase)
     return Response.json({ error: "No autorizado." }, { status: 403 });
+  const { data: photo } = await supabase
+    .from("photos")
+    .select("original_path,preview_path,thumbnail_path,watermarked_path")
+    .eq("id", id)
+    .is("deleted_at", null)
+    .maybeSingle();
+  if (!photo)
+    return Response.json({ error: "No encontramos la foto." }, { status: 404 });
   const { error } = await supabase
     .from("photos")
     .update({ deleted_at: new Date().toISOString() })
     .eq("id", id);
+  if (!error)
+    await Promise.all([
+      supabase.storage.from("hike-originals").remove([photo.original_path]),
+      supabase.storage
+        .from("hike-previews")
+        .remove([photo.preview_path, photo.thumbnail_path]),
+      supabase.storage
+        .from("hike-watermarked")
+        .remove([photo.watermarked_path]),
+    ]);
   return error
     ? Response.json({ error: error.message }, { status: 400 })
     : Response.json({ ok: true });

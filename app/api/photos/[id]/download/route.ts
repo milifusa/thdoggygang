@@ -13,7 +13,7 @@ export async function GET(
   const { data: photo } = await service
     .from("photos")
     .select(
-      "id,access,original_path,watermarked_path,gallery:hike_galleries!photos_gallery_id_fkey(hike_id)",
+      "id,title,access,original_path,watermarked_path,gallery:hike_galleries!photos_gallery_id_fkey(hike_id)",
     )
     .eq("id", id)
     .is("deleted_at", null)
@@ -78,12 +78,20 @@ export async function GET(
       { status: 403 },
     );
   const watermarked = photo.access === "FREE_WATERMARKED";
+  const extension = watermarked
+    ? "jpg"
+    : photo.original_path.split(".").pop()?.toLowerCase() || "jpg";
+  const downloadName = `${(photo.title || "foto-the-doggy-gang")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "foto-the-doggy-gang"}.${extension}`;
   const { data, error } = await service.storage
     .from(watermarked ? "hike-watermarked" : "hike-originals")
     .createSignedUrl(
       watermarked ? photo.watermarked_path : photo.original_path,
       300,
-      { download: true },
+      { download: downloadName },
     );
   if (error || !data)
     return Response.json(

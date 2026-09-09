@@ -64,9 +64,14 @@ export async function POST(
     const logo = await readFile(
       path.join(process.cwd(), "public/brand/logo-circular-blue.png"),
     );
-    const watermark = await sharp(logo)
+    const { data: watermarkPixels, info: watermarkInfo } = await sharp(logo)
       .resize({ width: Math.max(220, Math.round((info.width ?? 1200) * 0.34)) })
-      .ensureAlpha(0.58)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    for (let index = 3; index < watermarkPixels.length; index += 4)
+      watermarkPixels[index] = Math.round(watermarkPixels[index] * 0.58);
+    const watermark = await sharp(watermarkPixels, { raw: watermarkInfo })
       .png()
       .toBuffer();
     const watermarked = await sharp(preview)

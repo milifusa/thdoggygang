@@ -32,6 +32,26 @@ check(
 );
 check(proxy.includes("getClaims()"), "El proxy no valida/refresca la sesión.");
 
+const photoUpload = read("app/api/admin/photos/upload-url/route.ts");
+const photoManager = read("app/admin/fotos/photo-manager.tsx");
+const photoDownload = read("app/api/photos/[id]/download/route.ts");
+check(
+  photoUpload.includes("createSignedUploadUrl"),
+  "Las fotos originales no usan una carga privada firmada.",
+);
+check(
+  photoManager.includes("uploadToSignedUrl"),
+  "Las fotos originales todavía pasan por el servidor web.",
+);
+check(
+  photoDownload.includes('from(watermarked ? "hike-watermarked" : "hike-originals")'),
+  "La descarga pagada no entrega el original privado.",
+);
+check(
+  photoDownload.includes("download: downloadName"),
+  "La descarga no define un nombre de archivo seguro.",
+);
+
 for (const name of ["magic_link", "confirmation", "invite", "recovery"]) {
   const template = read(`supabase/templates/${name}.html`);
   check(template.includes("{{ .TokenHash }}"), `${name} no usa TokenHash.`);
