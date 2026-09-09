@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { BadgeCheck } from 'lucide-react';
 import { SiteHeader } from '../../components/SiteHeader';
-import { getAdventure } from '../../lib/data';
+import { getAdventure, getAdventureReviews } from '../../lib/data';
 import { SITE_ORIGIN } from '../../lib/site-url';
+import { WaitlistButton } from './waitlist-button';
 
 const origin = SITE_ORIGIN;
 const concise = (value: string, length = 155) => value.length <= length ? value : `${value.slice(0, length - 1).trim()}…`;
@@ -34,6 +36,7 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const hike = await getAdventure(slug);
   if (!hike) notFound();
+  const reviews = await getAdventureReviews(hike.id);
   const url = `${origin}/aventuras/${hike.slug}`;
   const image = hike.image.startsWith('http') ? hike.image : `${origin}${hike.image}`;
   const endsAt = hike.durationMinutes
@@ -120,11 +123,12 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
           </>}
           <div className="availability"><i /> Cupo para {hike.spots} personas</div>
           {hike.transportAvailable && <div className="transport-note"><span>BUS</span><p><strong>Transporte disponible</strong><br />{hike.transportDeparture ? `Desde ${hike.transportDeparture}` : 'Punto por confirmar'} · +${hike.transportPrice.toLocaleString('es-MX')}</p></div>}
-          <Link className="button button-primary full-button" href={`/reservar/${hike.slug}`}>QUIERO IR <span>→</span></Link>
+          {hike.spots > 0 ? <Link className="button button-primary full-button" href={`/reservar/${hike.slug}`}>QUIERO IR <span>→</span></Link> : <WaitlistButton hikeId={hike.id} slug={hike.slug} />}
           <p className="secure-note">Reserva segura · Confirmación inmediata</p>
         </aside>
       </section>
-      <div className="mobile-sticky"><div><span>DESDE</span><strong>${hike.price} MXN</strong></div><Link className="button button-primary" href={`/reservar/${hike.slug}`}>QUIERO IR →</Link></div>
+      {reviews.length > 0 && <section className="hike-reviews"><div><p className="eyebrow">RESEÑAS VERIFICADAS</p><h2>Lo cuenta la manada.</h2></div><div>{reviews.map((review) => { const profile = Array.isArray(review.profile) ? review.profile[0] : review.profile; const average=(review.route_rating+review.guide_rating+(review.transport_rating??0))/(review.transport_rating?3:2); return <article key={review.id}><BadgeCheck/><strong>{profile?.first_name || 'Miembro de la manada'} · {average.toFixed(1)}/5</strong><p>{review.body || 'Calificó esta aventura después de asistir.'}</p><small>RUTA {review.route_rating}/5 · GUÍAS {review.guide_rating}/5{review.transport_rating?` · TRANSPORTE ${review.transport_rating}/5`:''}</small></article>;})}</div></section>}
+      <div className="mobile-sticky"><div><span>{hike.spots > 0 ? 'DESDE' : 'CUPO'}</span><strong>{hike.spots > 0 ? `$${hike.price} MXN` : 'LISTA DE ESPERA'}</strong></div>{hike.spots > 0 ? <Link className="button button-primary" href={`/reservar/${hike.slug}`}>QUIERO IR →</Link> : <Link className="button button-primary" href="#lista-espera">VER DISPONIBILIDAD</Link>}</div>
     </main>
   );
 }

@@ -14,6 +14,10 @@ const dogSchema = z.object({
   medications: z.string().trim().max(1000).or(z.literal("")).optional(),
   notes: z.string().trim().max(1000).or(z.literal("")).optional(),
   photoPath: z.string().trim().max(500).or(z.literal("")).optional(),
+  activityLevel: z.enum(["LOW", "MEDIUM", "HIGH"]).nullable().optional(),
+  hikingExperience: z.enum(["FIRST_TIME", "SOME", "EXPERIENCED"]).nullable().optional(),
+  vaccinationCurrent: z.boolean().nullable().optional(),
+  vetCleared: z.boolean().nullable().optional(),
 });
 
 export async function PATCH(
@@ -73,6 +77,10 @@ export async function PATCH(
       medications: parsed.data.medications || null,
       notes: parsed.data.notes || null,
       photo_path: parsed.data.photoPath || null,
+      activity_level: parsed.data.activityLevel ?? null,
+      hiking_experience: parsed.data.hikingExperience ?? null,
+      vaccination_current: parsed.data.vaccinationCurrent ?? null,
+      vet_cleared: parsed.data.vetCleared ?? null,
     })
     .eq("id", id)
     .eq("owner_profile_id", profile.id)

@@ -54,7 +54,7 @@ export default async function Home() {
                   {index === 0 && <span className="featured-badge">MÁS POPULAR</span>}
                 </div>
                 <div className="card-body">
-                  <div className="location"><span aria-hidden="true">●</span>{adventure.location}</div>
+                  <div className="location"><span className="location-dot" aria-hidden="true" />{adventure.location}</div>
                   <h3>{adventure.title}</h3><p className="card-meta">{adventure.distance.toUpperCase()} · {adventure.duration.toUpperCase()} · {adventure.difficulty.toUpperCase()}</p>
                   <div className="card-footer">
                     <div><span>DESDE</span><strong>${adventure.price.toLocaleString("es-MX")} <small>MXN</small></strong></div>

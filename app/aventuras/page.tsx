@@ -38,7 +38,7 @@ export default async function AdventuresPage() {
                 </div>
               </div>
               <div className="card-body">
-                <div className="location"><span aria-hidden="true">●</span>{adventure.location}</div>
+                <div className="location"><span className="location-dot" aria-hidden="true" />{adventure.location}</div>
                 <h2>{adventure.title}</h2>
                 <p className="card-meta">{adventure.distance.toUpperCase()} · {adventure.duration.toUpperCase()} · {adventure.difficulty.toUpperCase()}</p>
                 <div className="card-footer">

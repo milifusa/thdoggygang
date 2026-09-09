@@ -32,5 +32,15 @@ export async function refreshSupabaseSession(request: NextRequest) {
   // Validates the access token and rotates it from the refresh token when
   // needed. This prevents the apparent logout after the short-lived JWT ends.
   await supabase.auth.getClaims();
+  const referral = request.nextUrl.searchParams.get("ref")?.trim().toUpperCase();
+  if (referral && /^[A-Z0-9]{6,20}$/u.test(referral)) {
+    response.cookies.set("tdg_referral", referral, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+      maxAge: 30 * 24 * 60 * 60,
+      path: "/",
+    });
+  }
   return response;
 }

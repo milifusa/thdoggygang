@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Check, Download } from "lucide-react";
 import { formatClabe, type BankTransferConfig } from "../../lib/payment-types";
+import { DogPhotoFinder } from "./dog-photo-finder";
 
 export type GalleryPhoto = {
   id: string;
@@ -32,7 +33,10 @@ export function PhotoGallery({
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [filter, setFilter] = useState<"ALL" | "FREE" | "PURCHASED">("ALL");
+  const [filter, setFilter] = useState<
+    "ALL" | "FREE" | "PURCHASED" | "MATCHED"
+  >("ALL");
+  const [matchedIds, setMatchedIds] = useState<string[]>([]);
   const [purchaseMode, setPurchaseMode] = useState<
     "INDIVIDUAL" | "FIVE" | "TEN" | "FULL"
   >("INDIVIDUAL");
@@ -42,7 +46,8 @@ export function PhotoGallery({
     (photo) =>
       filter === "ALL" ||
       (filter === "FREE" && photo.access !== "PAID") ||
-      (filter === "PURCHASED" && photo.purchased),
+      (filter === "PURCHASED" && photo.purchased) ||
+      (filter === "MATCHED" && matchedIds.includes(photo.id)),
   );
   const paidPhotos = photos.filter((photo) => selected.includes(photo.id));
   const packageTotal =
@@ -150,6 +155,15 @@ export function PhotoGallery({
             : "La galería de esta aventura estará disponible muy pronto."}
         </p>
       </section>
+      {photos.length > 0 && (
+        <DogPhotoFinder
+          photos={photos}
+          onMatches={(ids) => {
+            setMatchedIds(ids);
+            setFilter("MATCHED");
+          }}
+        />
+      )}
       <div className="gallery-toolbar">
         <span>
           {visible.length} DE {photos.length} FOTOS
@@ -173,6 +187,14 @@ export function PhotoGallery({
           >
             COMPRADAS
           </button>
+          {matchedIds.length > 0 && (
+            <button
+              className={filter === "MATCHED" ? "active" : ""}
+              onClick={() => setFilter("MATCHED")}
+            >
+              COINCIDENCIAS
+            </button>
+          )}
         </div>
       </div>
       {(packages.five !== null ||

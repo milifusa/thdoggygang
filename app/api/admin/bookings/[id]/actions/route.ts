@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../../../lib/supabase/service";
 import { getStripeSecretKey } from "../../../../../lib/payment-config";
+import { sendWaitlistOfferForHike } from "../../../../../lib/server/booking-reminder";
 
 const schema = z.object({
   action: z.enum([
@@ -43,7 +44,7 @@ export async function POST(
   const { data: booking } = await service
     .from("bookings")
     .select(
-      "id,status,orders(id,status,payments(id,provider,provider_payment_id,status,amount_cents))",
+      "id,status,hike_id,orders(id,status,payments(id,provider,provider_payment_id,status,amount_cents))",
     )
     .eq("id", id)
     .single();
@@ -181,5 +182,7 @@ export async function POST(
       entity_id: booking.id,
       metadata: { reason: parsed.data.reason },
     });
+  if (["CANCEL", "REFUND"].includes(parsed.data.action))
+    await sendWaitlistOfferForHike(booking.hike_id).catch(() => null);
   return Response.json({ ok: true });
 }

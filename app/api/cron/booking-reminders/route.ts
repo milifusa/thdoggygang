@@ -1,5 +1,5 @@
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
-import { sendBookingReminder } from "../../../lib/server/booking-reminder";
+import { sendBookingReminder, sendUpcomingHikeReminder, sendWaitlistOfferForHike } from "../../../lib/server/booking-reminder";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -50,10 +50,31 @@ export async function GET(request: Request) {
       });
     }
   }
+  const now = new Date();
+  const upper = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: upcoming } = await service.from("bookings").select("id,hike:hikes!inner(starts_at)").eq("status", "CONFIRMED").gt("hike.starts_at", now.toISOString()).lte("hike.starts_at", upper).limit(200);
+  const upcomingResults = [];
+  for (const booking of upcoming ?? []) {
+    const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
+    if (!hike) continue;
+    const hours = (new Date(hike.starts_at).getTime() - now.getTime()) / 3_600_000;
+    const kind = hours >= 144 && hours <= 192 ? "HIKE_REMINDER_7D" : hours >= 18 && hours <= 42 ? "HIKE_REMINDER_1D" : null;
+    if (!kind) continue;
+    try { const sent = await sendUpcomingHikeReminder(booking.id, kind, admin.id); upcomingResults.push({ bookingId: booking.id, kind, ...sent }); }
+    catch (error) { upcomingResults.push({ bookingId: booking.id, kind, ok: false, error: error instanceof Error ? error.message : "No enviado" }); }
+  }
+  const { data: waitlistOffers } = await service.from("waitlist_entries").select("hike_id").eq("status", "OFFERED").is("notified_at", null).gt("offer_expires_at", now.toISOString()).limit(50);
+  const waitlistResults = [];
+  for (const offer of waitlistOffers ?? []) {
+    try { waitlistResults.push({ hikeId: offer.hike_id, ...(await sendWaitlistOfferForHike(offer.hike_id)) }); }
+    catch (error) { waitlistResults.push({ hikeId: offer.hike_id, ok: false, error: error instanceof Error ? error.message : "No enviado" }); }
+  }
   return Response.json({
     ok: true,
     processed: results.length,
     sent: results.filter((item) => item.ok).length,
     results,
+    upcoming: upcomingResults,
+    waitlist: waitlistResults,
   });
 }

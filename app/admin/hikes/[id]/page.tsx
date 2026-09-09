@@ -6,7 +6,9 @@ import {
   CheckCircle2,
   Dog,
   Download,
+  Hourglass,
   Settings,
+  Star,
 } from "lucide-react";
 import { requireStaffSession } from "../../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
@@ -30,6 +32,8 @@ const tabs = [
   "pagos",
   "fotos",
   "check-in",
+  "lista-espera",
+  "reseñas",
   "configuracion",
 ] as const;
 type Tab = (typeof tabs)[number];
@@ -115,6 +119,8 @@ export default async function HikeAdminDetail({
     { data: bookingData },
     { data: gallery },
     { data: allPayments },
+    { data: waitlist },
+    { data: reviews },
   ] = await Promise.all([
     supabase
       .from("hikes")
@@ -144,6 +150,16 @@ export default async function HikeAdminDetail({
       .select(
         "id,status,method,amount_cents,created_at,order:orders(booking_id,order_items(item_type,reference_id,description,quantity,unit_price_cents))",
       )
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("waitlist_entries")
+      .select("id,status,people_count,dog_count,created_at,offer_expires_at,profile:profiles(first_name,last_name,email,phone)")
+      .eq("hike_id", id)
+      .order("created_at"),
+    supabase
+      .from("hike_reviews")
+      .select("id,route_rating,guide_rating,transport_rating,body,published,created_at,profile:profiles(first_name,last_name,email)")
+      .eq("hike_id", id)
       .order("created_at", { ascending: false }),
   ]);
   if (!hike) notFound();
@@ -324,6 +340,11 @@ export default async function HikeAdminDetail({
                       ).length
                   }{" "}
                   perritos con alertas
+                </p>
+                <p>
+                  <Hourglass />{" "}
+                  {(waitlist ?? []).filter((entry) => entry.status === "WAITING").length}{" "}
+                  registros en lista de espera
                 </p>
               </div>
               <div className="admin-panel">
@@ -529,6 +550,41 @@ export default async function HikeAdminDetail({
                 INICIAR MODO HIKE
               </Link>
             </div>
+          </section>
+        )}
+        {tab === "lista-espera" && (
+          <section className="admin-panel hike-detail-list">
+            <h2>Lista de espera</h2>
+            {(waitlist ?? []).map((entry) => (
+              <article key={entry.id}>
+                <div>
+                  <span>{adminDate(entry.created_at)}</span>
+                  <strong>{profileName(entry.profile)}</strong>
+                  <small>{entry.people_count} personas · {entry.dog_count} perritos</small>
+                </div>
+                <b>{entry.status === "OFFERED" ? "OFERTA 24 H" : entry.status}</b>
+                <em>{entry.offer_expires_at ? `Vence ${adminDate(entry.offer_expires_at)}` : "ORDEN DE LLEGADA"}</em>
+              </article>
+            ))}
+            {!waitlist?.length && <p>No hay personas en lista de espera.</p>}
+          </section>
+        )}
+        {tab === "reseñas" && (
+          <section className="admin-panel hike-detail-list admin-review-list">
+            <h2>Reseñas verificadas</h2>
+            {(reviews ?? []).map((review) => (
+              <article key={review.id}>
+                <Star />
+                <div>
+                  <span>{adminDate(review.created_at)}</span>
+                  <strong>{profileName(review.profile)}</strong>
+                  <small>{review.body || "Sin comentario escrito"}</small>
+                </div>
+                <b>RUTA {review.route_rating}/5 · GUÍAS {review.guide_rating}/5</b>
+                <em>{review.published ? "PUBLICADA" : "OCULTA"}</em>
+              </article>
+            ))}
+            {!reviews?.length && <p>Las reseñas aparecerán después de la aventura.</p>}
           </section>
         )}
         {tab === "configuracion" && isAdmin && (

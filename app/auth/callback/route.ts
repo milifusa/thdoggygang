@@ -2,6 +2,7 @@ import type { EmailOtpType } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
 import { destinationForRole, safeReturnPath } from '../../lib/auth/destination';
+import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -23,8 +24,13 @@ export async function GET(request: Request) {
       ? await supabase.from('profiles').select('role,active').eq('auth_user_id', user.id).maybeSingle()
       : { data: null };
     if (!profile?.active) throw new Error('Inactive account.');
+    const cookieStore = await cookies();
+    const referral = cookieStore.get('tdg_referral')?.value;
+    if (referral) await supabase.rpc('redeem_referral_code', { p_code: referral });
     const destination = destinationForRole(profile.role, next);
-    return NextResponse.redirect(new URL(destination, url.origin));
+    const response = NextResponse.redirect(new URL(destination, url.origin));
+    if (referral) response.cookies.delete('tdg_referral');
+    return response;
   } catch {
     const login = new URL('/ingresar', url.origin);
     login.searchParams.set('error', 'expired');

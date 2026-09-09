@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { adminClient, hikeSchema } from "../route";
+import { notifyConfirmedHikeChange } from "../../../../lib/server/booking-reminder";
 const idSchema = z.string().uuid();
 
 export async function PATCH(
@@ -75,6 +76,13 @@ export async function PATCH(
     if (transportError)
       return Response.json({ error: transportError.message }, { status: 400 });
   }
+  const importantChanges = [
+    value.startsAt !== undefined ? "fecha u horario" : null,
+    value.locationName !== undefined ? "ubicación" : null,
+    value.transportDepartureAt !== undefined || value.transportDeparturePlace !== undefined ? "transporte" : null,
+  ].filter((item): item is string => Boolean(item));
+  if (importantChanges.length)
+    await notifyConfirmedHikeChange(id, importantChanges).catch(() => null);
   return Response.json({ hike: data });
 }
 

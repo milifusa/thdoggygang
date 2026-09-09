@@ -1,16 +1,22 @@
 import Link from "next/link";
 import {
+  Award,
+  Bell,
   CalendarDays,
   CircleCheck,
+  Clock4,
   Dog,
+  Gift,
   Images,
   ShoppingBag,
+  Sparkles,
   Users,
 } from "lucide-react";
 import { requireClientSession } from "../lib/auth/guards";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { GangManager, type DogRecord, type PersonRecord } from "./gang-manager";
-import { hikeCoverUrl } from "../lib/data";
+import { getAdventures, hikeCoverUrl } from "../lib/data";
+import { recommendAdventures } from "../lib/recommendations";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +47,10 @@ type DogRow = {
   medications: string | null;
   notes: string | null;
   photo_path: string | null;
+  activity_level: DogRecord["activityLevel"];
+  hiking_experience: DogRecord["hikingExperience"];
+  vaccination_current: boolean | null;
+  vet_cleared: boolean | null;
 };
 type HikeSummary = {
   id: string;
@@ -94,7 +104,7 @@ export default async function MyGangPage({
       supabase
         .from("dogs")
         .select(
-          "id, name, breed, birth_date, sex, size, sterilized, sociability, reactivity, medical_conditions, medications, notes, photo_path",
+          "id, name, breed, birth_date, sex, size, sterilized, sociability, reactivity, medical_conditions, medications, notes, photo_path, activity_level, hiking_experience, vaccination_current, vet_cleared",
         )
         .eq("owner_profile_id", session.profile.id)
         .is("deleted_at", null)
@@ -147,6 +157,10 @@ export default async function MyGangPage({
         notes: dog.notes ?? "",
         photoPath: dog.photo_path ?? "",
         photoUrl,
+        activityLevel: dog.activity_level,
+        hikingExperience: dog.hiking_experience,
+        vaccinationCurrent: dog.vaccination_current,
+        vetCleared: dog.vet_cleared,
       };
     }),
   );
@@ -204,6 +218,43 @@ export default async function MyGangPage({
     session.profile.first_name,
     session.profile.last_name,
   );
+  const adventures = await getAdventures();
+  const visitedHikeIds = new Set(
+    bookings
+      .map((booking) => hikeOf(booking)?.id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const recommendations = recommendAdventures(
+    adventures,
+    dogs.map((dog) => ({
+      name: dog.name,
+      birthDate: dog.birthDate,
+      size: dog.size,
+      sociability: dog.sociability,
+      reactivity: dog.reactivity,
+      medicalConditions: dog.medicalConditions,
+      activityLevel: dog.activityLevel,
+      hikingExperience: dog.hikingExperience,
+      vaccinationCurrent: dog.vaccinationCurrent,
+      vetCleared: dog.vetCleared,
+    })),
+    visitedHikeIds,
+  );
+  const [{ data: notifications }, { data: waitlist }] = await Promise.all([
+    supabase
+      .from("notifications")
+      .select("id,template_key,payload,created_at")
+      .eq("profile_id", session.profile.id)
+      .eq("channel", "IN_APP")
+      .order("created_at", { ascending: false })
+      .limit(3),
+    supabase
+      .from("waitlist_entries")
+      .select("id,status,created_at,offer_expires_at,hike:hikes(name,slug,starts_at)")
+      .eq("profile_id", session.profile.id)
+      .in("status", ["WAITING", "OFFERED"])
+      .order("created_at"),
+  ]);
 
   return (
     <main className="account-page">
@@ -228,6 +279,35 @@ export default async function MyGangPage({
             <span>FO</span> Mis fotos
           </Link>
         </nav>
+        {notifications && notifications.length > 0 && (
+          <section className="member-notifications">
+            <Bell />
+            <div>
+              <strong>AVISOS DE TU MANADA</strong>
+              {notifications.map((notification) => {
+                const payload = notification.payload as { hike?: string; url?: string };
+                return payload.url ? (
+                  <Link href={payload.url} key={notification.id}>
+                    {notification.template_key === "WAITLIST_OFFER"
+                      ? `Se liberó un lugar para ${payload.hike ?? "tu aventura"}. Reserva dentro de las próximas 24 horas.`
+                      : notification.template_key === "HIKE_CHANGED"
+                        ? `Hay una actualización importante en ${payload.hike ?? "tu próxima aventura"}.`
+                        : `Revisa los detalles de ${payload.hike ?? "tu próxima aventura"}.`}
+                  </Link>
+                ) : null;
+              })}
+            </div>
+          </section>
+        )}
+        {waitlist && waitlist.length > 0 && (
+          <section className="member-waitlist">
+            <div className="account-heading"><div><p className="eyebrow">LISTA DE ESPERA</p><h2>Aventuras que estás siguiendo</h2></div><Clock4 /></div>
+            {waitlist.map((entry) => {
+              const hike = Array.isArray(entry.hike) ? entry.hike[0] : entry.hike;
+              return hike ? <Link href={entry.status === "OFFERED" ? `/reservar/${hike.slug}` : `/aventuras/${hike.slug}`} key={entry.id}><div><strong>{hike.name}</strong><small>{date(hike.starts_at)}</small></div><span>{entry.status === "OFFERED" ? "LUGAR DISPONIBLE · RESERVAR" : "EN ESPERA"}</span></Link> : null;
+            })}
+          </section>
+        )}
         <div className="account-user">
           <div>{userInitials}</div>
           <span>
@@ -280,6 +360,20 @@ export default async function MyGangPage({
             <span>
               <strong>Mis fotos</strong>
               <small>{galleries?.length ?? 0} galerías</small>
+            </span>
+          </Link>
+          <Link href="/mi-manada/pasaporte">
+            <Award />
+            <span>
+              <strong>Pasaporte</strong>
+              <small>Huellas y kilómetros</small>
+            </span>
+          </Link>
+          <Link href="/mi-manada/recompensas">
+            <Gift />
+            <span>
+              <strong>Recompensas</strong>
+              <small>Puntos e invitaciones</small>
             </span>
           </Link>
         </nav>
@@ -361,6 +455,31 @@ export default async function MyGangPage({
             </div>
           )}
         </section>
+
+        {recommendations.length > 0 && (
+          <section className="member-recommendations">
+            <div className="account-heading">
+              <div>
+                <p className="eyebrow">ELEGIDAS PARA TU MANADA</p>
+                <h2>Próximas rutas recomendadas</h2>
+              </div>
+              <Sparkles />
+            </div>
+            <div>
+              {recommendations.map(({ adventure, score, reason }) => (
+                <Link href={`/aventuras/${adventure.slug}`} key={adventure.id}>
+                  <img src={adventure.image} alt={adventure.title} />
+                  <div>
+                    <span>{score}% COMPATIBLE</span>
+                    <h3>{adventure.title}</h3>
+                    <p>{adventure.shortDate} · {adventure.location}</p>
+                    <small>{reason}</small>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         <GangManager
           profileId={session.profile.id}

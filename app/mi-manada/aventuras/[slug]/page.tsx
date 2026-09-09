@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Clock3, FileSignature, PackageCheck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock3, FileSignature, PackageCheck } from "lucide-react";
 import { requireClientSession } from "../../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
 import { AdventureTicket } from "./ticket-client";
 import { CancelBookingButton } from "./cancel-booking-button";
+import { AdventureCenter } from "./adventure-center";
+import { assessDogSuitability } from "../../../lib/dog-suitability";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +32,7 @@ export default async function MyAdventurePage({
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "id,booking_number,status,current_step,total_cents,profile_id,hike:hikes!inner(id,name,slug,starts_at,location_name,meeting_point,cancellation_policy),booking_participants(id,snapshot),booking_dogs(id,snapshot),signed_waivers(id,booking_participant_id),check_ins(id,booking_participant_id),booking_cancellation_requests(id,status),orders(id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(status)))",
+      "id,booking_number,status,current_step,total_cents,profile_id,hike:hikes!inner(id,name,slug,starts_at,location_name,meeting_point,cancellation_policy,distance_km,elevation_m,duration_minutes,difficulty),booking_participants(id,snapshot),booking_dogs(id,snapshot),signed_waivers(id,booking_participant_id),check_ins(id,booking_participant_id),booking_cancellation_requests(id,status),orders(id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(status))),adventure_checklist_items(item_key),hike_reviews(route_rating,guide_rating,transport_rating,body)",
     )
     .eq("profile_id", session.profile.id)
     .eq("hike.slug", slug)
@@ -73,6 +75,27 @@ export default async function MyAdventurePage({
   const hasCancellationRequest = (
     booking.booking_cancellation_requests ?? []
   ).some((request) => request.status === "REQUESTED");
+  const dogAssessments = booking.booking_dogs.map((dog) => {
+    const snapshot = dog.snapshot as {
+      name?: string; birth_date?: string | null; size?: string | null; sociability?: string | null;
+      reactivity?: string | null; medical_conditions?: string | null; activity_level?: string | null;
+      hiking_experience?: string | null; vaccination_current?: boolean | null; vet_cleared?: boolean | null;
+    };
+    return {
+      name: snapshot.name || "Tu perrito",
+      result: assessDogSuitability(
+        {
+          name: snapshot.name || "Tu perrito", birthDate: snapshot.birth_date, size: snapshot.size,
+          sociability: snapshot.sociability, reactivity: snapshot.reactivity, medicalConditions: snapshot.medical_conditions,
+          activityLevel: snapshot.activity_level, hikingExperience: snapshot.hiking_experience,
+          vaccinationCurrent: snapshot.vaccination_current, vetCleared: snapshot.vet_cleared,
+        },
+        { distanceKm: hike.distance_km, elevationM: hike.elevation_m, durationMinutes: hike.duration_minutes, difficulty: hike.difficulty },
+      ),
+    };
+  });
+  const review = one(booking.hike_reviews);
+  const canReview = ["CONFIRMED", "COMPLETED"].includes(booking.status) && new Date(hike.starts_at) < new Date();
   return (
     <main className="ticket-page">
       <header>
@@ -173,6 +196,34 @@ export default async function MyAdventurePage({
               "El equipo revisará tu solicitud conforme a las condiciones de esta aventura."}
           </p>
         </div>
+        {dogAssessments.length > 0 && (
+          <section className="dog-suitability-results">
+            <div>
+              <p className="eyebrow">COMPATIBILIDAD ORIENTATIVA</p>
+              <h2>¿Esta ruta va con mi perrito?</h2>
+              <p>Usamos el perfil guardado y la exigencia del hike. No sustituye una valoración veterinaria.</p>
+            </div>
+            {dogAssessments.map(({ name, result }) => (
+              <article className={result.level.toLowerCase()} key={name}>
+                {result.level === "GOOD" ? <CheckCircle2 /> : <AlertTriangle />}
+                <div><strong>{name} · {result.label}</strong><span>{result.score}/100</span><p>{result.notes.join(" ")}</p></div>
+              </article>
+            ))}
+          </section>
+        )}
+        <AdventureCenter
+          bookingId={booking.id}
+          status={booking.status}
+          signed={booking.signed_waivers.length}
+          participants={booking.booking_participants.length}
+          checkedIn={booking.check_ins.length}
+          startsAt={hike.starts_at}
+          meetingPoint={hike.meeting_point ?? hike.location_name}
+          completedKeys={(booking.adventure_checklist_items ?? []).map((item) => item.item_key)}
+          shopUrl={`/tienda?hike=${hike.id}`}
+          canReview={canReview}
+          initialReview={review ?? null}
+        />
         <CancelBookingButton
           bookingId={booking.id}
           status={booking.status}

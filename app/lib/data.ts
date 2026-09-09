@@ -204,14 +204,45 @@ export async function getAdventures(): Promise<Adventure[]> {
     console.error("Could not load public hikes", error.message);
     return [];
   }
-  return (data ?? []).map((row) =>
-    mapHike(row as unknown as Record<string, unknown>),
+  const rows = data ?? [];
+  const { data: availability } = rows.length
+    ? await supabase.rpc("public_hike_availability", {
+        p_hike_ids: rows.map((row) => row.id),
+      })
+    : { data: [] };
+  const spots = new Map<string, number>(
+    (availability ?? []).map((item: { hike_id: string; spots_left: number }) => [
+      item.hike_id,
+      Number(item.spots_left),
+    ]),
   );
+  return rows.map((row) => {
+    const adventure = mapHike(row as unknown as Record<string, unknown>);
+    adventure.spots = spots.get(adventure.id) ?? adventure.spots;
+    return adventure;
+  });
 }
 
 export async function getAdventure(slug: string): Promise<Adventure | null> {
   const adventures = await getAdventures();
   return adventures.find((item) => item.slug === slug) ?? null;
+}
+
+export async function getAdventureReviews(hikeId: string) {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  const { data } = await supabase
+    .from("hike_reviews")
+    .select("id,route_rating,guide_rating,transport_rating,body,created_at,profile:profiles(first_name)")
+    .eq("hike_id", hikeId)
+    .eq("published", true)
+    .order("created_at", { ascending: false })
+    .limit(12);
+  return data ?? [];
 }
 
 export function calculateHikeSubtotal(

@@ -35,6 +35,10 @@ export type DogRecord = {
   notes: string;
   photoPath: string;
   photoUrl: string;
+  activityLevel: "LOW" | "MEDIUM" | "HIGH" | null;
+  hikingExperience: "FIRST_TIME" | "SOME" | "EXPERIENCED" | null;
+  vaccinationCurrent: boolean | null;
+  vetCleared: boolean | null;
 };
 
 type DialogState =
@@ -582,6 +586,16 @@ function DogDialog({
         medications: data.get("medications"),
         notes: data.get("notes"),
         photoPath,
+        activityLevel: data.get("activityLevel") || null,
+        hikingExperience: data.get("hikingExperience") || null,
+        vaccinationCurrent:
+          data.get("vaccinationCurrent") === ""
+            ? null
+            : data.get("vaccinationCurrent") === "true",
+        vetCleared:
+          data.get("vetCleared") === ""
+            ? null
+            : data.get("vetCleared") === "true",
       };
       const response = await fetch(
         record ? `/api/dogs/${record.id}` : "/api/dogs",
@@ -706,6 +720,40 @@ function DogDialog({
               defaultValue={record?.reactivity}
               placeholder="Ruidos, perros grandes…"
             />
+          </label>
+          <label>
+            NIVEL DE ACTIVIDAD
+            <select name="activityLevel" defaultValue={record?.activityLevel ?? ""}>
+              <option value="">Sin especificar</option>
+              <option value="LOW">Bajo</option>
+              <option value="MEDIUM">Medio</option>
+              <option value="HIGH">Alto</option>
+            </select>
+          </label>
+          <label>
+            EXPERIENCIA EN HIKES
+            <select name="hikingExperience" defaultValue={record?.hikingExperience ?? ""}>
+              <option value="">Sin especificar</option>
+              <option value="FIRST_TIME">Primera vez</option>
+              <option value="SOME">Algunos hikes</option>
+              <option value="EXPERIENCED">Con experiencia</option>
+            </select>
+          </label>
+          <label>
+            VACUNAS AL CORRIENTE
+            <select name="vaccinationCurrent" defaultValue={record?.vaccinationCurrent == null ? "" : String(record.vaccinationCurrent)}>
+              <option value="">Sin especificar</option>
+              <option value="true">Sí</option>
+              <option value="false">No</option>
+            </select>
+          </label>
+          <label>
+            APTO POR SU VETERINARIO
+            <select name="vetCleared" defaultValue={record?.vetCleared == null ? "" : String(record.vetCleared)}>
+              <option value="">Sin especificar</option>
+              <option value="true">Sí</option>
+              <option value="false">No / pendiente</option>
+            </select>
           </label>
           <label className="full-field">
             CONDICIONES MÉDICAS

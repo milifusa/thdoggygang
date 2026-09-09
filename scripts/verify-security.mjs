@@ -52,6 +52,43 @@ check(
   "La descarga no define un nombre de archivo seguro.",
 );
 
+for (const route of [
+  "app/api/adventure-checklist/route.ts",
+  "app/api/notification-preferences/route.ts",
+  "app/api/referrals/route.ts",
+  "app/api/reviews/route.ts",
+  "app/api/waitlist/route.ts",
+  "app/api/passport/certificate/route.ts",
+  "app/api/bookings/[id]/calendar/route.ts",
+  "app/api/bookings/[id]/guide/route.ts",
+]) {
+  check(existsSync(join(root, route)), `Falta la ruta protegida ${route}.`);
+  if (existsSync(join(root, route)))
+    check(read(route).includes("auth.getUser()"), `${route} no verifica la sesión en servidor.`);
+}
+const memberMigration = read(
+  "supabase/migrations/202609090002_member_value_features.sql",
+);
+check(
+  memberMigration.includes("alter table public.reward_ledger enable row level security"),
+  "El libro de recompensas no activa RLS.",
+);
+check(
+  memberMigration.includes("revoke insert,update,delete on table public.reward_ledger from authenticated"),
+  "Los clientes podrían modificar sus propios puntos.",
+);
+check(
+  memberMigration.includes("protect_profile_referrals"),
+  "Los códigos de recomendación no están protegidos contra manipulación.",
+);
+const capacityMigration = read(
+  "supabase/migrations/202609090003_waitlist_capacity_hardening.sql",
+);
+check(
+  capacityMigration.includes("bookings_capacity_transition_guard"),
+  "El cupo no está protegido al iniciar el pago.",
+);
+
 for (const name of ["magic_link", "confirmation", "invite", "recovery"]) {
   const template = read(`supabase/templates/${name}.html`);
   check(template.includes("{{ .TokenHash }}"), `${name} no usa TokenHash.`);
