@@ -6,7 +6,9 @@ import { getStripeSecretKey } from "../../../lib/payment-config";
 const schema = z.object({
   photoIds: z.array(z.string().uuid()).min(1).max(500),
   hikeSlug: z.string().min(1).max(160),
-  purchaseMode: z.enum(["INDIVIDUAL","FIVE","TEN","FULL"]).default("INDIVIDUAL"),
+  purchaseMode: z
+    .enum(["INDIVIDUAL", "FIVE", "TEN", "FULL"])
+    .default("INDIVIDUAL"),
 });
 
 export async function POST(request: Request) {
@@ -62,11 +64,15 @@ export async function POST(request: Request) {
       { error: "Una de las fotos ya no está disponible." },
       { status: 409 },
     );
-  const galleryValue = (
-    valid[0] && Array.isArray(valid[0].gallery)
-      ? valid[0].gallery[0]
-      : valid[0]?.gallery
-  ) as unknown as { id:string;package_5_price_cents:number|null;package_10_price_cents:number|null;full_gallery_price_cents:number|null;hike: { id: string } | Array<{ id: string }> } | null;
+  const galleryValue = (valid[0] && Array.isArray(valid[0].gallery)
+    ? valid[0].gallery[0]
+    : valid[0]?.gallery) as unknown as {
+    id: string;
+    package_5_price_cents: number | null;
+    package_10_price_cents: number | null;
+    full_gallery_price_cents: number | null;
+    hike: { id: string } | Array<{ id: string }>;
+  } | null;
   const galleryHike =
     galleryValue &&
     (Array.isArray(galleryValue.hike)
@@ -87,19 +93,74 @@ export async function POST(request: Request) {
       { error: "Esta galería es exclusiva para asistentes confirmados." },
       { status: 403 },
     );
-  const mode=parsed.data.purchaseMode;
-  const expectedCount=mode==="FIVE"?5:mode==="TEN"?10:null;
-  if(expectedCount&&ids.length!==expectedCount)return Response.json({error:`Este paquete requiere exactamente ${expectedCount} fotos.`},{status:409});
-  if(mode==="FULL"){
-    const {data:allPaid}=await service.from("photos").select("id").eq("gallery_id",galleryValue?.id).eq("access","PAID").eq("hidden",false).is("deleted_at",null);
-    const {data:owned}=await service.from("photo_purchases").select("photo_id,order_item:order_items!inner(order:orders!inner(status))").eq("profile_id",profile.id);
-    const ownedIds=new Set((owned??[]).filter((purchase)=>{const item=Array.isArray(purchase.order_item)?purchase.order_item[0]:purchase.order_item;const order=Array.isArray(item?.order)?item.order[0]:item?.order;return order?.status==="PAID";}).map((purchase)=>purchase.photo_id));
-    const remaining=(allPaid??[]).map((photo)=>photo.id).filter((id)=>!ownedIds.has(id));
-    if(remaining.length!==ids.length||remaining.some((id)=>!ids.includes(id)))return Response.json({error:"Selecciona todas las fotos disponibles para usar este paquete."},{status:409});
+  const mode = parsed.data.purchaseMode;
+  const expectedCount = mode === "FIVE" ? 5 : mode === "TEN" ? 10 : null;
+  if (expectedCount && ids.length !== expectedCount)
+    return Response.json(
+      { error: `Este paquete requiere exactamente ${expectedCount} fotos.` },
+      { status: 409 },
+    );
+  if (mode === "FULL") {
+    const { data: allPaid } = await service
+      .from("photos")
+      .select("id")
+      .eq("gallery_id", galleryValue?.id)
+      .eq("access", "PAID")
+      .eq("hidden", false)
+      .is("deleted_at", null);
+    const { data: owned } = await service
+      .from("photo_purchases")
+      .select(
+        "photo_id,order_item:order_items!inner(order:orders!inner(status))",
+      )
+      .eq("profile_id", profile.id);
+    const ownedIds = new Set(
+      (owned ?? [])
+        .filter((purchase) => {
+          const item = Array.isArray(purchase.order_item)
+            ? purchase.order_item[0]
+            : purchase.order_item;
+          const order = Array.isArray(item?.order)
+            ? item.order[0]
+            : item?.order;
+          return order?.status === "PAID";
+        })
+        .map((purchase) => purchase.photo_id),
+    );
+    const remaining = (allPaid ?? [])
+      .map((photo) => photo.id)
+      .filter((id) => !ownedIds.has(id));
+    if (
+      remaining.length !== ids.length ||
+      remaining.some((id) => !ids.includes(id))
+    )
+      return Response.json(
+        {
+          error:
+            "Selecciona todas las fotos disponibles para usar este paquete.",
+        },
+        { status: 409 },
+      );
   }
-  const configuredTotal=mode==="FIVE"?galleryValue?.package_5_price_cents:mode==="TEN"?galleryValue?.package_10_price_cents:mode==="FULL"?galleryValue?.full_gallery_price_cents:null;
-  if(mode!=="INDIVIDUAL"&&(configuredTotal===null||configuredTotal===undefined))return Response.json({error:"Este paquete ya no está disponible."},{status:409});
-  const total = configuredTotal ?? valid.reduce((sum, photo) => sum + (photo.price_cents ?? 0), 0);
+  const configuredTotal =
+    mode === "FIVE"
+      ? galleryValue?.package_5_price_cents
+      : mode === "TEN"
+        ? galleryValue?.package_10_price_cents
+        : mode === "FULL"
+          ? galleryValue?.full_gallery_price_cents
+          : null;
+  if (
+    mode !== "INDIVIDUAL" &&
+    (configuredTotal === null || configuredTotal === undefined)
+  )
+    return Response.json(
+      { error: "Este paquete ya no está disponible." },
+      { status: 409 },
+    );
+  const total =
+    configuredTotal ??
+    valid.reduce((sum, photo) => sum + (photo.price_cents ?? 0), 0);
   if (total <= 0)
     return Response.json(
       { error: "La compra no tiene un monto válido." },
@@ -122,14 +183,18 @@ export async function POST(request: Request) {
       { error: "No pudimos crear la orden." },
       { status: 500 },
     );
-  const baseUnit=Math.floor(total/valid.length);const remainder=total-baseUnit*valid.length;
-  const items = valid.map((photo,index) => ({
+  const baseUnit = Math.floor(total / valid.length);
+  const remainder = total - baseUnit * valid.length;
+  const items = valid.map((photo, index) => ({
     order_id: order.id,
     item_type: "PHOTO",
     reference_id: photo.id,
     description: photo.title ?? "Fotografía The Doggy Gang",
     quantity: 1,
-    unit_price_cents: configuredTotal===null||configuredTotal===undefined?(photo.price_cents??0):baseUnit+(index<remainder?1:0),
+    unit_price_cents:
+      configuredTotal === null || configuredTotal === undefined
+        ? (photo.price_cents ?? 0)
+        : baseUnit + (index < remainder ? 1 : 0),
   }));
   const { data: orderItems, error: itemError } = await service
     .from("order_items")
@@ -140,18 +205,16 @@ export async function POST(request: Request) {
       { error: "No pudimos preparar las fotografías." },
       { status: 500 },
     );
-  await service
-    .from("photo_purchases")
-    .insert(
-      orderItems.map((item) => ({
-        order_item_id: item.id,
-        profile_id: profile.id,
-        photo_id: item.reference_id,
-        download_expires_at: new Date(
-          Date.now() + 30 * 24 * 60 * 60 * 1000,
-        ).toISOString(),
-      })),
-    );
+  await service.from("photo_purchases").insert(
+    orderItems.map((item) => ({
+      order_item_id: item.id,
+      profile_id: profile.id,
+      photo_id: item.reference_id,
+      download_expires_at: new Date(
+        Date.now() + 30 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    })),
+  );
   const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
   const form = new URLSearchParams({
     mode: "payment",
@@ -162,17 +225,30 @@ export async function POST(request: Request) {
     "metadata[purchase_type]": "photos",
   });
   if (profile.email) form.set("customer_email", profile.email);
-  const checkoutLines=configuredTotal===null||configuredTotal===undefined?valid.map((photo)=>({name:photo.title??"Fotografía The Doggy Gang",amount:photo.price_cents??0,quantity:1})):[{name:mode==="FULL"?"Galería completa":`Paquete de ${valid.length} fotografías`,amount:total,quantity:1}];
+  const checkoutLines =
+    configuredTotal === null || configuredTotal === undefined
+      ? valid.map((photo) => ({
+          name: photo.title ?? "Fotografía The Doggy Gang",
+          amount: photo.price_cents ?? 0,
+          quantity: 1,
+        }))
+      : [
+          {
+            name:
+              mode === "FULL"
+                ? "Galería completa"
+                : `Paquete de ${valid.length} fotografías`,
+            amount: total,
+            quantity: 1,
+          },
+        ];
   checkoutLines.forEach((line, index) => {
     form.set(`line_items[${index}][price_data][currency]`, "mxn");
     form.set(
       `line_items[${index}][price_data][unit_amount]`,
       String(line.amount),
     );
-    form.set(
-      `line_items[${index}][price_data][product_data][name]`,
-      line.name,
-    );
+    form.set(`line_items[${index}][price_data][product_data][name]`, line.name);
     form.set(`line_items[${index}][quantity]`, String(line.quantity));
   });
   const stripeResponse = await fetch(
@@ -196,15 +272,13 @@ export async function POST(request: Request) {
       { error: checkout.error?.message ?? "Stripe no pudo iniciar el pago." },
       { status: 502 },
     );
-  await service
-    .from("payments")
-    .insert({
-      order_id: order.id,
-      provider: "stripe",
-      provider_payment_id: checkout.id,
-      method: "CARD",
-      status: "PENDING",
-      amount_cents: total,
-    });
+  await service.from("payments").insert({
+    order_id: order.id,
+    provider: "stripe",
+    provider_payment_id: checkout.id,
+    method: "CARD",
+    status: "PENDING",
+    amount_cents: total,
+  });
   return Response.json({ url: checkout.url });
 }

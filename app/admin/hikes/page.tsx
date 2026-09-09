@@ -36,12 +36,18 @@ type HikeRow = {
     signed_waivers: Array<{ id: string }>;
     check_ins: Array<{ id: string }>;
   }>;
-  transport_configurations: Array<{ mode: string; capacity: number | null }> | { mode: string; capacity: number | null } | null;
-  hike_galleries: Array<{
-    id: string;
-    published_at: string | null;
-    photos: Array<{ id: string }>;
-  }> | { id: string; published_at: string | null; photos: Array<{ id: string }> } | null;
+  transport_configurations:
+    | Array<{ mode: string; capacity: number | null }>
+    | { mode: string; capacity: number | null }
+    | null;
+  hike_galleries:
+    | Array<{
+        id: string;
+        published_at: string | null;
+        photos: Array<{ id: string }>;
+      }>
+    | { id: string; published_at: string | null; photos: Array<{ id: string }> }
+    | null;
 };
 type PaymentRow = {
   status: string;
@@ -73,8 +79,8 @@ export default async function HikesAdminPage({
 }: {
   searchParams: Promise<{ filter?: string; q?: string }>;
 }) {
-  const session=await requireStaffSession("/admin/hikes", true);
-  const isAdmin=session.mode!=="live"||session.profile.role==="ADMIN";
+  const session = await requireStaffSession("/admin/hikes", true);
+  const isAdmin = session.mode !== "live" || session.profile.role === "ADMIN";
   const supabase = await createSupabaseServerClient();
   const query = await searchParams;
   const [{ data: hikeData }, { data: paymentData }] = await Promise.all([
@@ -94,10 +100,20 @@ export default async function HikesAdminPage({
   ]);
   const hikes = (hikeData ?? []) as unknown as HikeRow[];
   const payments = (paymentData ?? []) as unknown as PaymentRow[];
-  const galleryOf = (hike: HikeRow) => Array.isArray(hike.hike_galleries) ? hike.hike_galleries[0] : hike.hike_galleries;
-  const transportOf = (hike: HikeRow) => Array.isArray(hike.transport_configurations) ? hike.transport_configurations[0] : hike.transport_configurations;
+  const galleryOf = (hike: HikeRow) =>
+    Array.isArray(hike.hike_galleries)
+      ? hike.hike_galleries[0]
+      : hike.hike_galleries;
+  const transportOf = (hike: HikeRow) =>
+    Array.isArray(hike.transport_configurations)
+      ? hike.transport_configurations[0]
+      : hike.transport_configurations;
   const photoHike = new Map<string, string>();
-  hikes.forEach((hike) => galleryOf(hike)?.photos?.forEach((photo) => photoHike.set(photo.id, hike.id)));
+  hikes.forEach((hike) =>
+    galleryOf(hike)?.photos?.forEach((photo) =>
+      photoHike.set(photo.id, hike.id),
+    ),
+  );
   const metrics = new Map(
     hikes.map((h) => {
       const active = h.bookings.filter((b) =>
@@ -307,7 +323,28 @@ export default async function HikesAdminPage({
                     </span>
                   )}
                 </div>
-                <div className="hike-ops-actions">{isAdmin?<HikeQuickActions id={h.id} past={pastMode} published={h.published} cancelled={Boolean(h.cancelled_at)}/>:<><Link className="button button-primary" href={`/admin/hikes/${h.id}`}>{pastMode?"VER RESULTADOS":"ADMINISTRAR"}</Link><Link href={`/admin/hike-mode?hike=${h.id}`}>MODO HIKE</Link></>}</div>
+                <div className="hike-ops-actions">
+                  {isAdmin ? (
+                    <HikeQuickActions
+                      id={h.id}
+                      past={pastMode}
+                      published={h.published}
+                      cancelled={Boolean(h.cancelled_at)}
+                    />
+                  ) : (
+                    <>
+                      <Link
+                        className="button button-primary"
+                        href={`/admin/hikes/${h.id}`}
+                      >
+                        {pastMode ? "VER RESULTADOS" : "ADMINISTRAR"}
+                      </Link>
+                      <Link href={`/admin/hike-mode?hike=${h.id}`}>
+                        MODO HIKE
+                      </Link>
+                    </>
+                  )}
+                </div>
               </article>
             );
           })}

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Check, Download } from "lucide-react";
+import { formatClabe, type BankTransferConfig } from "../../lib/payment-types";
 
 export type GalleryPhoto = {
   id: string;
@@ -19,18 +20,24 @@ export function PhotoGallery({
   hikeDate,
   photos,
   packages,
+  bankTransfer,
 }: {
   hikeName: string;
   hikeSlug: string;
   hikeDate: string;
   photos: GalleryPhoto[];
-  packages: { five:number|null;ten:number|null;full:number|null };
+  packages: { five: number | null; ten: number | null; full: number | null };
+  bankTransfer: BankTransferConfig | null;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<"ALL" | "FREE" | "PURCHASED">("ALL");
-  const [purchaseMode,setPurchaseMode]=useState<"INDIVIDUAL"|"FIVE"|"TEN"|"FULL">("INDIVIDUAL");
+  const [purchaseMode, setPurchaseMode] = useState<
+    "INDIVIDUAL" | "FIVE" | "TEN" | "FULL"
+  >("INDIVIDUAL");
+  const [payment, setPayment] = useState<"card" | "transfer">("card");
+  const [receipt, setReceipt] = useState<File | null>(null);
   const visible = photos.filter(
     (photo) =>
       filter === "ALL" ||
@@ -38,22 +45,73 @@ export function PhotoGallery({
       (filter === "PURCHASED" && photo.purchased),
   );
   const paidPhotos = photos.filter((photo) => selected.includes(photo.id));
-  const packageTotal=purchaseMode==="FIVE"?packages.five:purchaseMode==="TEN"?packages.ten:purchaseMode==="FULL"?packages.full:null;
-  const total = useMemo(() => packageTotal ?? paidPhotos.reduce((sum, p) => sum + p.priceCents, 0), [packageTotal,paidPhotos]);
-  const availablePaid=photos.filter((photo)=>photo.access==="PAID"&&!photo.purchased);
-  const choosePackage=(mode:"FIVE"|"TEN"|"FULL")=>{const count=mode==="FIVE"?5:mode==="TEN"?10:availablePaid.length;if(availablePaid.length<count){setMessage(`Sólo hay ${availablePaid.length} fotos de pago disponibles.`);return;}setSelected(availablePaid.slice(0,count).map((photo)=>photo.id));setPurchaseMode(mode);setMessage(mode==="FULL"?"Seleccionamos toda la galería disponible.":`Seleccionamos ${count} fotos para este paquete.`);};
+  const packageTotal =
+    purchaseMode === "FIVE"
+      ? packages.five
+      : purchaseMode === "TEN"
+        ? packages.ten
+        : purchaseMode === "FULL"
+          ? packages.full
+          : null;
+  const total = useMemo(
+    () => packageTotal ?? paidPhotos.reduce((sum, p) => sum + p.priceCents, 0),
+    [packageTotal, paidPhotos],
+  );
+  const availablePaid = photos.filter(
+    (photo) => photo.access === "PAID" && !photo.purchased,
+  );
+  const choosePackage = (mode: "FIVE" | "TEN" | "FULL") => {
+    const count =
+      mode === "FIVE" ? 5 : mode === "TEN" ? 10 : availablePaid.length;
+    if (availablePaid.length < count) {
+      setMessage(`Sólo hay ${availablePaid.length} fotos de pago disponibles.`);
+      return;
+    }
+    setSelected(availablePaid.slice(0, count).map((photo) => photo.id));
+    setPurchaseMode(mode);
+    setMessage(
+      mode === "FULL"
+        ? "Seleccionamos toda la galería disponible."
+        : `Seleccionamos ${count} fotos para este paquete.`,
+    );
+  };
   async function checkout() {
     setBusy(true);
     setMessage("");
-    const response = await fetch("/api/checkout/photos", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ photoIds: selected, hikeSlug, purchaseMode }),
-    });
-    const result = (await response.json()) as { url?: string; error?: string };
+    let response: Response;
+    if (payment === "transfer") {
+      if (!receipt) {
+        setBusy(false);
+        return setMessage("Adjunta el comprobante de tu transferencia.");
+      }
+      const body = new FormData();
+      body.set("photoIds", JSON.stringify(selected));
+      body.set("hikeSlug", hikeSlug);
+      body.set("purchaseMode", purchaseMode);
+      body.set("receipt", receipt);
+      response = await fetch("/api/photos/transfer", { method: "POST", body });
+    } else
+      response = await fetch("/api/checkout/photos", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ photoIds: selected, hikeSlug, purchaseMode }),
+      });
+    const result = (await response.json()) as {
+      url?: string;
+      error?: string;
+      ok?: boolean;
+      orderNumber?: string;
+    };
     setBusy(false);
     if (response.status === 401) {
       window.location.href = `/ingresar?next=${encodeURIComponent(`/galeria/${hikeSlug}`)}`;
+      return;
+    }
+    if (payment === "transfer" && response.ok) {
+      setSelected([]);
+      setMessage(
+        `Comprobante recibido · ${result.orderNumber}. Tus descargas se activarán al aprobarse.`,
+      );
       return;
     }
     if (!response.ok || !result.url)
@@ -117,7 +175,49 @@ export function PhotoGallery({
           </button>
         </div>
       </div>
-      {(packages.five!==null||packages.ten!==null||packages.full!==null)&&<section className="gallery-packages"><div><span>PAQUETES DE RECUERDOS</span><strong>Ahorra al llevar más fotos.</strong></div>{packages.five!==null&&<button onClick={()=>choosePackage("FIVE")}>5 FOTOS <b>{(packages.five/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}</b></button>}{packages.ten!==null&&<button onClick={()=>choosePackage("TEN")}>10 FOTOS <b>{(packages.ten/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}</b></button>}{packages.full!==null&&<button onClick={()=>choosePackage("FULL")}>GALERÍA COMPLETA <b>{(packages.full/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}</b></button>}</section>}
+      {(packages.five !== null ||
+        packages.ten !== null ||
+        packages.full !== null) && (
+        <section className="gallery-packages">
+          <div>
+            <span>PAQUETES DE RECUERDOS</span>
+            <strong>Ahorra al llevar más fotos.</strong>
+          </div>
+          {packages.five !== null && (
+            <button onClick={() => choosePackage("FIVE")}>
+              5 FOTOS{" "}
+              <b>
+                {(packages.five / 100).toLocaleString("es-MX", {
+                  style: "currency",
+                  currency: "MXN",
+                })}
+              </b>
+            </button>
+          )}
+          {packages.ten !== null && (
+            <button onClick={() => choosePackage("TEN")}>
+              10 FOTOS{" "}
+              <b>
+                {(packages.ten / 100).toLocaleString("es-MX", {
+                  style: "currency",
+                  currency: "MXN",
+                })}
+              </b>
+            </button>
+          )}
+          {packages.full !== null && (
+            <button onClick={() => choosePackage("FULL")}>
+              GALERÍA COMPLETA{" "}
+              <b>
+                {(packages.full / 100).toLocaleString("es-MX", {
+                  style: "currency",
+                  currency: "MXN",
+                })}
+              </b>
+            </button>
+          )}
+        </section>
+      )}
       <section className="photo-grid">
         {visible.map((photo, index) => {
           const isPaid = photo.access === "PAID" && !photo.purchased;
@@ -135,9 +235,14 @@ export function PhotoGallery({
                 <button
                   aria-label="Seleccionar foto"
                   className="photo-select-button"
-                  onClick={() =>
-                    {setPurchaseMode("INDIVIDUAL");setSelected((items) => items.includes(photo.id) ? items.filter((id) => id !== photo.id) : [...items, photo.id]);}
-                  }
+                  onClick={() => {
+                    setPurchaseMode("INDIVIDUAL");
+                    setSelected((items) =>
+                      items.includes(photo.id)
+                        ? items.filter((id) => id !== photo.id)
+                        : [...items, photo.id],
+                    );
+                  }}
                 >
                   {isSelected ? <Check /> : "+"}
                 </button>
@@ -184,12 +289,50 @@ export function PhotoGallery({
               })}
             </strong>
           </div>
+          <div className="photo-payment-tabs">
+            <button
+              className={payment === "card" ? "active" : ""}
+              onClick={() => setPayment("card")}
+            >
+              TARJETA
+            </button>
+            <button
+              disabled={!bankTransfer}
+              className={payment === "transfer" ? "active" : ""}
+              onClick={() => setPayment("transfer")}
+            >
+              {bankTransfer ? "TRANSFERENCIA" : "TRANSFERENCIA NO DISPONIBLE"}
+            </button>
+          </div>
+          {payment === "transfer" && bankTransfer && (
+            <div className="photo-bank-box">
+              <strong>{bankTransfer.bankName}</strong>
+              <span>
+                {bankTransfer.accountName} · CLABE{" "}
+                {formatClabe(bankTransfer.clabe)}
+              </span>
+              <label>
+                {receipt ? receipt.name : "ADJUNTAR COMPROBANTE"}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,application/pdf"
+                  onChange={(event) =>
+                    setReceipt(event.target.files?.[0] ?? null)
+                  }
+                />
+              </label>
+            </div>
+          )}
           <button
             className="button button-primary"
             disabled={busy}
             onClick={() => void checkout()}
           >
-            {busy ? "ABRIENDO PAGO…" : "COMPRAR FOTOS"}
+            {busy
+              ? "PROCESANDO…"
+              : payment === "transfer"
+                ? "ENVIAR COMPROBANTE"
+                : "COMPRAR FOTOS"}
           </button>
           {message && <p>{message}</p>}
         </aside>

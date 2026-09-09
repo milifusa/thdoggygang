@@ -20,10 +20,12 @@ type PersonRow = {
   last_name: string;
   email: string | null;
   phone: string | null;
+  whatsapp: string | null;
   birth_date: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
   is_minor: boolean;
+  guardian_person_id: string | null;
 };
 type DogRow = {
   id: string;
@@ -73,7 +75,7 @@ const date = (value: string) =>
 export default async function MyGangPage({
   searchParams,
 }: {
-  searchParams: Promise<{ new?: string; returnTo?: string }>;
+  searchParams: Promise<{ new?: string; editDog?: string; returnTo?: string }>;
 }) {
   const session = await requireClientSession("/mi-manada");
   const query = await searchParams;
@@ -84,7 +86,7 @@ export default async function MyGangPage({
       supabase
         .from("person_profiles")
         .select(
-          "id, first_name, last_name, email, phone, birth_date, emergency_contact_name, emergency_contact_phone, is_minor",
+          "id, first_name, last_name, email, phone, whatsapp, birth_date, emergency_contact_name, emergency_contact_phone, is_minor, guardian_person_id",
         )
         .eq("owner_profile_id", session.profile.id)
         .is("deleted_at", null)
@@ -114,10 +116,12 @@ export default async function MyGangPage({
       lastName: person.last_name,
       email: person.email ?? "",
       phone: person.phone ?? "",
+      whatsapp: person.whatsapp ?? "",
       birthDate: person.birth_date ?? "",
       emergencyContactName: person.emergency_contact_name ?? "",
       emergencyContactPhone: person.emergency_contact_phone ?? "",
       isMinor: person.is_minor,
+      guardianPersonId: person.guardian_person_id ?? "",
     }),
   );
   const dogs: DogRecord[] = await Promise.all(
@@ -367,6 +371,7 @@ export default async function MyGangPage({
           returnTo={
             query.returnTo?.startsWith("/") ? query.returnTo : undefined
           }
+          initialDogId={query.editDog}
         />
 
         <section className="history">

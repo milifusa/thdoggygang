@@ -125,7 +125,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("hike_galleries")
       .select(
-          "id,title,published_at,default_photo_price_cents,package_5_price_cents,package_10_price_cents,full_gallery_price_cents,cover_photo_id,photos:photos!photos_gallery_id_fkey(id,title,caption,access,price_cents,thumbnail_path,preview_path,watermarked_path,processing_status,hidden)",
+        "id,title,published_at,default_photo_price_cents,package_5_price_cents,package_10_price_cents,full_gallery_price_cents,cover_photo_id,photos:photos!photos_gallery_id_fkey(id,title,caption,access,price_cents,thumbnail_path,preview_path,watermarked_path,processing_status,hidden)",
       )
       .eq("hike_id", id)
       .maybeSingle(),
@@ -161,10 +161,10 @@ export default async function HikeAdminDetail({
         : payment.order;
       return Boolean(
         order &&
-        ((order.booking_id && bookingIds.has(order.booking_id)) ||
-          order.order_items.some(
-            (i) => i.reference_id && photoIds.has(i.reference_id),
-          )),
+          ((order.booking_id && bookingIds.has(order.booking_id)) ||
+            order.order_items.some(
+              (i) => i.reference_id && photoIds.has(i.reference_id),
+            )),
       );
     },
   );
@@ -302,7 +302,7 @@ export default async function HikeAdminDetail({
                       .filter((d) =>
                         Boolean(
                           d.snapshot.reactivity ||
-                          d.snapshot.medical_conditions,
+                            d.snapshot.medical_conditions,
                         ),
                       ).length
                   }{" "}

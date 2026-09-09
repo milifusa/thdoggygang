@@ -24,7 +24,10 @@ export type SignedPayload = SignedCheckinPayload | OfflineAuthorizationPayload;
 function toBase64Url(bytes: Uint8Array) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+  return btoa(binary)
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replace(/=+$/u, "");
 }
 
 function fromBase64Url(value: string) {
@@ -56,7 +59,9 @@ async function importPublicKey(encoded: string) {
 }
 
 export async function signPayload(payload: SignedPayload) {
-  const encodedPayload = toBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
+  const encodedPayload = toBase64Url(
+    new TextEncoder().encode(JSON.stringify(payload)),
+  );
   const signature = await crypto.subtle.sign(
     { name: "ECDSA", hash: "SHA-256" },
     await importPrivateKey(),
@@ -69,7 +74,9 @@ export function parseSignedPayload(token: string): SignedPayload | null {
   try {
     const [prefix, payloadPart, signaturePart] = token.split(".");
     if (prefix !== "tdg:v2" || !payloadPart || !signaturePart) return null;
-    return JSON.parse(new TextDecoder().decode(fromBase64Url(payloadPart))) as SignedPayload;
+    return JSON.parse(
+      new TextDecoder().decode(fromBase64Url(payloadPart)),
+    ) as SignedPayload;
   } catch {
     return null;
   }
@@ -78,7 +85,8 @@ export function parseSignedPayload(token: string): SignedPayload | null {
 export async function verifySignedPayload(token: string, publicKey?: string) {
   const [prefix, payloadPart, signaturePart] = token.split(".");
   if (prefix !== "tdg:v2" || !payloadPart || !signaturePart) return null;
-  const encodedPublicKey = publicKey ?? process.env.NEXT_PUBLIC_QR_SIGNING_PUBLIC_KEY;
+  const encodedPublicKey =
+    publicKey ?? process.env.NEXT_PUBLIC_QR_SIGNING_PUBLIC_KEY;
   if (!encodedPublicKey) return null;
   try {
     const valid = await crypto.subtle.verify(
@@ -88,7 +96,9 @@ export async function verifySignedPayload(token: string, publicKey?: string) {
       new TextEncoder().encode(payloadPart),
     );
     if (!valid) return null;
-    const payload = JSON.parse(new TextDecoder().decode(fromBase64Url(payloadPart))) as SignedPayload;
+    const payload = JSON.parse(
+      new TextDecoder().decode(fromBase64Url(payloadPart)),
+    ) as SignedPayload;
     if (!payload.expiresAt || Date.now() > payload.expiresAt) return null;
     return payload;
   } catch {
@@ -97,6 +107,11 @@ export async function verifySignedPayload(token: string, publicKey?: string) {
 }
 
 export async function hashSignedToken(token: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(token),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
 }

@@ -40,12 +40,25 @@ export type HikeBooking = {
   status: string;
   hike_id: string;
   total_cents: number;
-  profile: { first_name?: string; last_name?: string; email?: string; phone?: string } | null;
+  profile: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone?: string;
+  } | null;
   booking_participants: HikeParticipant[];
   booking_dogs: HikeDog[];
   transport_reservations: Array<{ id: string; booking_participant_id: string }>;
-  signed_waivers: Array<{ id: string; booking_participant_id: string; signed_at: string }>;
-  check_ins: Array<{ id: string; booking_participant_id: string; checked_in_at: string }>;
+  signed_waivers: Array<{
+    id: string;
+    booking_participant_id: string;
+    signed_at: string;
+  }>;
+  check_ins: Array<{
+    id: string;
+    booking_participant_id: string;
+    checked_in_at: string;
+  }>;
   qrToken?: string;
 };
 
@@ -62,7 +75,11 @@ export type HikeModeData = {
   availableHikes: Array<{ id: string; name: string; startsAt: string }>;
   bookings: HikeBooking[];
   deliveries: HikeDelivery[];
-  transportDeparture: { completedAt: string | null; passengerCount: number; note: string | null };
+  transportDeparture: {
+    completedAt: string | null;
+    passengerCount: number;
+    note: string | null;
+  };
   publicKey: string;
   authorization?: string;
   preparedAt?: string;

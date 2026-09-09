@@ -124,6 +124,7 @@ export function BookingWizard({
   const [processing, setProcessing] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(resume?.bookingId ?? null);
   const [syncMessage, setSyncMessage] = useState("");
+  const [dogNeedsUpdate,setDogNeedsUpdate]=useState(false);
   const hikeSubtotal = useMemo(
     () => calculateHikeSubtotal(adventure, selectedPeople.length, selectedDogs.length),
     [adventure, selectedPeople.length, selectedDogs.length],
@@ -146,6 +147,20 @@ export function BookingWizard({
         ? values.filter((item) => item !== id)
         : [...values, id],
     );
+  const togglePerson = (id: string) => {
+    const person=people.find((item)=>item.id===id);
+    if(selectedPeople.includes(id)){
+      const hasSelectedMinor=people.some((item)=>item.isMinor&&item.guardianPersonId===id&&selectedPeople.includes(item.id));
+      if(hasSelectedMinor){setSyncMessage("Primero quita al menor que tiene a esta persona como responsable.");return;}
+      setSelectedPeople(selectedPeople.filter((item)=>item!==id));
+      setTransportPeople((current)=>current.filter((item)=>item!==id));
+      return;
+    }
+    const next=[...selectedPeople,id];
+    if(person?.isMinor&&person.guardianPersonId&&!next.includes(person.guardianPersonId))next.push(person.guardianPersonId);
+    setSelectedPeople(next);
+    setSyncMessage(person?.isMinor&&person.guardianPersonId?"También seleccionamos a su persona adulta responsable.":"");
+  };
   const persistDraft = async () => {
     if (context.mode === "demo") return bookingId;
     const response = await fetch("/api/bookings/draft", {
@@ -252,7 +267,7 @@ export function BookingWizard({
   };
   const canContinue =
     step === 0
-      ? selectedPeople.length > 0
+      ? selectedPeople.length > 0 && selectedPeople.every((id)=>{const person=people.find((item)=>item.id===id);return !person?.isMinor||Boolean(person.guardianPersonId&&selectedPeople.includes(person.guardianPersonId));})
       : step === 1
         ? selectedDogs.length > 0
         : step === 4
@@ -351,7 +366,7 @@ export function BookingWizard({
                         className={`select-card ${selectedPeople.includes(person.id) ? "selected" : ""}`}
                         key={person.id}
                         onClick={() =>
-                          toggle(person.id, selectedPeople, setSelectedPeople)
+                          togglePerson(person.id)
                         }
                       >
                         <span className="profile-initials">
@@ -431,13 +446,14 @@ export function BookingWizard({
                       {dogs.find((dog) => selectedDogs.includes(dog.id))?.name}?
                     </strong>
                     <label>
-                      <input type="radio" defaultChecked name="changed" /> No,
+                      <input type="radio" checked={!dogNeedsUpdate} name="changed" onChange={()=>setDogNeedsUpdate(false)} /> No,
                       todo sigue igual
                     </label>
                     <label>
-                      <input type="radio" name="changed" /> Sí, quiero
+                      <input type="radio" checked={dogNeedsUpdate} name="changed" onChange={()=>setDogNeedsUpdate(true)} /> Sí, quiero
                       actualizar su perfil
                     </label>
+                    {dogNeedsUpdate&&<button className="add-row" type="button" onClick={()=>window.location.assign(`/mi-manada?editDog=${dogs.find((dog)=>selectedDogs.includes(dog.id))?.id}&returnTo=${encodeURIComponent(`/reservar/${adventure.slug}`)}`)}>ACTUALIZAR PERFIL ANTES DE CONTINUAR <ArrowRight/></button>}
                   </div>
                 )}
                 <button

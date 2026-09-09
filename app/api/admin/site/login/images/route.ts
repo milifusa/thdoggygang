@@ -62,17 +62,15 @@ export async function POST(request: Request) {
     [`${kind.data}Width`]: info.width,
     [`${kind.data}Height`]: info.height,
   };
-  const { error } = await supabase
-    .from("site_content")
-    .upsert(
-      {
-        id: "login",
-        [column]: path,
-        image_metadata: metadata,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    );
+  const { error } = await supabase.from("site_content").upsert(
+    {
+      id: "login",
+      [column]: path,
+      image_metadata: metadata,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
   if (error) {
     await supabase.storage.from("site-assets").remove([path]);
     return Response.json(
@@ -93,14 +91,28 @@ export async function DELETE(request: Request) {
   const supabase = await adminClient();
   if (!supabase)
     return Response.json({ error: "No autorizado." }, { status: 403 });
-  const kind = z.enum(["desktop", "mobile"]).safeParse(new URL(request.url).searchParams.get("kind"));
+  const kind = z
+    .enum(["desktop", "mobile"])
+    .safeParse(new URL(request.url).searchParams.get("kind"));
   if (!kind.success)
     return Response.json({ error: "Imagen inválida." }, { status: 400 });
-  const column = kind.data === "desktop" ? "hero_image_path" : "mobile_image_path";
-  const { data: current } = await supabase.from("site_content").select(column).eq("id", "login").maybeSingle();
+  const column =
+    kind.data === "desktop" ? "hero_image_path" : "mobile_image_path";
+  const { data: current } = await supabase
+    .from("site_content")
+    .select(column)
+    .eq("id", "login")
+    .maybeSingle();
   const previous = (current as Record<string, unknown> | null)?.[column];
-  const { error } = await supabase.from("site_content").update({ [column]: null, updated_at: new Date().toISOString() }).eq("id", "login");
+  const { error } = await supabase
+    .from("site_content")
+    .update({ [column]: null, updated_at: new Date().toISOString() })
+    .eq("id", "login");
   if (error) return Response.json({ error: error.message }, { status: 400 });
-  if (typeof previous === "string" && previous.startsWith(`login/${kind.data}-`)) await supabase.storage.from("site-assets").remove([previous]);
+  if (
+    typeof previous === "string" &&
+    previous.startsWith(`login/${kind.data}-`)
+  )
+    await supabase.storage.from("site-assets").remove([previous]);
   return Response.json({ ok: true });
 }

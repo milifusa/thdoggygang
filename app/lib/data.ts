@@ -63,9 +63,19 @@ const demoAdventures: Adventure[] = [
     description:
       "Un sendero entre bosque, vistas abiertas y rincones que parecen salidos de un cuento.",
     storyTitle: "Respira bosque.\nCamina en manada.",
-    includes: ["Guías de The Doggy Gang", "Kit de bienvenida", "Hidratación durante la ruta", "Galería digital de recuerdos"],
+    includes: [
+      "Guías de The Doggy Gang",
+      "Kit de bienvenida",
+      "Hidratación durante la ruta",
+      "Galería digital de recuerdos",
+    ],
     excludes: [],
-    packingList: ["Correa fija y placa", "Agua para tu perrito", "Calzado con buena tracción", "Bolsitas y snacks"],
+    packingList: [
+      "Correa fija y placa",
+      "Agua para tu perrito",
+      "Calzado con buena tracción",
+      "Bolsitas y snacks",
+    ],
     dogSuitability: defaultDogSuitability,
     rules: defaultRules,
     cancellationPolicy: defaultCancellation,
@@ -75,7 +85,10 @@ const demoAdventures: Adventure[] = [
   },
 ];
 
-export function hikeCoverUrl(hikeId: string, coverPath: string | null | undefined) {
+export function hikeCoverUrl(
+  hikeId: string,
+  coverPath: string | null | undefined,
+) {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!baseUrl || !coverPath || !coverPath.startsWith(`${hikeId}/`)) {
     return "/brand/profile-trail-sun.png";
@@ -89,9 +102,14 @@ function mapHike(row: Record<string, unknown>): Adventure {
   const transportValue = Array.isArray(row.transport_configurations)
     ? row.transport_configurations[0]
     : row.transport_configurations;
-  const transport = transportValue && typeof transportValue === "object"
-    ? transportValue as { mode?: string; price_cents?: number; departure_place?: string | null }
-    : null;
+  const transport =
+    transportValue && typeof transportValue === "object"
+      ? (transportValue as {
+          mode?: string;
+          price_cents?: number;
+          departure_place?: string | null;
+        })
+      : null;
   const formatDate = new Intl.DateTimeFormat("es-MX", {
     day: "numeric",
     month: "long",
@@ -104,8 +122,12 @@ function mapHike(row: Record<string, unknown>): Adventure {
     timeZone: "America/Mexico_City",
   }).formatToParts(startsAt);
   const day = shortParts.find((part) => part.type === "day")?.value ?? "";
-  const month = (shortParts.find((part) => part.type === "month")?.value ?? "").replace(".", "").toUpperCase();
-  const durationMinutes = row.duration_minutes ? Number(row.duration_minutes) : 0;
+  const month = (shortParts.find((part) => part.type === "month")?.value ?? "")
+    .replace(".", "")
+    .toUpperCase();
+  const durationMinutes = row.duration_minutes
+    ? Number(row.duration_minutes)
+    : 0;
   return {
     id: String(row.id),
     slug: String(row.slug),
@@ -121,19 +143,32 @@ function mapHike(row: Record<string, unknown>): Adventure {
     location: String(row.location_name),
     price: Number(row.price_cents ?? 0) / 100,
     dogPrice: Number(row.dog_price_cents ?? 0) / 100,
-    pricingMode: row.pricing_mode === "PERSON_DOG_BUNDLE" ? "PERSON_DOG_BUNDLE" : "PER_PERSON",
+    pricingMode:
+      row.pricing_mode === "PERSON_DOG_BUNDLE"
+        ? "PERSON_DOG_BUNDLE"
+        : "PER_PERSON",
     distance: row.distance_km ? `${Number(row.distance_km)} km` : "Por definir",
-    duration: durationMinutes ? `${Number((durationMinutes / 60).toFixed(1))} h` : "Por definir",
+    duration: durationMinutes
+      ? `${Number((durationMinutes / 60).toFixed(1))} h`
+      : "Por definir",
     difficulty: String(row.difficulty || "Por definir"),
-    elevation: row.elevation_m === null || row.elevation_m === undefined ? "Por definir" : `${Number(row.elevation_m)} m`,
+    elevation:
+      row.elevation_m === null || row.elevation_m === undefined
+        ? "Por definir"
+        : `${Number(row.elevation_m)} m`,
     terrain: String(row.terrain || "Por definir"),
     spots: Number(row.capacity ?? 0),
-    image: hikeCoverUrl(String(row.id), row.cover_path ? String(row.cover_path) : null),
+    image: hikeCoverUrl(
+      String(row.id),
+      row.cover_path ? String(row.cover_path) : null,
+    ),
     description: String(row.description),
     storyTitle: String(row.story_title || "Respira bosque.\nCamina en manada."),
     includes: Array.isArray(row.includes) ? row.includes.map(String) : [],
     excludes: Array.isArray(row.excludes) ? row.excludes.map(String) : [],
-    packingList: Array.isArray(row.packing_list) ? row.packing_list.map(String) : [],
+    packingList: Array.isArray(row.packing_list)
+      ? row.packing_list.map(String)
+      : [],
     dogSuitability: String(row.dog_suitability || defaultDogSuitability),
     rules: String(row.rules || defaultRules),
     cancellationPolicy: String(row.cancellation_policy || defaultCancellation),
@@ -152,7 +187,9 @@ export async function getAdventures(): Promise<Adventure[]> {
   );
   const { data, error } = await supabase
     .from("hikes")
-    .select("id, slug, name, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, transport_configurations(mode, price_cents, departure_place)")
+    .select(
+      "id, slug, name, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, transport_configurations(mode, price_cents, departure_place)",
+    )
     .eq("published", true)
     .is("deleted_at", null)
     .gte("starts_at", new Date().toISOString())
@@ -161,7 +198,9 @@ export async function getAdventures(): Promise<Adventure[]> {
     console.error("Could not load public hikes", error.message);
     return [];
   }
-  return (data ?? []).map((row) => mapHike(row as unknown as Record<string, unknown>));
+  return (data ?? []).map((row) =>
+    mapHike(row as unknown as Record<string, unknown>),
+  );
 }
 
 export async function getAdventure(slug: string): Promise<Adventure | null> {

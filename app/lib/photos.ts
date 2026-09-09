@@ -1,4 +1,7 @@
-export function publicPhotoUrl(bucket: "hike-previews" | "hike-watermarked", path: string) {
+export function publicPhotoUrl(
+  bucket: "hike-previews" | "hike-watermarked",
+  path: string,
+) {
   const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!baseUrl) return "";
   const encoded = path.split("/").map(encodeURIComponent).join("/");

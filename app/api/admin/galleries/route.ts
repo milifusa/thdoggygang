@@ -19,22 +19,20 @@ export async function PATCH(request: Request) {
   const supabase = await adminClient();
   if (!supabase)
     return Response.json({ error: "No autorizado." }, { status: 403 });
-  const { error } = await supabase
-    .from("hike_galleries")
-    .upsert(
-      {
-        hike_id: parsed.data.hikeId,
-        title: "Galería The Doggy Gang",
-        published_at: parsed.data.published ? new Date().toISOString() : null,
-        default_photo_price_cents: parsed.data.defaultPriceCents,
-        package_5_price_cents: parsed.data.package5Cents,
-        package_10_price_cents: parsed.data.package10Cents,
-        full_gallery_price_cents: parsed.data.fullGalleryCents,
-        cover_photo_id: parsed.data.coverPhotoId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "hike_id" },
-    );
+  const { error } = await supabase.from("hike_galleries").upsert(
+    {
+      hike_id: parsed.data.hikeId,
+      title: "Galería The Doggy Gang",
+      published_at: parsed.data.published ? new Date().toISOString() : null,
+      default_photo_price_cents: parsed.data.defaultPriceCents,
+      package_5_price_cents: parsed.data.package5Cents,
+      package_10_price_cents: parsed.data.package10Cents,
+      full_gallery_price_cents: parsed.data.fullGalleryCents,
+      cover_photo_id: parsed.data.coverPhotoId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "hike_id" },
+  );
   return error
     ? Response.json({ error: error.message }, { status: 400 })
     : Response.json({ ok: true });

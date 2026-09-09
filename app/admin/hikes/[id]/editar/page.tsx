@@ -3,10 +3,7 @@ import { notFound } from "next/navigation";
 import { requireStaffSession } from "../../../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 import { hikeCoverUrl } from "../../../../lib/data";
-import {
-  NewHikeForm,
-  type HikeFormInitial,
-} from "../../nuevo/form";
+import { NewHikeForm, type HikeFormInitial } from "../../nuevo/form";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +19,9 @@ export default async function EditHikePage({
     const supabase = await createSupabaseServerClient();
     const { data: hike } = await supabase
       .from("hikes")
-      .select("name, slug, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules)")
+      .select(
+        "name, slug, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules)",
+      )
       .eq("id", id)
       .is("deleted_at", null)
       .maybeSingle();
@@ -35,9 +34,25 @@ export default async function EditHikePage({
       minute: "2-digit",
       hour12: false,
       timeZone: "America/Mexico_City",
-    }).format(new Date(hike.starts_at)).replace(" ", "T");
-    const transportValue = Array.isArray(hike.transport_configurations) ? hike.transport_configurations[0] : hike.transport_configurations;
-    const transportLocalDate = transportValue?.departure_at ? new Intl.DateTimeFormat("sv-SE", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "America/Mexico_City" }).format(new Date(transportValue.departure_at)).replace(" ", "T") : "";
+    })
+      .format(new Date(hike.starts_at))
+      .replace(" ", "T");
+    const transportValue = Array.isArray(hike.transport_configurations)
+      ? hike.transport_configurations[0]
+      : hike.transport_configurations;
+    const transportLocalDate = transportValue?.departure_at
+      ? new Intl.DateTimeFormat("sv-SE", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+          timeZone: "America/Mexico_City",
+        })
+          .format(new Date(transportValue.departure_at))
+          .replace(" ", "T")
+      : "";
     initial = {
       name: hike.name,
       slug: hike.slug,
@@ -47,7 +62,10 @@ export default async function EditHikePage({
       location: hike.location_name,
       price: hike.price_cents / 100,
       dogPrice: hike.dog_price_cents / 100,
-      pricingMode: hike.pricing_mode === "PERSON_DOG_BUNDLE" ? "PERSON_DOG_BUNDLE" : "PER_PERSON",
+      pricingMode:
+        hike.pricing_mode === "PERSON_DOG_BUNDLE"
+          ? "PERSON_DOG_BUNDLE"
+          : "PER_PERSON",
       capacity: hike.capacity,
       maxDogs: hike.max_dogs,
       distance: hike.distance_km === null ? null : Number(hike.distance_km),
@@ -61,9 +79,15 @@ export default async function EditHikePage({
       dogSuitability: hike.dog_suitability ?? "",
       rules: hike.rules ?? "",
       cancellationPolicy: hike.cancellation_policy ?? "",
-      coverUrl: hike.cover_path?.startsWith(`${id}/`) ? hikeCoverUrl(id, hike.cover_path) : null,
+      coverUrl: hike.cover_path?.startsWith(`${id}/`)
+        ? hikeCoverUrl(id, hike.cover_path)
+        : null,
       published: hike.published,
-      transportMode: transportValue?.mode === "OPTIONAL" || transportValue?.mode === "INCLUDED" ? transportValue.mode : "NONE",
+      transportMode:
+        transportValue?.mode === "OPTIONAL" ||
+        transportValue?.mode === "INCLUDED"
+          ? transportValue.mode
+          : "NONE",
       transportCapacity: transportValue?.capacity ?? null,
       transportPrice: (transportValue?.price_cents ?? 0) / 100,
       transportDeparturePlace: transportValue?.departure_place ?? "",

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { requireClientSession } from "../../lib/auth/guards";
 import { PhotoGallery, type GalleryPhoto } from "./photo-gallery";
+import { getBankTransferConfig } from "../../lib/payment-config";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,9 @@ export default async function GalleryPage({
   }
   const { data: gallery } = await supabase
     .from("hike_galleries")
-    .select("id,title,published_at,package_5_price_cents,package_10_price_cents,full_gallery_price_cents")
+    .select(
+      "id,title,published_at,package_5_price_cents,package_10_price_cents,full_gallery_price_cents",
+    )
     .eq("hike_id", hike.id)
     .not("published_at", "is", null)
     .maybeSingle();
@@ -89,13 +92,19 @@ export default async function GalleryPage({
       };
     }),
   );
+  const bankTransfer = await getBankTransferConfig();
   return (
     <PhotoGallery
       hikeName={hike.name}
       hikeSlug={slug}
       hikeDate={hike.starts_at}
       photos={photos}
-      packages={{ five: gallery?.package_5_price_cents ?? null, ten: gallery?.package_10_price_cents ?? null, full: gallery?.full_gallery_price_cents ?? null }}
+      packages={{
+        five: gallery?.package_5_price_cents ?? null,
+        ten: gallery?.package_10_price_cents ?? null,
+        full: gallery?.full_gallery_price_cents ?? null,
+      }}
+      bankTransfer={bankTransfer}
     />
   );
 }

@@ -1,7 +1,14 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-import { EyeOff, ExternalLink, Save, Trash2, Upload } from "lucide-react";
+import {
+  EyeOff,
+  ExternalLink,
+  RefreshCw,
+  Save,
+  Trash2,
+  Upload,
+} from "lucide-react";
 
 export type AdminPhoto = {
   id: string;
@@ -10,6 +17,8 @@ export type AdminPhoto = {
   access: "FREE_WATERMARKED" | "FREE_ORIGINAL" | "PAID";
   price_cents: number | null;
   url: string;
+  processingStatus?: "UPLOADING" | "PROCESSING" | "READY" | "ERROR";
+  processingError?: string | null;
 };
 export type GallerySettings = {
   published: boolean;
@@ -42,7 +51,9 @@ export function PhotoManager({
     const source = new FormData(formElement);
     const files = source
       .getAll("photos")
-      .filter((value): value is File => value instanceof File && value.size > 0);
+      .filter(
+        (value): value is File => value instanceof File && value.size > 0,
+      );
     if (!files.length || files.length > 100) {
       setBusy("");
       return setMessage("Selecciona entre 1 y 100 fotos.");
@@ -65,7 +76,9 @@ export function PhotoManager({
             });
             const result = (await response.json()) as { error?: string };
             if (!response.ok)
-              throw new Error(result.error ?? `No pudimos procesar ${file.name}.`);
+              throw new Error(
+                result.error ?? `No pudimos procesar ${file.name}.`,
+              );
             done += 1;
             setProgress({ done, total: files.length });
           }),
@@ -114,6 +127,19 @@ export function PhotoManager({
     if (!response.ok)
       return setMessage(result.error ?? "No pudimos borrar la foto.");
     setMessage("Foto eliminada.");
+    router.refresh();
+  }
+  async function retry(photo: AdminPhoto) {
+    setBusy(photo.id);
+    setMessage("");
+    const response = await fetch(`/api/admin/photos/${photo.id}/retry`, {
+      method: "POST",
+    });
+    const result = (await response.json()) as { error?: string };
+    setBusy("");
+    if (!response.ok)
+      return setMessage(result.error ?? "No pudimos reprocesar la foto.");
+    setMessage("Foto procesada correctamente.");
     router.refresh();
   }
   async function bulk(
@@ -305,8 +331,14 @@ export function PhotoManager({
       </form>
       {busy === "upload" && (
         <div className="photo-upload-progress" aria-live="polite">
-          <span style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
-          <b>{progress.done} / {progress.total} fotografías procesadas</b>
+          <span
+            style={{
+              width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%`,
+            }}
+          />
+          <b>
+            {progress.done} / {progress.total} fotografías procesadas
+          </b>
         </div>
       )}
       {message && <p className="admin-feedback">{message}</p>}
@@ -352,7 +384,33 @@ export function PhotoManager({
               />
               <span>SELECCIONAR</span>
             </label>
-            <img src={photo.url} alt={photo.title ?? "Foto del hike"} />
+            {photo.url ? (
+              <img src={photo.url} alt={photo.title ?? "Foto del hike"} />
+            ) : (
+              <div
+                className={`photo-processing-state ${(photo.processingStatus ?? "PROCESSING").toLowerCase()}`}
+              >
+                <RefreshCw />
+                <strong>
+                  {photo.processingStatus === "ERROR"
+                    ? "ERROR DE PROCESAMIENTO"
+                    : "PROCESANDO"}
+                </strong>
+                <small>
+                  {photo.processingError ??
+                    "La vista aparecerá cuando termine."}
+                </small>
+                {photo.processingStatus === "ERROR" && (
+                  <button
+                    type="button"
+                    disabled={busy === photo.id}
+                    onClick={() => void retry(photo)}
+                  >
+                    REINTENTAR
+                  </button>
+                )}
+              </div>
+            )}
             <label>
               TÍTULO
               <input name="title" defaultValue={photo.title ?? ""} />
@@ -391,9 +449,11 @@ export function PhotoManager({
               >
                 <Trash2 /> BORRAR
               </button>
-              <a href={photo.url} target="_blank" rel="noreferrer">
-                <ExternalLink /> VISTA
-              </a>
+              {photo.url && (
+                <a href={photo.url} target="_blank" rel="noreferrer">
+                  <ExternalLink /> VISTA
+                </a>
+              )}
             </div>
           </form>
         ))}

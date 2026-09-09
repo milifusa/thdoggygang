@@ -34,16 +34,14 @@ export async function PATCH(request: Request) {
   const supabase = await adminClient();
   if (!supabase)
     return Response.json({ error: "No autorizado." }, { status: 403 });
-  const { error } = await supabase
-    .from("site_content")
-    .upsert(
-      {
-        id: "login",
-        content: parsed.data,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" },
-    );
+  const { error } = await supabase.from("site_content").upsert(
+    {
+      id: "login",
+      content: parsed.data,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
   return error
     ? Response.json({ error: error.message }, { status: 400 })
     : Response.json({ ok: true });

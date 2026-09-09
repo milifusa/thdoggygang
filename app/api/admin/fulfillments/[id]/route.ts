@@ -1,3 +1,88 @@
-import { z } from "zod";import { createSupabaseServerClient } from "../../../../lib/supabase/server";
-const schema=z.object({status:z.enum(["PENDING","PREPARED","DELIVERED","SHIPPED","CANCELLED"]),deliveryLocation:z.string().max(240).optional(),note:z.string().max(1000).optional()});
-export async function PATCH(request:Request,{params}:{params:Promise<{id:string}>}){const parsed=schema.safeParse(await request.json().catch(()=>null));if(!parsed.success||parsed.data.status==="DELIVERED"&&!parsed.data.deliveryLocation?.trim())return Response.json({error:"Indica el estado y el lugar de entrega."},{status:400});const supabase=await createSupabaseServerClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return Response.json({error:"No autorizado."},{status:401});const {data:profile}=await supabase.from("profiles").select("id,role,active").eq("auth_user_id",user.id).single();if(!profile?.active||profile.role!=="ADMIN")return Response.json({error:"No autorizado."},{status:403});const {id}=await params;const now=new Date().toISOString();const timestamps=parsed.data.status==="DELIVERED"?{delivered_at:now,delivered_by:profile.id}:parsed.data.status==="PREPARED"?{prepared_at:now}:parsed.data.status==="SHIPPED"?{shipped_at:now}:{};const {data:fulfillment,error}=await supabase.from("order_item_fulfillments").update({status:parsed.data.status,delivery_location:parsed.data.deliveryLocation,note:parsed.data.note,updated_at:now,...timestamps}).eq("id",id).select("order_item:order_items(order:orders(booking_id))").single();if(error)return Response.json({error:"No pudimos actualizar la entrega."},{status:400});const item=Array.isArray(fulfillment.order_item)?fulfillment.order_item[0]:fulfillment.order_item;const order=Array.isArray(item?.order)?item.order[0]:item?.order;if(order?.booking_id)await supabase.from("audit_logs").insert({actor_profile_id:profile.id,action:`PRODUCT_${parsed.data.status}`,entity_type:"booking",entity_id:order.booking_id,metadata:{fulfillment_id:id,delivery_location:parsed.data.deliveryLocation,note:parsed.data.note}});return Response.json({ok:true});}
+import { z } from "zod";
+import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+const schema = z.object({
+  status: z.enum(["PENDING", "PREPARED", "DELIVERED", "SHIPPED", "CANCELLED"]),
+  deliveryLocation: z.string().max(240).optional(),
+  note: z.string().max(1000).optional(),
+  trackingNumber: z.string().trim().max(160).optional(),
+});
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const parsed = schema.safeParse(await request.json().catch(() => null));
+  if (
+    !parsed.success ||
+    (parsed.data.status === "DELIVERED" &&
+      !parsed.data.deliveryLocation?.trim()) ||
+    (parsed.data.status === "SHIPPED" && !parsed.data.trackingNumber?.trim())
+  )
+    return Response.json(
+      { error: "Indica el estado, lugar de entrega o número de seguimiento." },
+      { status: 400 },
+    );
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "No autorizado." }, { status: 401 });
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id,role,active")
+    .eq("auth_user_id", user.id)
+    .single();
+  if (!profile?.active || profile.role !== "ADMIN")
+    return Response.json({ error: "No autorizado." }, { status: 403 });
+  const { id } = await params;
+  const now = new Date().toISOString();
+  const timestamps =
+    parsed.data.status === "DELIVERED"
+      ? { delivered_at: now, delivered_by: profile.id }
+      : parsed.data.status === "PREPARED"
+        ? { prepared_at: now }
+        : parsed.data.status === "SHIPPED"
+          ? { shipped_at: now }
+          : {};
+  const { data: fulfillment, error } = await supabase
+    .from("order_item_fulfillments")
+    .update({
+      status: parsed.data.status,
+      delivery_location: parsed.data.deliveryLocation,
+      note: parsed.data.note,
+      updated_at: now,
+      ...timestamps,
+    })
+    .eq("id", id)
+    .select("order_item:order_items(order:orders(id,booking_id))")
+    .single();
+  if (error)
+    return Response.json(
+      { error: "No pudimos actualizar la entrega." },
+      { status: 400 },
+    );
+  const item = Array.isArray(fulfillment.order_item)
+    ? fulfillment.order_item[0]
+    : fulfillment.order_item;
+  const order = Array.isArray(item?.order) ? item.order[0] : item?.order;
+  if (parsed.data.status === "SHIPPED" && order?.id)
+    await supabase
+      .from("orders")
+      .update({ tracking_number: parsed.data.trackingNumber })
+      .eq("id", order.id);
+  if (order?.booking_id)
+    await supabase
+      .from("audit_logs")
+      .insert({
+        actor_profile_id: profile.id,
+        action: `PRODUCT_${parsed.data.status}`,
+        entity_type: "booking",
+        entity_id: order.booking_id,
+        metadata: {
+          fulfillment_id: id,
+          delivery_location: parsed.data.deliveryLocation,
+          note: parsed.data.note,
+          tracking_number: parsed.data.trackingNumber,
+        },
+      });
+  return Response.json({ ok: true });
+}

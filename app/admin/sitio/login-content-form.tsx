@@ -145,7 +145,9 @@ export function LoginContentForm({
         onChange={(event) => {
           setDirty(true);
           const target = event.target as unknown as
-            HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+            | HTMLInputElement
+            | HTMLTextAreaElement
+            | HTMLSelectElement;
           const name = target.name;
           if (!name) return;
           if (name === "quoteVisible")
@@ -193,7 +195,10 @@ export function LoginContentForm({
                   ? `· ${(desktop.size / 1024 / 1024).toFixed(1)} MB`
                   : ""}
               </small>
-              <button type="button" onClick={() => void restoreImage("desktop")}>
+              <button
+                type="button"
+                onClick={() => void restoreImage("desktop")}
+              >
                 <RotateCcw /> RESTAURAR ORIGINAL
               </button>
             </label>
