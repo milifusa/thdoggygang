@@ -13,6 +13,7 @@ import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { hikeCoverUrl } from "../../lib/data";
 import { AdminMobileNav, AdminNav } from "../admin-nav";
 import { adminDate, money } from "../admin-utils";
+import { HikeQuickActions } from "./hike-quick-actions";
 
 export const dynamic = "force-dynamic";
 type HikeRow = {
@@ -72,7 +73,8 @@ export default async function HikesAdminPage({
 }: {
   searchParams: Promise<{ filter?: string; q?: string }>;
 }) {
-  await requireStaffSession("/admin/hikes", true);
+  const session=await requireStaffSession("/admin/hikes", true);
+  const isAdmin=session.mode!=="live"||session.profile.role==="ADMIN";
   const supabase = await createSupabaseServerClient();
   const query = await searchParams;
   const [{ data: hikeData }, { data: paymentData }] = await Promise.all([
@@ -305,15 +307,7 @@ export default async function HikesAdminPage({
                     </span>
                   )}
                 </div>
-                <div className="hike-ops-actions">
-                  <Link
-                    className="button button-primary"
-                    href={`/admin/hikes/${h.id}`}
-                  >
-                    {pastMode ? "VER RESULTADOS" : "ADMINISTRAR"}
-                  </Link>
-                  <Link href={`/admin/hikes/${h.id}/editar`}>EDITAR</Link>
-                </div>
+                <div className="hike-ops-actions">{isAdmin?<HikeQuickActions id={h.id} past={pastMode} published={h.published} cancelled={Boolean(h.cancelled_at)}/>:<><Link className="button button-primary" href={`/admin/hikes/${h.id}`}>{pastMode?"VER RESULTADOS":"ADMINISTRAR"}</Link><Link href={`/admin/hike-mode?hike=${h.id}`}>MODO HIKE</Link></>}</div>
               </article>
             );
           })}

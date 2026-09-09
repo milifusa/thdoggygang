@@ -13,8 +13,8 @@ const demoContext: BookingContext = {
     { id: 'maximo', name: 'Máximo Flores', detail: 'Acompañante · Menor', initials: 'MF' },
   ],
   dogs: [
-    { id: 'mona', name: 'Mona', detail: 'Westie · 5 años · 3 aventuras', image: 'https://images.unsplash.com/photo-1586671267731-da2cf3ceeb80?auto=format&fit=crop&w=300&q=80' },
-    { id: 'bruno', name: 'Bruno', detail: 'Border Collie · 3 años · 1 aventura', image: 'https://images.unsplash.com/photo-1551717743-49959800b1f6?auto=format&fit=crop&w=300&q=80' },
+    { id: 'mona', name: 'Mona', detail: 'Westie · 5 años · 3 aventuras', image: '/brand/profile-trail-sun.png' },
+    { id: 'bruno', name: 'Bruno', detail: 'Border Collie · 3 años · 1 aventura', image: '/brand/profile-trail-sun.png' },
   ],
 };
 
@@ -31,7 +31,7 @@ export async function loadBookingContext(): Promise<BookingContext> {
   ]);
   const age = (birthDate: string | null) => birthDate ? Math.max(0, new Date().getFullYear() - new Date(birthDate).getFullYear()) : null;
   const dogOptions = await Promise.all((dogs ?? []).map(async (dog) => {
-    let image = 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=300&q=80';
+    let image = '/brand/profile-trail-sun.png';
     if (dog.photo_path) {
       const { data: signedPhoto } = await supabase.storage.from('dog-photos').createSignedUrl(dog.photo_path, 60 * 60);
       if (signedPhoto?.signedUrl) image = signedPhoto.signedUrl;

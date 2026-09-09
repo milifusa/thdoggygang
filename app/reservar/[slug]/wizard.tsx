@@ -8,6 +8,7 @@ import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 import type { Product } from "../../lib/products";
 import type { BookingResume } from "./page";
+import { formatClabe, type BankTransferConfig } from "../../lib/payment-types";
 
 const steps = [
   "Personas",
@@ -89,12 +90,14 @@ export function BookingWizard({
   context,
   products,
   cardPaymentsEnabled,
+  bankTransfer,
   resume,
 }: {
   adventure: Adventure;
   context: BookingContext;
   products: Product[];
   cardPaymentsEnabled: boolean;
+  bankTransfer: BankTransferConfig | null;
   resume?: BookingResume;
 }) {
   const people = context.people;
@@ -255,7 +258,9 @@ export function BookingWizard({
         : step === 4
           ? Boolean(signatureData || waiverSaved) && accepted
           : step === 5 && context.mode === "live" && payment === "transfer"
-            ? Boolean(receiptFile)
+            ? Boolean(bankTransfer && receiptFile)
+            : step === 5 && context.mode === "live" && payment === "card"
+              ? cardPaymentsEnabled
             : true;
   const progress = `${Math.round((step / (steps.length - 1)) * 100)}%`;
   const goBack = () => {
@@ -634,10 +639,16 @@ export function BookingWizard({
                   <button
                     className={payment === "transfer" ? "active" : ""}
                     onClick={() => setPayment("transfer")}
+                    disabled={!bankTransfer}
                   >
-                    TRANSFERENCIA
+                    {bankTransfer ? "TRANSFERENCIA" : "TRANSFERENCIA · NO DISPONIBLE"}
                   </button>
                 </div>
+                {!cardPaymentsEnabled && !bankTransfer && (
+                  <p className="payment-unavailable" role="alert">
+                    Los pagos están temporalmente deshabilitados. La reservación puede guardarse como borrador, pero no se cobrará hasta que el administrador configure un método real.
+                  </p>
+                )}
                 {payment === "card" ? (
                   <div className="stripe-checkout-box">
                     <div>TDG</div>
@@ -649,15 +660,15 @@ export function BookingWizard({
                     </p>
                     <small>CONEXIÓN CIFRADA · CONFIRMACIÓN POR WEBHOOK</small>
                   </div>
-                ) : (
+                ) : bankTransfer ? (
                   <div className="bank-box">
                     <span>DATOS PARA TRANSFERENCIA</span>
-                    <strong>Banco Mutt</strong>
+                    <strong>{bankTransfer.bankName}</strong>
                     <p>
-                      THE DOGGY GANG EXPERIENCIAS
+                      {bankTransfer.accountName}
                       <br />
-                      CLABE 012 345 678901234 5<br />
-                      Referencia: TDG-SEP-LOJAN
+                      CLABE {formatClabe(bankTransfer.clabe)}<br />
+                      Referencia: {bankTransfer.referencePrefix}-{(bookingId ?? "RESERVA").slice(0, 8).toUpperCase()}
                     </p>
                     <label className="receipt-upload">
                       {receiptFile
@@ -672,7 +683,7 @@ export function BookingWizard({
                       />
                     </label>
                   </div>
-                )}
+                ) : null}
               </>
             )}
             {syncMessage && (

@@ -28,15 +28,16 @@ export async function GET(request: Request) {
   }
 
   const service = createSupabaseServiceClient();
-  const [{ data: hike }, { data: hikes }, { data: rawBookings }, { data: rawOrders }] = await Promise.all([
+  const [{ data: hike }, { data: hikes }, { data: rawBookings }, { data: rawOrders }, { data: transportDeparture }] = await Promise.all([
     service.from("hikes").select("id,name,starts_at,location_name,meeting_point,capacity,max_dogs").eq("id", parsed.data.hike).is("deleted_at", null).single(),
     service.from("hikes").select("id,name,starts_at").gte("starts_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()).is("deleted_at", null).order("starts_at").limit(30),
-    service.from("bookings").select("id,booking_number,status,hike_id,total_cents,profile:profiles(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id,booking_participant_id),signed_waivers(id,booking_participant_id,signed_at),check_ins(id,booking_participant_id,checked_in_at)").eq("hike_id", parsed.data.hike).in("status", ["CONFIRMED", "PENDING_PAYMENT"]).order("created_at"),
+    service.from("bookings").select("id,booking_number,status,hike_id,total_cents,profile:profiles(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id,booking_participant_id),signed_waivers(id,booking_participant_id,signed_at),check_ins(id,booking_participant_id,checked_in_at)").eq("hike_id", parsed.data.hike).eq("status", "CONFIRMED").order("created_at"),
     service.from("orders").select("id,booking_id,fulfillment_mode,pickup_hike_id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(id,status,delivery_location,delivered_at))").eq("pickup_hike_id", parsed.data.hike).eq("fulfillment_mode", "HIKE_PICKUP").in("status", ["PAID", "UNDER_REVIEW"]),
+    service.from("hike_transport_departures").select("completed_at,passenger_count,note").eq("hike_id",parsed.data.hike).maybeSingle(),
   ]);
   if (!hike) return Response.json({ error: "Hike no encontrado." }, { status: 404 });
 
-  const bookings = (rawBookings ?? []) as unknown as HikeBooking[];
+  const bookings = ((rawBookings ?? []) as unknown as HikeBooking[]).filter((booking) => booking.booking_participants.length > 0 && booking.signed_waivers.length >= booking.booking_participants.length);
   await Promise.all(bookings.map(async (booking) => { booking.qrToken = await ensureBookingQrToken(booking.id); }));
   const deliveries: HikeDelivery[] = [];
   for (const order of rawOrders ?? []) {
@@ -83,6 +84,7 @@ export async function GET(request: Request) {
     availableHikes: (hikes ?? []).map((item) => ({ id: item.id, name: item.name, startsAt: item.starts_at })),
     bookings,
     deliveries,
+    transportDeparture: { completedAt: transportDeparture?.completed_at ?? null, passengerCount: transportDeparture?.passenger_count ?? 0, note: transportDeparture?.note ?? null },
     publicKey: process.env.NEXT_PUBLIC_QR_SIGNING_PUBLIC_KEY ?? "",
     authorization,
     preparedAt: new Date().toISOString(),

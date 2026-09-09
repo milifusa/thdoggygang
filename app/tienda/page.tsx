@@ -2,6 +2,7 @@ import { SiteHeader } from "../components/SiteHeader";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { getProducts } from "../lib/products";
 import { Shop } from "./shop";
+import { getBankTransferConfig, getStripeSecretKey } from "../lib/payment-config";
 
 export const dynamic="force-dynamic";
 export const metadata={title:"Equipo de hiking | The Doggy Gang",description:"Correas y accesorios para caminar en manada."};
@@ -22,5 +23,6 @@ export default async function ShopPage({searchParams}:{searchParams:Promise<{hik
   }
   const options=(hikes??[]).map((h)=>({id:h.id,slug:h.slug,name:h.name,date:new Intl.DateTimeFormat("es-MX",{dateStyle:"medium",timeZone:"America/Mexico_City"}).format(new Date(h.starts_at)),booked:bookedHikeIds.has(h.id)}));
   const initialHikeId=options.some((hike)=>hike.booked&&hike.id===query.hike)?query.hike:"";
-  return <><SiteHeader/><Shop products={products} hikes={options} initialHikeId={initialHikeId} cardPaymentsEnabled={Boolean(process.env.STRIPE_SECRET_KEY)}/></>;
+  const [bankTransfer,stripeSecret]=await Promise.all([getBankTransferConfig(),getStripeSecretKey()]);
+  return <><SiteHeader/><Shop products={products} hikes={options} initialHikeId={initialHikeId} cardPaymentsEnabled={Boolean(stripeSecret)} bankTransfer={bankTransfer}/></>;
 }

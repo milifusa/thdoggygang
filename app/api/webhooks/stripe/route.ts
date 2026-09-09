@@ -1,5 +1,6 @@
 import { createSupabaseServiceClient } from '../../../lib/supabase/service';
 import { ensureBookingQrToken } from '../../../lib/domain/checkin-token';
+import { getStripeWebhookSecret } from '../../../lib/payment-config';
 
 function parseSignature(header: string) { return Object.fromEntries(header.split(',').map((part) => part.split('=', 2) as [string, string])); }
 async function verifyStripeSignature(body: string, header: string, secret: string) {
@@ -10,7 +11,7 @@ async function verifyStripeSignature(body: string, header: string, secret: strin
 }
 
 export async function POST(request: Request) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET; const signature = request.headers.get('stripe-signature'); const raw = await request.text();
+  const secret = await getStripeWebhookSecret(); const signature = request.headers.get('stripe-signature'); const raw = await request.text();
   if (!secret || !signature || !await verifyStripeSignature(raw, signature, secret)) return Response.json({ error: 'Firma inválida.' }, { status: 401 });
   const event = JSON.parse(raw) as { id: string; type: string; data: { object: { id: string; payment_status?: string; metadata?: { booking_id?: string; order_id?: string } } } };
   const service = createSupabaseServiceClient();

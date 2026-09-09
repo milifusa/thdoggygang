@@ -9,15 +9,22 @@ export const metadata = {
 };
 export const dynamic = "force-dynamic";
 
-async function loadHikeModeData(requestedHikeId?: string): Promise<HikeModeData | null> {
+async function loadHikeModeData(requestedHikeId:string|undefined,profile:{id:string;role:string}): Promise<HikeModeData | null> {
   const supabase = await createSupabaseServerClient();
-  const { data: hikes } = await supabase
+  let query=supabase
     .from("hikes")
     .select("id, name, starts_at, location_name,meeting_point,capacity, max_dogs")
     .gte("starts_at", new Date().toISOString())
     .is("deleted_at", null)
     .order("starts_at")
     .limit(20);
+  if(profile.role==="GUIDE"){
+    const {data:assignments}=await supabase.from("guide_hikes").select("hike_id").eq("profile_id",profile.id);
+    const ids=(assignments??[]).map((assignment)=>assignment.hike_id);
+    if(!ids.length)return null;
+    query=query.in("id",ids);
+  }
+  const {data:hikes}=await query;
   if (!hikes?.length) return null;
 
   const requested = hikes.find((hike) => hike.id === requestedHikeId);
@@ -32,6 +39,7 @@ async function loadHikeModeData(requestedHikeId?: string): Promise<HikeModeData 
     })),
     bookings: [],
     deliveries: [],
+    transportDeparture: { completedAt: null, passengerCount: 0, note: null },
     publicKey: process.env.NEXT_PUBLIC_QR_SIGNING_PUBLIC_KEY ?? "",
   };
 }
@@ -46,6 +54,6 @@ export default async function HikeModePage({
     hike ? `/admin/hike-mode?hike=${encodeURIComponent(hike)}` : "/admin/hike-mode",
     true,
   );
-  const data = session.mode === "live" ? await loadHikeModeData(hike) : null;
+  const data = session.mode === "live" ? await loadHikeModeData(hike,session.profile) : null;
   return <HikeMode demo={session.mode === "demo"} data={data} />;
 }

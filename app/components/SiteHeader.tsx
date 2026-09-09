@@ -3,7 +3,7 @@ import { isSupabaseConfigured } from "../lib/config";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 
 export async function SiteHeader({ dark = false }: { dark?: boolean }) {
-  let accountHref = "/ingresar";
+  let accountHref = "/ingresar?next=%2Fmi-manada";
   let accountLabel = "MI CUENTA";
   let modeHref = "";
   if (isSupabaseConfigured()) {

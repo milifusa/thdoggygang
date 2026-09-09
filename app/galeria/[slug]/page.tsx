@@ -34,7 +34,7 @@ export default async function GalleryPage({
   }
   const { data: gallery } = await supabase
     .from("hike_galleries")
-    .select("id,title,published_at")
+    .select("id,title,published_at,package_5_price_cents,package_10_price_cents,full_gallery_price_cents")
     .eq("hike_id", hike.id)
     .not("published_at", "is", null)
     .maybeSingle();
@@ -95,6 +95,7 @@ export default async function GalleryPage({
       hikeSlug={slug}
       hikeDate={hike.starts_at}
       photos={photos}
+      packages={{ five: gallery?.package_5_price_cents ?? null, ten: gallery?.package_10_price_cents ?? null, full: gallery?.full_gallery_price_cents ?? null }}
     />
   );
 }

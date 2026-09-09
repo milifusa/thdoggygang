@@ -1,9 +1,11 @@
 import { createSupabaseServerClient } from '../../../lib/supabase/server';
 import { createSupabaseServiceClient } from '../../../lib/supabase/service';
+import { getBankTransferConfig } from '../../../lib/payment-config';
 
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
 
 export async function POST(request: Request) {
+  if (!await getBankTransferConfig()) return Response.json({ error: 'Las transferencias no están configuradas.' }, { status: 503 });
   const form = await request.formData();
   const bookingId = form.get('bookingId'); const receipt = form.get('receipt');
   if (typeof bookingId !== 'string' || !(receipt instanceof File) || !allowedTypes.has(receipt.type) || receipt.size > 10 * 1024 * 1024) return Response.json({ error: 'Usa una imagen o PDF de máximo 10 MB.' }, { status: 400 });
@@ -16,7 +18,7 @@ export async function POST(request: Request) {
   if ((signedCount ?? 0) < booking.booking_participants.length) return Response.json({ error: 'Falta firmar la responsiva.' }, { status: 409 });
   const service = createSupabaseServiceClient();
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
-  let { data: order } = await service.from('orders').select('id').eq('booking_id', booking.id).maybeSingle();
+  let { data: order } = await service.from('orders').select('id').eq('booking_id', booking.id).is('fulfillment_mode',null).limit(1).maybeSingle();
   if (!order) {
     const result = await service.from('orders').insert({ order_number: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, profile_id: booking.profile_id, booking_id: booking.id, status: 'PENDING', total_cents: booking.total_cents, currency: booking.currency }).select('id').single();
     if (result.error || !result.data) return Response.json({ error: 'No pudimos crear la orden.' }, { status: 500 });

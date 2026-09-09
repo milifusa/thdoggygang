@@ -62,6 +62,7 @@ export type HikeModeData = {
   availableHikes: Array<{ id: string; name: string; startsAt: string }>;
   bookings: HikeBooking[];
   deliveries: HikeDelivery[];
+  transportDeparture: { completedAt: string | null; passengerCount: number; note: string | null };
   publicKey: string;
   authorization?: string;
   preparedAt?: string;
@@ -74,7 +75,7 @@ export type OfflineOperation = {
   bookingId?: string;
   participantId?: string;
   orderItemId?: string;
-  type: "CHECK_IN" | "PRODUCT_DELIVERY" | "NOTE";
+  type: "CHECK_IN" | "PRODUCT_DELIVERY" | "TRANSPORT_COMPLETE" | "NOTE";
   deviceId: string;
   clientTimestamp: string;
   payload?: Record<string, unknown>;

@@ -22,8 +22,9 @@ export async function POST(request: Request) {
   let query = supabase.from('booking_checkin_tokens').select('id, revoked_at, used_at, expires_at, booking:bookings(id, booking_number, status, hike_id,total_cents,profile:profiles(first_name,last_name,email,phone), booking_participants(id, snapshot), booking_dogs(id, snapshot), transport_reservations(id, booking_participant_id),signed_waivers(id,booking_participant_id,signed_at), check_ins(id, booking_participant_id,checked_in_at))').eq('token_hash', tokenHash);
   if (signedPayload?.purpose === 'checkin') query = query.eq('token_id', signedPayload.tokenId).eq('booking_id', signedPayload.bookingId);
   const { data, error } = await query.single();
-  if (error || !data || data.revoked_at) return Response.json({ error: 'No encontramos esta reservación' }, { status: 404 });
+  if (error || !data || data.revoked_at || (data.expires_at && new Date(data.expires_at).getTime() < Date.now())) return Response.json({ error: 'No encontramos esta reservación' }, { status: 404 });
   const booking = Array.isArray(data.booking) ? data.booking[0] : data.booking;
+  if (!booking || booking.status !== 'CONFIRMED' || booking.booking_participants.length === 0 || booking.signed_waivers.length < booking.booking_participants.length) return Response.json({ error: 'La reservación no está habilitada para check-in.' }, { status: 409 });
   if (signedPayload?.purpose === 'checkin' && booking?.hike_id !== signedPayload.hikeId) return Response.json({ error: 'Este QR pertenece a otro hike.' }, { status: 403 });
   if (staff.role === 'GUIDE' && booking?.hike_id) {
     const { data: assignment } = await userClient.from('guide_hikes').select('hike_id').eq('hike_id', booking.hike_id).maybeSingle();

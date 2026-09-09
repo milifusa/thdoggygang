@@ -9,7 +9,7 @@ const operationSchema = z.object({
   bookingId: z.string().uuid().optional(),
   participantId: z.string().uuid().optional(),
   orderItemId: z.string().uuid().optional(),
-  type: z.enum(["CHECK_IN", "PRODUCT_DELIVERY", "NOTE"]),
+  type: z.enum(["CHECK_IN", "PRODUCT_DELIVERY", "TRANSPORT_COMPLETE", "NOTE"]),
   deviceId: z.string().min(8).max(160),
   clientTimestamp: z.string().datetime(),
   payload: z.record(z.string(), z.unknown()).optional(),

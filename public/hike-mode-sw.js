@@ -1,5 +1,5 @@
-const CACHE = "tdg-hike-shell-v1";
-const SHELL = ["/admin/hike-mode", "/manifest.webmanifest", "/brand/logo-circular-blue.png"];
+const CACHE = "tdg-hike-shell-v2";
+const SHELL = ["/admin/hike-mode", "/manifest.webmanifest", "/brand/logo-pwa-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

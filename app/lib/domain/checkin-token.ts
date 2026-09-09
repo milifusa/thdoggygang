@@ -4,14 +4,17 @@ import { parseSignedPayload, signPayload, type SignedCheckinPayload } from '../s
 
 export async function ensureBookingQrToken(bookingId: string) {
   const service = createSupabaseServiceClient();
-  const { data: existing } = await service.from('booking_checkin_tokens').select('id,token_ciphertext,expires_at').eq('booking_id', bookingId).is('revoked_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  const { data: booking } = await service.from('bookings').select('id,hike_id,status,hike:hikes(starts_at),booking_participants(id),signed_waivers(id,booking_participant_id),check_ins(id,booking_participant_id)').eq('id', bookingId).single();
+  if (!booking) throw new Error('Booking not found.');
+  if (booking.status !== 'CONFIRMED') throw new Error('Only confirmed bookings can have a QR.');
+  if (!booking.booking_participants.length || booking.signed_waivers.length < booking.booking_participants.length) throw new Error('All waivers must be signed before creating the QR.');
+  if (booking.check_ins.length >= booking.booking_participants.length) throw new Error('Check-in is already complete.');
+  const { data: existing } = await service.from('booking_checkin_tokens').select('id,token_ciphertext,expires_at').eq('booking_id', bookingId).is('revoked_at', null).is('used_at', null).order('created_at', { ascending: false }).limit(1).maybeSingle();
   if (existing?.token_ciphertext) {
     const decrypted = await decryptQrToken(existing.token_ciphertext).catch(() => null);
     const payload = decrypted ? parseSignedPayload(decrypted) : null;
     if (decrypted && payload?.purpose === 'checkin' && payload.expiresAt > Date.now()) return decrypted;
   }
-  const { data: booking } = await service.from('bookings').select('id,hike_id,hike:hikes(starts_at)').eq('id', bookingId).single();
-  if (!booking) throw new Error('Booking not found.');
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
   const tokenId = crypto.randomUUID();
   const payload: SignedCheckinPayload = {

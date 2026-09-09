@@ -37,7 +37,7 @@ export type DogRecord = {
 
 type DialogState = { kind: 'person'; record?: PersonRecord } | { kind: 'dog'; record?: DogRecord } | null;
 
-const fallbackDogPhoto = 'https://images.unsplash.com/photo-1552053831-71594a27632d?auto=format&fit=crop&w=900&q=85';
+const fallbackDogPhoto = '/brand/profile-trail-sun.png';
 const age = (birthDate: string) => birthDate ? Math.max(0, new Date().getFullYear() - new Date(`${birthDate}T12:00:00`).getFullYear()) : null;
 const initials = (first: string, last: string) => `${first[0] ?? ''}${last[0] ?? ''}`.toUpperCase();
 const sexLabel = { FEMALE: 'Hembra', MALE: 'Macho', UNKNOWN: 'Sin especificar' } as const;

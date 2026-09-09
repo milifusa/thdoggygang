@@ -20,7 +20,7 @@ export const defaultLoginContent: LoginContent = {
   privacyLabel: "aviso de privacidad", privacyUrl: "/privacidad", imagePosition: "center",
 };
 
-const fallbackImage = "https://images.unsplash.com/photo-1534361960057-19889db9621e?auto=format&fit=crop&w=1600&q=90";
+const fallbackImage = "/brand/profile-trail-sun.png";
 
 export async function getLoginSettings() {
   if (!isSupabaseConfigured()) return { content: defaultLoginContent, desktopImage: fallbackImage, mobileImage: fallbackImage, metadata: {} };

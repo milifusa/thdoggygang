@@ -21,8 +21,8 @@ export const defaultLandingContent:LandingContent={
 };
 
 export type LandingSettings={content:LandingContent;heroImage:string;howImage:string;heroImagePath:string|null;howImagePath:string|null};
-const fallbackHero="https://images.unsplash.com/photo-1558788353-f76d92427f16?auto=format&fit=crop&w=2000&q=90";
-const fallbackHow="https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1400&q=88";
+const fallbackHero="/brand/profile-trail-sun.png";
+const fallbackHow="/brand/profile-trail-sun.png";
 
 export function siteAssetUrl(path:string|null|undefined){
   const base=process.env.NEXT_PUBLIC_SUPABASE_URL;if(!base||!path)return "";

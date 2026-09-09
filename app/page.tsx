@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { getAdventures } from './lib/data';
 import { getLandingSettings } from './lib/landing-content';
+import { SiteHeader } from './components/SiteHeader';
 
 export const revalidate = 60;
 
@@ -10,14 +11,7 @@ export default async function Home() {
   const { content } = landing;
   return (
     <main>
-      <header className="site-header">
-        <Link className="wordmark" href="/" aria-label="The Doggy Gang, inicio">THE DOGGY <span>GANG</span></Link>
-        <nav className="desktop-nav" aria-label="Navegación principal">
-          <a href="#aventuras">Aventuras</a><Link href="/tienda">Tienda</Link><a href="#manada">La manada</a><a href="#como-funciona">¿Cómo funciona?</a>
-        </nav>
-        <Link className="mobile-store-link" href="/tienda">TIENDA</Link>
-        <Link className="header-account" href="/ingresar">MI CUENTA <span aria-hidden="true">→</span></Link>
-      </header>
+      <SiteHeader />
 
       <section className="hero">
         <div className="hero-image" style={{ backgroundImage: `url("${landing.heroImage}")` }} aria-hidden="true" /><div className="hero-shade" />

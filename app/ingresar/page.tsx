@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { getLoginSettings } from "../lib/login-content";
 import { LoginForm } from "./login-form";
+import { destinationForRole, safeReturnPath } from "../lib/auth/destination";
 
 export const metadata = { title: "Entra a tu manada | The Doggy Gang" };
 
@@ -24,19 +25,10 @@ export default async function LoginPage({
         .eq("auth_user_id", user.id)
         .maybeSingle();
       if (profile?.active)
-        redirect(
-          profile.role === "ADMIN"
-            ? "/admin"
-            : profile.role === "GUIDE"
-              ? "/admin/hikes"
-              : "/mi-manada",
-        );
+        redirect(destinationForRole(profile.role, safeReturnPath(params.next)));
     }
   }
-  const nextPath =
-    params.next?.startsWith("/") && !params.next.startsWith("//")
-      ? params.next
-      : "/mi-manada";
+  const nextPath = safeReturnPath(params.next) ?? "/mi-manada";
   const initialMessage =
     params.error === "expired"
       ? "Este enlace ya venció o fue utilizado. Pide uno nuevo para entrar."

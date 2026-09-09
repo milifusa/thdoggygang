@@ -1,11 +1,11 @@
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '../../lib/supabase/server';
+import { destinationForRole, safeReturnPath } from '../../lib/auth/destination';
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const nextValue = url.searchParams.get('next');
-  const next = nextValue?.startsWith('/') && !nextValue.startsWith('//') ? nextValue : '/mi-manada';
+  const next = safeReturnPath(url.searchParams.get('next'));
   const code = url.searchParams.get('code');
   const tokenHash = url.searchParams.get('token_hash');
   const type = url.searchParams.get('type') as EmailOtpType | null;
@@ -23,16 +23,12 @@ export async function GET(request: Request) {
       ? await supabase.from('profiles').select('role,active').eq('auth_user_id', user.id).maybeSingle()
       : { data: null };
     if (!profile?.active) throw new Error('Inactive account.');
-    const destination = profile.role === 'ADMIN'
-      ? '/admin'
-      : profile.role === 'GUIDE'
-        ? '/admin/hikes'
-        : next;
+    const destination = destinationForRole(profile.role, next);
     return NextResponse.redirect(new URL(destination, url.origin));
   } catch {
     const login = new URL('/ingresar', url.origin);
     login.searchParams.set('error', 'expired');
-    login.searchParams.set('next', next);
+    login.searchParams.set('next', next ?? '/mi-manada');
     return NextResponse.redirect(login);
   }
 }

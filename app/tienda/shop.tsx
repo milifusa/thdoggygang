@@ -3,11 +3,12 @@ import Link from "next/link";
 import { useMemo,useState } from "react";
 import { ArrowRight,Check,Minus,Plus,ShoppingBag,Truck } from "lucide-react";
 import type { Product } from "../lib/products";
+import { formatClabe, type BankTransferConfig } from "../lib/payment-types";
 
 type HikeOption={id:string;slug:string;name:string;date:string;booked:boolean};
 const money=(cents:number)=>(cents/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"});
 
-export function Shop({products,hikes,initialHikeId,cardPaymentsEnabled}:{products:Product[];hikes:HikeOption[];initialHikeId?:string;cardPaymentsEnabled:boolean}){
+export function Shop({products,hikes,initialHikeId,cardPaymentsEnabled,bankTransfer}:{products:Product[];hikes:HikeOption[];initialHikeId?:string;cardPaymentsEnabled:boolean;bankTransfer:BankTransferConfig|null}){
   const bookedHikes=hikes.filter((hike)=>hike.booked);
   const otherHikes=hikes.filter((hike)=>!hike.booked);
   const [quantities,setQuantities]=useState<Record<string,number>>({});
@@ -28,7 +29,9 @@ export function Shop({products,hikes,initialHikeId,cardPaymentsEnabled}:{product
     if(!selected.length)return setMessage("Agrega al menos un producto.");
     if(fulfillment==="SHIPPING"&&(!address.recipient||!address.street||!address.exterior||!address.colony||!address.city||!/^[0-9]{5}$/.test(address.postalCode)||!/^\+?52\d{10}$/.test(address.phone)))return setMessage("Completa la dirección, código postal y teléfono mexicano.");
     if(fulfillment==="HIKE_PICKUP"&&!pickupHikeId)return setMessage("Selecciona el hike donde recogerás tu pedido.");
+    if(payment==="transfer"&&!bankTransfer)return setMessage("Las transferencias no están configuradas por el administrador.");
     if(payment==="transfer"&&!receipt)return setMessage("Sube tu comprobante de transferencia.");
+    if(payment==="card"&&!cardPaymentsEnabled)return setMessage("El pago con tarjeta no está disponible.");
     setBusy(true);setMessage("");
     const payload={selections:selected.map((p)=>({productId:p.id,variant:variants[p.id]??"",quantity:quantities[p.id]})),fulfillmentMode:fulfillment,pickupHikeId:fulfillment==="HIKE_PICKUP"?pickupHikeId:null,address:fulfillment==="SHIPPING"?address:null};
     const response=payment==="card"
@@ -84,10 +87,11 @@ export function Shop({products,hikes,initialHikeId,cardPaymentsEnabled}:{product
           {bookedHikes.length?<div>{bookedHikes.map((hike)=><button type="button" className={pickupHikeId===hike.id?"active":""} onClick={()=>setPickupHikeId(hike.id)} key={hike.id}><span>{pickupHikeId===hike.id&&<Check aria-hidden="true"/>}{hike.name}</span><small>{hike.date}</small></button>)}</div>:<p>No tienes un hike confirmado. Elige una aventura para reservarla y agregar ahí tus productos.</p>}
           {otherHikes.length>0&&<div className="other-hike-links"><span>PRÓXIMAS AVENTURAS</span>{otherHikes.map((hike)=><Link href={`/reservar/${hike.slug}`} key={hike.id}><span>{hike.name}<small>{hike.date}</small></span><ArrowRight aria-hidden="true"/></Link>)}</div>}
         </div>}
-        <div className="payment-tabs"><button disabled={!cardPaymentsEnabled} className={payment==="card"?"active":""} onClick={()=>setPayment("card")}>{cardPaymentsEnabled?"TARJETA":"TARJETA · PRÓXIMAMENTE"}</button><button className={payment==="transfer"?"active":""} onClick={()=>setPayment("transfer")}>TRANSFERENCIA</button></div>
-        {payment==="transfer"&&<><div className="bank-box"><span>DATOS PARA TRANSFERENCIA</span><strong>Banco Mutt</strong><p>THE DOGGY GANG EXPERIENCIAS<br/>CLABE 012 345 678901234 5</p></div><label className="receipt-upload">{receipt?"ARCHIVO · "+receipt.name:"SUBIR COMPROBANTE"}<input type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e)=>setReceipt(e.target.files?.[0]??null)}/></label></>}
+        <div className="payment-tabs"><button disabled={!cardPaymentsEnabled} className={payment==="card"?"active":""} onClick={()=>setPayment("card")}>{cardPaymentsEnabled?"TARJETA":"TARJETA · NO DISPONIBLE"}</button><button disabled={!bankTransfer} className={payment==="transfer"?"active":""} onClick={()=>setPayment("transfer")}>{bankTransfer?"TRANSFERENCIA":"TRANSFERENCIA · NO DISPONIBLE"}</button></div>
+        {!cardPaymentsEnabled&&!bankTransfer&&<p className="payment-unavailable" role="alert">Los pagos están temporalmente deshabilitados hasta que el administrador configure un método real.</p>}
+        {payment==="transfer"&&bankTransfer&&<><div className="bank-box"><span>DATOS PARA TRANSFERENCIA</span><strong>{bankTransfer.bankName}</strong><p>{bankTransfer.accountName}<br/>CLABE {formatClabe(bankTransfer.clabe)}<br/>Referencia: {bankTransfer.referencePrefix}-TIENDA</p></div><label className="receipt-upload">{receipt?"ARCHIVO · "+receipt.name:"SUBIR COMPROBANTE"}<input type="file" accept="image/jpeg,image/png,application/pdf" onChange={(e)=>setReceipt(e.target.files?.[0]??null)}/></label></>}
         <dl><div><dt>Subtotal</dt><dd>{money(subtotal)}</dd></div><div><dt>Entrega</dt><dd>{shipping?money(shipping):"Gratis"}</dd></div><div><dt>Total</dt><dd>{money(total)} MXN</dd></div></dl>
-        {message&&<p className="wizard-error">{message}</p>}<button className="button button-primary full-button" disabled={busy||!selected.length||(fulfillment==="HIKE_PICKUP"&&!pickupHikeId)} onClick={()=>void checkout()}>{busy?"PROCESANDO…":fulfillment==="HIKE_PICKUP"&&!pickupHikeId?"ELIGE UN HIKE":"COMPRAR · "+money(total)}</button>
+        {message&&<p className="wizard-error">{message}</p>}<button className="button button-primary full-button" disabled={busy||!selected.length||(fulfillment==="HIKE_PICKUP"&&!pickupHikeId)||(!cardPaymentsEnabled&&!bankTransfer)} onClick={()=>void checkout()}>{busy?"PROCESANDO…":fulfillment==="HIKE_PICKUP"&&!pickupHikeId?"ELIGE UN HIKE":!cardPaymentsEnabled&&!bankTransfer?"PAGOS NO DISPONIBLES":"COMPRAR · "+money(total)}</button>
       </aside>
     </section>
   </main>;

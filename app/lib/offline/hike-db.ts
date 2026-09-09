@@ -43,7 +43,7 @@ export async function saveHikePackage(data: HikeModeData) {
 export async function getHikePackage(hikeId: string) {
   const data = await transact<HikeModeData | undefined>("packages", "readonly", (store) => store.get(hikeId));
   if (data?.expiresAt && new Date(data.expiresAt).getTime() < Date.now()) {
-    await deleteHikePackage(hikeId);
+    await clearHikeData(hikeId);
     return null;
   }
   return data ?? null;
@@ -51,6 +51,12 @@ export async function getHikePackage(hikeId: string) {
 
 export async function deleteHikePackage(hikeId: string) {
   await transact("packages", "readwrite", (store) => store.delete(hikeId));
+}
+
+export async function clearHikeData(hikeId: string) {
+  await deleteHikePackage(hikeId);
+  const operations = await listOperations(hikeId);
+  await Promise.all(operations.map((operation) => removeOperation(operation.operationId)));
 }
 
 export async function enqueueOperation(operation: OfflineOperation) {

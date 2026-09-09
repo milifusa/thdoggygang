@@ -18,16 +18,19 @@ export function PhotoGallery({
   hikeSlug,
   hikeDate,
   photos,
+  packages,
 }: {
   hikeName: string;
   hikeSlug: string;
   hikeDate: string;
   photos: GalleryPhoto[];
+  packages: { five:number|null;ten:number|null;full:number|null };
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [filter, setFilter] = useState<"ALL" | "FREE" | "PURCHASED">("ALL");
+  const [purchaseMode,setPurchaseMode]=useState<"INDIVIDUAL"|"FIVE"|"TEN"|"FULL">("INDIVIDUAL");
   const visible = photos.filter(
     (photo) =>
       filter === "ALL" ||
@@ -35,17 +38,17 @@ export function PhotoGallery({
       (filter === "PURCHASED" && photo.purchased),
   );
   const paidPhotos = photos.filter((photo) => selected.includes(photo.id));
-  const total = useMemo(
-    () => paidPhotos.reduce((sum, p) => sum + p.priceCents, 0),
-    [paidPhotos],
-  );
+  const packageTotal=purchaseMode==="FIVE"?packages.five:purchaseMode==="TEN"?packages.ten:purchaseMode==="FULL"?packages.full:null;
+  const total = useMemo(() => packageTotal ?? paidPhotos.reduce((sum, p) => sum + p.priceCents, 0), [packageTotal,paidPhotos]);
+  const availablePaid=photos.filter((photo)=>photo.access==="PAID"&&!photo.purchased);
+  const choosePackage=(mode:"FIVE"|"TEN"|"FULL")=>{const count=mode==="FIVE"?5:mode==="TEN"?10:availablePaid.length;if(availablePaid.length<count){setMessage(`Sólo hay ${availablePaid.length} fotos de pago disponibles.`);return;}setSelected(availablePaid.slice(0,count).map((photo)=>photo.id));setPurchaseMode(mode);setMessage(mode==="FULL"?"Seleccionamos toda la galería disponible.":`Seleccionamos ${count} fotos para este paquete.`);};
   async function checkout() {
     setBusy(true);
     setMessage("");
     const response = await fetch("/api/checkout/photos", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ photoIds: selected, hikeSlug }),
+      body: JSON.stringify({ photoIds: selected, hikeSlug, purchaseMode }),
     });
     const result = (await response.json()) as { url?: string; error?: string };
     setBusy(false);
@@ -114,6 +117,7 @@ export function PhotoGallery({
           </button>
         </div>
       </div>
+      {(packages.five!==null||packages.ten!==null||packages.full!==null)&&<section className="gallery-packages"><div><span>PAQUETES DE RECUERDOS</span><strong>Ahorra al llevar más fotos.</strong></div>{packages.five!==null&&<button onClick={()=>choosePackage("FIVE")}>5 FOTOS <b>{(packages.five/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}</b></button>}{packages.ten!==null&&<button onClick={()=>choosePackage("TEN")}>10 FOTOS <b>{(packages.ten/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}</b></button>}{packages.full!==null&&<button onClick={()=>choosePackage("FULL")}>GALERÍA COMPLETA <b>{(packages.full/100).toLocaleString("es-MX",{style:"currency",currency:"MXN"})}</b></button>}</section>}
       <section className="photo-grid">
         {visible.map((photo, index) => {
           const isPaid = photo.access === "PAID" && !photo.purchased;
@@ -132,11 +136,7 @@ export function PhotoGallery({
                   aria-label="Seleccionar foto"
                   className="photo-select-button"
                   onClick={() =>
-                    setSelected((items) =>
-                      items.includes(photo.id)
-                        ? items.filter((id) => id !== photo.id)
-                        : [...items, photo.id],
-                    )
+                    {setPurchaseMode("INDIVIDUAL");setSelected((items) => items.includes(photo.id) ? items.filter((id) => id !== photo.id) : [...items, photo.id]);}
                   }
                 >
                   {isSelected ? <Check /> : "+"}

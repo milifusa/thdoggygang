@@ -33,6 +33,8 @@ export default async function MyPhotosPage() {
         .in("hike_id", ids)
         .not("published_at", "is", null)
     : { data: [] };
+  const { data: purchases } = await supabase.from("photo_purchases").select("photo_id,order_item:order_items!inner(order:orders!inner(status))").eq("profile_id",session.profile.id);
+  const purchasedIds=new Set((purchases??[]).filter((purchase)=>{const item=Array.isArray(purchase.order_item)?purchase.order_item[0]:purchase.order_item;const order=Array.isArray(item?.order)?item.order[0]:item?.order;return order?.status==="PAID";}).map((purchase)=>purchase.photo_id));
   const cards = await Promise.all(
     (galleries ?? []).map(async (gallery) => {
       const hike = hikes.find((item) => item!.id === gallery.hike_id)!;
@@ -53,7 +55,7 @@ export default async function MyPhotosPage() {
           .createSignedUrl(photoPath, 3600);
         image = data?.signedUrl ?? image;
       }
-      return { gallery, hike, image };
+      return { gallery, hike, image, free:photos.filter((photo)=>photo.access!=="PAID").length, purchased:photos.filter((photo)=>purchasedIds.has(photo.id)).length };
     }),
   );
   return (
@@ -74,7 +76,7 @@ export default async function MyPhotosPage() {
       </section>
       {cards.length ? (
         <section className="my-gallery-grid">
-          {cards.map(({ gallery, hike, image }) => (
+          {cards.map(({ gallery, hike, image, free, purchased }) => (
             <Link href={`/galeria/${hike.slug}`} key={gallery.id}>
               <img src={image} alt={hike.name} />
               <div>
@@ -83,6 +85,7 @@ export default async function MyPhotosPage() {
                 <p>
                   <Images /> {gallery.photos.length} fotografías
                 </p>
+                <p>{free} gratis · {purchased} compradas</p>
                 <b>
                   ABRIR GALERÍA <ChevronRight />
                 </b>

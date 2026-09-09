@@ -18,9 +18,9 @@ export async function GET(request: Request) {
   ]);
   const ids = [...new Set([...(participantMatches.data ?? []).map((item) => item.booking_id), ...(dogMatches.data ?? []).map((item) => item.booking_id), ...(bookingMatches.data ?? []).map((item) => item.id)])];
   if (!ids.length) return Response.json({ bookings: [] });
-  let bookingQuery = supabase.from('bookings').select('id, booking_number, status, hike_id, booking_participants(id, snapshot), booking_dogs(id, snapshot), transport_reservations(id, booking_participant_id), check_ins(id, booking_participant_id)').in('id', ids).in('status', ['CONFIRMED','PENDING_PAYMENT']);
+  let bookingQuery = supabase.from('bookings').select('id, booking_number, status, hike_id, booking_participants(id, snapshot), booking_dogs(id, snapshot), transport_reservations(id, booking_participant_id),signed_waivers(id,booking_participant_id), check_ins(id, booking_participant_id)').in('id', ids).eq('status', 'CONFIRMED');
   if (hikeId) bookingQuery = bookingQuery.eq('hike_id', hikeId);
   const { data, error } = await bookingQuery.limit(12);
   if (error) return Response.json({ error: 'No pudimos buscar reservaciones.' }, { status: 400 });
-  return Response.json({ bookings: data ?? [] });
+  return Response.json({ bookings: (data ?? []).filter((booking) => booking.booking_participants.length > 0 && booking.signed_waivers.length >= booking.booking_participants.length) });
 }

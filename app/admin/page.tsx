@@ -13,15 +13,16 @@ export default async function AdminDashboard() {
   const session = await requireStaffSession("/admin");
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
-  const [{ data: hikes }, { data: pendingPayments }, { data: recentBookings }, { count: photoCount }] = await Promise.all([
+  const [{ data: hikes }, { data: pendingPayments }, { data: recentBookings }, { count: photoCount }, { data: paidPayments }] = await Promise.all([
     supabase.from("hikes").select("id,name,slug,starts_at,location_name,capacity,cover_path").gte("starts_at", now).is("deleted_at", null).order("starts_at").limit(10),
     supabase.from("payments").select("id,amount_cents,created_at,order:orders(order_number,profile:profiles(first_name,last_name),booking:bookings(booking_number,profile:profiles(first_name,last_name)))").eq("status", "UNDER_REVIEW").order("created_at", { ascending: false }).limit(5),
     supabase.from("bookings").select("id,status,total_cents,hike_id").in("status", ["CONFIRMED", "PENDING_PAYMENT"]).order("created_at", { ascending: false }).limit(250),
     supabase.from("photos").select("id", { count: "exact", head: true }),
+    supabase.from("payments").select("amount_cents").eq("status", "PAID"),
   ]);
   const nextHike = hikes?.[0] ?? null;
   const nextBookings = (recentBookings ?? []).filter((booking) => booking.hike_id === nextHike?.id);
-  const confirmedIncome = (recentBookings ?? []).filter((booking) => booking.status === "CONFIRMED").reduce((sum, booking) => sum + booking.total_cents, 0);
+  const confirmedIncome = (paidPayments ?? []).reduce((sum, payment) => sum + payment.amount_cents, 0);
   const pendingBookings = (recentBookings ?? []).filter((booking) => booking.status === "PENDING_PAYMENT").length;
   const profile = session.mode === "live" ? session.profile : null;
 
@@ -60,6 +61,7 @@ export default async function AdminDashboard() {
               <Link href="/admin/fotos"><strong>Fotografías</strong><span>Carga, publica y vende recuerdos.</span></Link>
               <Link href="/admin/productos"><strong>Productos</strong><span>Administra catálogo, precios e inventario.</span></Link>
               <Link href="/admin/reportes"><strong>Reportes</strong><span>Descarga manifiestos y conciliación.</span></Link>
+              <Link href="/admin/configuracion-pagos"><strong>Configuración de pagos</strong><span>Administra transferencias y Stripe.</span></Link>
               <Link href="/admin/sitio"><strong>Sitio</strong><span>Edita imágenes y textos del landing.</span></Link>
             </div>
           </div>
