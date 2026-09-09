@@ -31,6 +31,22 @@ const schema = z.object({
     .default("personas"),
 });
 
+function friendlyDraftError(message?: string) {
+  if (!message) return "No pudimos guardar tu reservación. Intenta nuevamente.";
+  if (/cupo suficiente/i.test(message)) return message;
+  if (/hike not found/i.test(message))
+    return "Esta aventura ya no está disponible para reservar.";
+  if (/invalid participant/i.test(message))
+    return "Una de las personas seleccionadas ya no está disponible. Actualiza la página e intenta nuevamente.";
+  if (/invalid dog/i.test(message))
+    return "Uno de los perritos seleccionados ya no está disponible. Actualiza la página e intenta nuevamente.";
+  if (/minor requires|responsable/i.test(message))
+    return "Selecciona también a la persona adulta responsable del menor.";
+  if (/draft not found/i.test(message))
+    return "No encontramos el borrador. Actualiza la página para continuar.";
+  return "No pudimos guardar tu avance. Intenta nuevamente; tu selección sigue en pantalla.";
+}
+
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
@@ -97,11 +113,18 @@ export async function POST(request: Request) {
     p_dog_ids: parsed.data.dogIds,
     p_transport_person_ids: parsed.data.transportPersonIds,
   });
-  if (error || !data)
+  if (error || !data) {
+    console.error("Booking draft save failed", {
+      code: error?.code,
+      message: error?.message,
+      hikeSlug: parsed.data.hikeSlug,
+      hasExistingDraft: Boolean(effectiveBookingId),
+    });
     return Response.json(
-      { error: error?.message ?? "No pudimos guardar tu reservación." },
+      { error: friendlyDraftError(error?.message) },
       { status: 400 },
     );
+  }
   const selections = parsed.data.productSelections;
   const productIds = [...new Set(selections.map((item) => item.productId))];
   let productSubtotal = 0;

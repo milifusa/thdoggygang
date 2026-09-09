@@ -96,6 +96,12 @@ export default async function MyAdventurePage({
   });
   const review = one(booking.hike_reviews);
   const canReview = ["CONFIRMED", "COMPLETED"].includes(booking.status) && new Date(hike.starts_at) < new Date();
+  const daysUntil = Math.max(
+    0,
+    Math.ceil(
+      (new Date(hike.starts_at).getTime() - new Date().getTime()) / 86_400_000,
+    ),
+  );
   return (
     <main className="ticket-page">
       <header>
@@ -217,7 +223,7 @@ export default async function MyAdventurePage({
           signed={booking.signed_waivers.length}
           participants={booking.booking_participants.length}
           checkedIn={booking.check_ins.length}
-          startsAt={hike.starts_at}
+          daysUntil={daysUntil}
           meetingPoint={hike.meeting_point ?? hike.location_name}
           completedKeys={(booking.adventure_checklist_items ?? []).map((item) => item.item_key)}
           shopUrl={`/tienda?hike=${hike.id}`}

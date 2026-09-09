@@ -11,9 +11,10 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && npm run test:security && npm run test:seo",
+    "test": "npm run typecheck && npm run test:security && npm run test:seo && npm run test:mobile",
     "test:security": "node scripts/verify-security.mjs",
     "test:seo": "node scripts/verify-seo.mjs",
+    "test:mobile": "node scripts/verify-mobile.mjs",
     "test:production": "node scripts/verify-production.mjs",
     "vercel-build": "next build"
   },

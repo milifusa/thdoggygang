@@ -277,6 +277,25 @@ export function BookingWizard({
             : step === 5 && context.mode === "live" && payment === "card"
               ? cardPaymentsEnabled
             : true;
+  const continueLabel = processing
+    ? "GUARDANDO…"
+    : step === 0 && !canContinue
+      ? people.length
+        ? "SELECCIONA UNA PERSONA"
+        : "AGREGA UNA PERSONA"
+      : step === 1 && !canContinue
+        ? dogs.length
+          ? "SELECCIONA UN PERRITO"
+          : "AGREGA UN PERRITO"
+        : step === 4 && !canContinue
+          ? signatureData || waiverSaved
+            ? "ACTIVA HE LEÍDO Y ACEPTO"
+            : "FIRMA PARA CONTINUAR"
+          : step === 5
+            ? payment === "transfer" && !receiptFile
+              ? "SUBE TU COMPROBANTE"
+              : `PAGAR $${total.toLocaleString("es-MX")} MXN`
+            : "CONTINUAR";
   const progress = `${Math.round((step / (steps.length - 1)) * 100)}%`;
   const goBack = () => {
     if (step <= 5) setWaiverSaved(false);
@@ -702,32 +721,30 @@ export function BookingWizard({
                 ) : null}
               </>
             )}
-            {syncMessage && (
-              <p className="wizard-error" role="alert">
-                {syncMessage}
-              </p>
-            )}
             <div className="wizard-actions">
-              <button
-                type="button"
-                disabled={step === 0 || processing}
-                onClick={goBack}
-                className="back-button"
-              >
-                ATRÁS
-              </button>
-              <button
-                type="button"
-                disabled={!canContinue || processing}
-                onClick={next}
-                className="button button-primary"
-              >
-                {processing
-                  ? "GUARDANDO…"
-                  : step === 5
-                    ? `PAGAR $${total.toLocaleString("es-MX")} MXN`
-                    : "CONTINUAR"}
-              </button>
+              {syncMessage && (
+                <p className="wizard-error" role="alert">
+                  {syncMessage}
+                </p>
+              )}
+              <div className="wizard-action-row">
+                <button
+                  type="button"
+                  disabled={step === 0 || processing}
+                  onClick={goBack}
+                  className="back-button"
+                >
+                  ATRÁS
+                </button>
+                <button
+                  type="button"
+                  disabled={!canContinue || processing}
+                  onClick={next}
+                  className="button button-primary"
+                >
+                  {continueLabel}
+                </button>
+              </div>
             </div>
           </section>
           <aside className="wizard-summary">

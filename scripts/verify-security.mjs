@@ -88,6 +88,19 @@ check(
   capacityMigration.includes("bookings_capacity_transition_guard"),
   "El cupo no está protegido al iniciar el pago.",
 );
+const bookingDraftFix = read(
+  "supabase/migrations/202609090004_fix_booking_draft_hike_lock.sql",
+);
+check(
+  !/from public\.hikes[\s\S]{0,180}for update/i.test(bookingDraftFix),
+  "El borrador vuelve a bloquear hikes con permisos que el cliente no tiene.",
+);
+check(
+  bookingDraftFix.includes(
+    "revoke all on function public.save_booking_draft(text,uuid,uuid[],uuid[],uuid[]) from public,anon",
+  ),
+  "La función de borrador debe rechazar ejecución anónima.",
+);
 
 for (const name of ["magic_link", "confirmation", "invite", "recovery"]) {
   const template = read(`supabase/templates/${name}.html`);

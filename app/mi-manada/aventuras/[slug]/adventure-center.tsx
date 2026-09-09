@@ -10,8 +10,8 @@ const checklist = [
   ["DOG_TAG", "Placa y correa del perrito"], ["VACCINES", "Vacunas revisadas"],
 ] as const;
 
-export function AdventureCenter({ bookingId, status, signed, participants, checkedIn, startsAt, meetingPoint, completedKeys, shopUrl, canReview, initialReview }: {
-  bookingId: string; status: string; signed: number; participants: number; checkedIn: number; startsAt: string; meetingPoint: string;
+export function AdventureCenter({ bookingId, status, signed, participants, checkedIn, daysUntil, meetingPoint, completedKeys, shopUrl, canReview, initialReview }: {
+  bookingId: string; status: string; signed: number; participants: number; checkedIn: number; daysUntil: number; meetingPoint: string;
   completedKeys: string[]; shopUrl: string; canReview: boolean;
   initialReview: { route_rating: number; guide_rating: number; transport_rating: number | null; body: string } | null;
 }) {
@@ -26,9 +26,20 @@ export function AdventureCenter({ bookingId, status, signed, participants, check
     { label: "Check-in", complete: participants > 0 && checkedIn >= participants },
   ];
   const toggle = async (key: string) => {
-    const completed = !done.has(key); const next = new Set(done); completed ? next.add(key) : next.delete(key); setDone(next);
-    const response = await fetch("/api/adventure-checklist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bookingId, itemKey: key, completed }) });
-    if (!response.ok) { completed ? next.delete(key) : next.add(key); setDone(new Set(next)); setNotice("No pudimos guardar este cambio."); }
+    const completed = !done.has(key);
+    const previous = new Set(done);
+    const next = new Set(done);
+    if (completed) next.add(key);
+    else next.delete(key);
+    setDone(next);
+    setNotice("");
+    try {
+      const response = await fetch("/api/adventure-checklist", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ bookingId, itemKey: key, completed }) });
+      if (!response.ok) throw new Error("Checklist save failed");
+    } catch {
+      setDone(previous);
+      setNotice("No pudimos guardar este cambio.");
+    }
   };
   const submitReview = async () => {
     setSavingReview(true); setNotice("");
@@ -37,7 +48,7 @@ export function AdventureCenter({ bookingId, status, signed, participants, check
     setNotice(response.ok ? "Tu reseña verificada quedó publicada." : result.error ?? "No pudimos guardar la reseña.");
   };
   return <section className="adventure-center">
-    <div className="adventure-center-heading"><div><p className="eyebrow">CENTRO DE AVENTURA</p><h2>Todo lo que necesitas, en un solo lugar.</h2></div><span>{Math.max(0, Math.ceil((new Date(startsAt).getTime()-Date.now())/86400000))} DÍAS</span></div>
+    <div className="adventure-center-heading"><div><p className="eyebrow">CENTRO DE AVENTURA</p><h2>Todo lo que necesitas, en un solo lugar.</h2></div><span>{daysUntil} DÍAS</span></div>
     <div className="adventure-progress">{steps.map((step) => <div className={step.complete ? "complete" : ""} key={step.label}><i>{step.complete ? <Check /> : null}</i><span>{step.label}</span></div>)}</div>
     <div className="adventure-tool-grid">
       <a href={`/api/bookings/${bookingId}/calendar`}><CalendarPlus /><span><strong>Agregar al calendario</strong><small>Incluye alerta un día antes</small></span></a>

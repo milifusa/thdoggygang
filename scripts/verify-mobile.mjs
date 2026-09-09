@@ -1,0 +1,50 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const root = process.cwd();
+const css = readFileSync(join(root, "app/globals.css"), "utf8");
+const layout = readFileSync(join(root, "app/layout.tsx"), "utf8");
+const wizard = readFileSync(
+  join(root, "app/reservar/[slug]/wizard.tsx"),
+  "utf8",
+);
+const failures = [];
+const check = (condition, message) => {
+  if (!condition) failures.push(message);
+};
+
+check(
+  css.includes(".wizard-main.wizard-step-enter") &&
+    css.includes("animation: tdg-step-in-mobile"),
+  "El contenido animado del wizard puede volver a romper el pie fijo en móvil.",
+);
+check(
+  css.includes(".wizard-action-row") && wizard.includes("wizard-action-row"),
+  "Las acciones móviles del wizard no tienen su contenedor estable.",
+);
+check(
+  css.includes('input:not([type="checkbox"]):not([type="radio"]):not([type="range"])') &&
+    css.includes("font-size: 16px !important"),
+  "Los campos pequeños pueden provocar zoom automático en Safari móvil.",
+);
+check(
+  css.includes("overflow-x: clip") && layout.includes("interactiveWidget: 'resizes-content'"),
+  "Falta protección contra desplazamiento horizontal o teclado móvil.",
+);
+check(
+  wizard.includes("const continueLabel") &&
+    wizard.includes("AGREGA UN PERRITO") &&
+    wizard.includes("FIRMA PARA CONTINUAR"),
+  "El flujo no explica qué requisito impide avanzar.",
+);
+check(
+  wizard.indexOf("{syncMessage && (") > wizard.indexOf('className="wizard-actions"'),
+  "Los errores deben mostrarse dentro del pie visible del wizard.",
+);
+
+if (failures.length) {
+  console.error(failures.map((failure) => `- ${failure}`).join("\n"));
+  process.exit(1);
+}
+
+console.log("Verificación móvil estática: OK");
