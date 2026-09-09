@@ -442,17 +442,28 @@ export default async function MyGangPage({
               </div>
             </>
           ) : (
-            <div className="empty-adventure-copy">
-              <span>PRÓXIMA AVENTURA</span>
-              <h2>Tu siguiente historia empieza aquí.</h2>
-              <p>
-                Aún no tienes una reservación activa. Explora los próximos hikes
-                y arma tu manada.
-              </p>
-              <Link className="button button-dark" href="/#aventuras">
-                VER AVENTURAS →
-              </Link>
-            </div>
+            <>
+              <div className="empty-adventure-visual" aria-hidden="true">
+                <span className="empty-trail"><i /><i /><i /><i /></span>
+                <img src="/brand/logo-circular-sun.png" alt="" />
+                <small>EL SENDERO TE ESPERA</small>
+              </div>
+              <div className="empty-adventure-copy">
+                <span>PRÓXIMA AVENTURA</span>
+                <h2>Tu siguiente historia empieza aquí.</h2>
+                <p>
+                  Todavía no tienes una reservación activa. Elige una ruta y prepara a tu manada para salir juntos.
+                </p>
+                <ol>
+                  <li><b>01</b><span>ELIGE TU RUTA</span></li>
+                  <li><b>02</b><span>ARMA TU MANADA</span></li>
+                  <li><b>03</b><span>RESERVA TU LUGAR</span></li>
+                </ol>
+                <Link className="button button-primary" href="/#aventuras">
+                  EXPLORAR AVENTURAS
+                </Link>
+              </div>
+            </>
           )}
         </section>
 

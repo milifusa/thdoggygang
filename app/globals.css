@@ -6202,3 +6202,30 @@ h3,
   .wizard-step-enter,.select-card.selected>i,.choice-grid button.selected>i,.accept-row input:checked+.accept-toggle i,.adventure-prep button.done i,.wizard-product-grid article.selected,.shop-products article,.photo-item,.photo-item.selected .photo-select-button,.motion-burst i,.passport-cover img,.passport-cover small,.passport-page-turn,.passport-mobile-page,.passport-stamp:before{animation:none!important}
   .passport-cover,.passport-spread,.select-card,.choice-grid button,.wizard-product-grid article,.shop-products article,.photo-item,.adventure-tool-grid>a,.adventure-prep button,.account-quick-actions>a{transition:none!important}
 }
+
+/* A purposeful empty state for members who have not booked an adventure yet. */
+.next-adventure.empty-adventure{grid-template-columns:minmax(280px,.78fr) minmax(0,1.22fr)!important;min-height:350px;background:var(--wild-blue);overflow:visible;animation:tdg-empty-arrive 620ms cubic-bezier(.2,.75,.25,1) both}
+.empty-adventure-visual{position:relative;min-height:350px;overflow:hidden;border-radius:12px 0 0 12px;background:radial-gradient(circle at 50% 45%,#293261 0,var(--wild-blue) 58%,#0b0f2b 100%);display:grid;place-items:center}
+.empty-adventure-visual:after{content:"";position:absolute;inset:17px;border:1px solid #fdc06e55;border-radius:8px;pointer-events:none}
+.empty-adventure-visual>img{position:relative;z-index:2;width:176px;height:176px;object-fit:contain;animation:tdg-mascot-float 2.6s ease-in-out infinite;filter:drop-shadow(0 12px 18px #05071966)}
+.empty-adventure-visual>small{position:absolute;z-index:2;bottom:35px;color:var(--trail-sun);font-size:.57rem;font-weight:900;letter-spacing:.17em}
+.empty-trail{position:absolute;z-index:1;left:-15%;right:-15%;top:55%;height:3px;rotate:-10deg;background:repeating-linear-gradient(90deg,#fdc06e00 0 10px,#fdc06e7a 10px 22px);background-size:44px 3px;animation:tdg-trail-move 2.1s linear infinite}
+.empty-trail i{position:absolute;width:9px;height:13px;border:2px solid var(--trail-sun);border-radius:60% 60% 55% 55%;opacity:.62}.empty-trail i:nth-child(1){left:20%;top:-22px;rotate:18deg}.empty-trail i:nth-child(2){left:32%;top:9px;rotate:23deg}.empty-trail i:nth-child(3){right:29%;top:-20px;rotate:18deg}.empty-trail i:nth-child(4){right:16%;top:9px;rotate:25deg}
+.empty-adventure-copy{min-width:0;padding:clamp(30px,4vw,55px);background:#fffdf8;border-radius:0 12px 12px 0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
+.empty-adventure-copy>span{font-size:.6rem;font-weight:900;letter-spacing:.15em;color:#9b611b}
+.empty-adventure-copy h2{max-width:560px;margin:10px 0 14px;font-size:clamp(38px,4.6vw,61px);line-height:.92;color:var(--wild-blue)}
+.empty-adventure-copy>p{max-width:540px;margin:0;color:#655e58;font-size:.93rem;line-height:1.55}
+.empty-adventure-copy ol{width:100%;max-width:590px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:24px 0;padding:0;list-style:none}
+.empty-adventure-copy li{display:grid;gap:4px;padding:11px 12px;border-top:2px solid var(--trail-sun);background:#f8f4ec}.empty-adventure-copy li b{font-size:.62rem;color:#a3651c}.empty-adventure-copy li span{font-size:.58rem;font-weight:900;letter-spacing:.06em}
+.empty-adventure-copy .button{min-height:50px;display:inline-flex;align-items:center;justify-content:center;padding:0 22px;background:var(--trail-sun);color:var(--wild-blue);border:1px solid var(--wild-blue);font-size:.67rem;font-weight:900;letter-spacing:.08em;transition:transform 180ms ease,box-shadow 180ms ease}.empty-adventure-copy .button:hover{transform:translateY(-3px);box-shadow:5px 5px 0 var(--wild-blue)}
+.account-quick-actions>a{animation:tdg-reveal-up 480ms ease both}.account-quick-actions>a:nth-child(2){animation-delay:55ms}.account-quick-actions>a:nth-child(3){animation-delay:110ms}.account-quick-actions>a:nth-child(4){animation-delay:165ms}.account-quick-actions>a:nth-child(5){animation-delay:220ms}.account-quick-actions>a:nth-child(6){animation-delay:275ms}
+.next-adventure:not(.empty-adventure) .next-photo img{transition:transform 700ms ease}.next-adventure:not(.empty-adventure):hover .next-photo img{transform:scale(1.035)}
+@keyframes tdg-empty-arrive{from{opacity:0;transform:translateY(22px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes tdg-mascot-float{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-10px) rotate(3deg)}}
+@keyframes tdg-trail-move{to{background-position:44px 0}}
+@media(max-width:700px){
+  .next-adventure.empty-adventure{grid-template-columns:1fr!important;min-height:0;margin:12px 0 28px;box-shadow:7px 7px 0 var(--trail-sun)}
+  .empty-adventure-visual{min-height:190px;border-radius:12px 12px 0 0}.empty-adventure-visual>img{width:128px;height:128px}.empty-adventure-visual>small{bottom:18px}.empty-trail{top:51%}
+  .empty-adventure-copy{padding:25px 21px 27px;border-radius:0 0 12px 12px}.empty-adventure-copy h2{font-size:36px;line-height:.94;margin-top:9px}.empty-adventure-copy>p{font-size:.88rem}.empty-adventure-copy ol{gap:5px;margin:19px 0}.empty-adventure-copy li{padding:9px 7px}.empty-adventure-copy li span{font-size:.49rem}.empty-adventure-copy .button{width:100%;min-height:52px}
+}
+@media(prefers-reduced-motion:reduce){.next-adventure.empty-adventure,.empty-adventure-visual>img,.empty-trail,.account-quick-actions>a{animation:none!important}.next-adventure:not(.empty-adventure) .next-photo img{transition:none!important}}
