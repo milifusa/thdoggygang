@@ -5,6 +5,10 @@ import {
   defaultLoginContent,
   type LoginContent,
 } from "../../lib/login-content";
+import {
+  prepareImageForUpload,
+  readJsonResponse,
+} from "../../lib/client-image-upload";
 
 const text = (data: FormData, key: string) =>
   String(data.get(key) ?? "").trim();
@@ -99,14 +103,15 @@ export function LoginContentForm({
         ["mobile", mobile],
       ] as const) {
         if (!file) continue;
+        const prepared = await prepareImageForUpload(file);
         const body = new FormData();
         body.set("kind", kind);
-        body.set("image", file);
+        body.set("image", prepared);
         const upload = await fetch("/api/admin/site/login/images", {
           method: "POST",
           body,
         });
-        const out = (await upload.json()) as { error?: string };
+        const out = await readJsonResponse<{ error?: string }>(upload);
         if (!upload.ok)
           throw new Error(out.error ?? "No pudimos subir la imagen.");
       }
@@ -182,7 +187,7 @@ export function LoginContentForm({
               </b>
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 onChange={(e) => {
                   setDesktop(e.target.files?.[0] ?? null);
                   setDirty(true);
@@ -210,7 +215,7 @@ export function LoginContentForm({
               </b>
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept="image/*"
                 onChange={(e) => {
                   setMobile(e.target.files?.[0] ?? null);
                   setDirty(true);

@@ -2,6 +2,10 @@
 import { FormEvent, useState } from "react";
 import { Save, Upload } from "lucide-react";
 import type { LandingContent } from "../../lib/landing-content";
+import {
+  prepareImageForUpload,
+  readJsonResponse,
+} from "../../lib/client-image-upload";
 
 function Field({
   label,
@@ -108,14 +112,17 @@ export function SiteContentForm({
         ["how", howFile],
       ] as const) {
         if (!file) continue;
+        const prepared = await prepareImageForUpload(file);
         const imageData = new FormData();
         imageData.set("kind", kind);
-        imageData.set("image", file);
+        imageData.set("image", prepared);
         const imageResponse = await fetch("/api/admin/site/images", {
           method: "POST",
           body: imageData,
         });
-        const imageResult = (await imageResponse.json()) as { error?: string };
+        const imageResult = await readJsonResponse<{ error?: string }>(
+          imageResponse,
+        );
         if (!imageResponse.ok)
           throw new Error(
             imageResult.error ?? `No pudimos subir la imagen ${kind}.`,
@@ -153,7 +160,7 @@ export function SiteContentForm({
             </span>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={(e) => setHeroFile(e.target.files?.[0] ?? null)}
             />
           </label>
@@ -248,7 +255,7 @@ export function SiteContentForm({
             </span>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={(e) => setHowFile(e.target.files?.[0] ?? null)}
             />
           </label>

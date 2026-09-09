@@ -9,6 +9,10 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
+import {
+  prepareImageForUpload,
+  readJsonResponse,
+} from "../../lib/client-image-upload";
 
 export type AdminPhoto = {
   id: string;
@@ -59,22 +63,24 @@ export function PhotoManager({
       return setMessage("Selecciona entre 1 y 100 fotos.");
     }
     setProgress({ done: 0, total: files.length });
+    setMessage("Preparando y optimizando las fotografías…");
     let done = 0;
     try {
-      for (let index = 0; index < files.length; index += 4) {
-        const batch = files.slice(index, index + 4);
+      for (let index = 0; index < files.length; index += 2) {
+        const batch = files.slice(index, index + 2);
         await Promise.all(
           batch.map(async (file) => {
+            const prepared = await prepareImageForUpload(file);
             const body = new FormData();
             body.set("hikeId", hikeId);
             body.set("access", String(source.get("access") ?? "PAID"));
             body.set("price", String(source.get("price") ?? "90"));
-            body.set("photos", file);
+            body.set("photos", prepared);
             const response = await fetch("/api/admin/photos", {
               method: "POST",
               body,
             });
-            const result = (await response.json()) as { error?: string };
+            const result = await readJsonResponse<{ error?: string }>(response);
             if (!response.ok)
               throw new Error(
                 result.error ?? `No pudimos procesar ${file.name}.`,
@@ -297,8 +303,9 @@ export function PhotoManager({
         <div>
           <strong>Cargar fotos</strong>
           <span>
-            Puedes subir hasta 100 imágenes. Se generan thumbnail, preview y
-            marca de agua con el logo real; los originales permanecen privados.
+            Puedes subir hasta 100 imágenes, incluso archivos pesados de hasta
+            60 MB. Se optimizan antes de enviarse y se generan thumbnail,
+            preview y marca de agua; los archivos completos permanecen privados.
           </span>
         </div>
         <label>
@@ -320,7 +327,7 @@ export function PhotoManager({
             multiple
             name="photos"
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
           />
         </label>
         <button className="button button-primary" disabled={busy === "upload"}>

@@ -2,6 +2,10 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { CircleCheck } from "lucide-react";
+import {
+  prepareImageForUpload,
+  readJsonResponse,
+} from "../../../lib/client-image-upload";
 
 export type HikeFormInitial = {
   name: string;
@@ -128,8 +132,9 @@ export function NewHikeForm({
       if (!response.ok || !result.hike)
         throw new Error(result.error ?? "No pudimos guardar el hike.");
       if (coverFile) {
+        const preparedCover = await prepareImageForUpload(coverFile);
         const coverForm = new FormData();
-        coverForm.set("cover", coverFile);
+        coverForm.set("cover", preparedCover);
         const coverResponse = await fetch(
           `/api/admin/hikes/${result.hike.id}/cover`,
           {
@@ -137,7 +142,9 @@ export function NewHikeForm({
             body: coverForm,
           },
         );
-        const coverResult = (await coverResponse.json()) as { error?: string };
+        const coverResult = await readJsonResponse<{ error?: string }>(
+          coverResponse,
+        );
         if (!coverResponse.ok) {
           throw new Error(
             coverResult.error ??
@@ -237,7 +244,7 @@ export function NewHikeForm({
               required={!initial?.coverUrl}
               name="cover"
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/*"
               onChange={(event) => {
                 const file = event.target.files?.[0] ?? null;
                 setCoverFile(file);

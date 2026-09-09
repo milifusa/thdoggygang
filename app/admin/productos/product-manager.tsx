@@ -3,6 +3,10 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PackagePlus, Save, Trash2 } from "lucide-react";
 import type { ShopSettings } from "../../lib/shop-settings";
+import {
+  prepareImageForUpload,
+  readJsonResponse,
+} from "../../lib/client-image-upload";
 
 export type AdminProduct = {
   id: string;
@@ -97,7 +101,7 @@ function ProductFields({ product }: { product?: AdminProduct }) {
         <input
           name="image"
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
         />
       </label>
       <label className="product-check">
@@ -141,14 +145,29 @@ export function ProductManager({
     event.preventDefault();
     setBusy(id ?? "new");
     setMessage("");
+    const body = new FormData(event.currentTarget);
+    const image = body.get("image");
+    if (image instanceof File && image.size) {
+      try {
+        setMessage("Preparando y optimizando la imagen…");
+        body.set("image", await prepareImageForUpload(image));
+      } catch (error) {
+        setBusy("");
+        return setMessage(
+          error instanceof Error
+            ? error.message
+            : "No pudimos preparar la imagen.",
+        );
+      }
+    }
     const response = await fetch(
       id ? `/api/admin/products/${id}` : "/api/admin/products",
       {
         method: id ? "PATCH" : "POST",
-        body: new FormData(event.currentTarget),
+        body,
       },
     );
-    const result = (await response.json()) as { error?: string };
+    const result = await readJsonResponse<{ error?: string }>(response);
     setBusy("");
     if (!response.ok)
       return setMessage(result.error ?? "No pudimos guardar el producto.");
