@@ -345,7 +345,7 @@ export function BookingWizard({
 
       {step < 6 ? (
         <div className="wizard-layout">
-          <section className="wizard-main">
+          <section className="wizard-main wizard-step-enter" key={step}>
             <p className="wizard-kicker">PASO {step + 1} DE {steps.length}</p>
             {step === 0 && (
               <>
@@ -817,6 +817,7 @@ function Confirmation({
   const token = "tdg:checkin:7f9f5c2e-74bc-4f89-a310-86b4109d9d25";
   return (
     <section className="confirmation">
+      <div className="motion-burst" aria-hidden="true">{Array.from({length: 10}, (_, index) => <i key={index} />)}</div>
       <div className="success-mark">
         <CircleCheck aria-hidden="true" />
       </div>
@@ -880,6 +881,7 @@ function Confirmation({
 function TransferPending({ adventure }: { adventure: Adventure }) {
   return (
     <section className="confirmation pending-confirmation">
+      <div className="motion-burst" aria-hidden="true">{Array.from({length: 10}, (_, index) => <i key={index} />)}</div>
       <div className="success-mark">
         <CircleCheck aria-hidden="true" />
       </div>
