@@ -72,6 +72,7 @@ function formatTime(value?: string | null) {
   return new Intl.DateTimeFormat("es-MX", {
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Mexico_City",
   }).format(new Date(value));
 }
 
@@ -659,6 +660,7 @@ export function HikeMode({
     month: "long",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "America/Mexico_City",
   }).format(new Date(data.hike.starts_at));
   return (
     <main className="field-mode">

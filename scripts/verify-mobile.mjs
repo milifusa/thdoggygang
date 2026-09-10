@@ -73,6 +73,7 @@ check(
 check(
   hikeMode.includes('import("qr-scanner")') &&
     hikeMode.includes("QrScanner.scanImage") &&
+    hikeMode.includes('timeZone: "America/Mexico_City"') &&
     !hikeMode.includes("BarcodeDetector"),
   "Modo hike no tiene un lector QR compatible con iPhone, Android y fotografías.",
 );
