@@ -29,7 +29,7 @@ export default async function MyAdventurePage({
   const session = await requireClientSession(`/mi-manada/aventuras/${slug}`);
   if (session.mode !== "live" || !session.profile) return null;
   const supabase = await createSupabaseServerClient();
-  const { data: booking } = await supabase
+  const { data: bookingRows } = await supabase
     .from("bookings")
     .select(
       "id,booking_number,status,current_step,total_cents,profile_id,hike:hikes!inner(id,name,slug,starts_at,location_name,meeting_point,cancellation_policy,distance_km,elevation_m,duration_minutes,difficulty),booking_participants(id,snapshot),booking_dogs(id,snapshot),signed_waivers(id,booking_participant_id),check_ins(id,booking_participant_id),booking_cancellation_requests(id,status),orders(id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(status))),adventure_checklist_items(item_key),hike_reviews(route_rating,guide_rating,transport_rating,body)",
@@ -37,8 +37,10 @@ export default async function MyAdventurePage({
     .eq("profile_id", session.profile.id)
     .eq("hike.slug", slug)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(20);
+  const booking = ["CONFIRMED", "COMPLETED", "PENDING_PAYMENT", "DRAFT", "CANCELLED"]
+    .map((status) => bookingRows?.find((candidate) => candidate.status === status))
+    .find(Boolean) ?? null;
   if (!booking) notFound();
   const hike = one(booking.hike);
   if (!hike) notFound();
