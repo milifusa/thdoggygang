@@ -26,6 +26,11 @@ export async function PATCH(
   if (value.storyTitle !== undefined) map.story_title = value.storyTitle;
   if (value.startsAt !== undefined) map.starts_at = value.startsAt;
   if (value.locationName !== undefined) map.location_name = value.locationName;
+  if (value.meetingPoints !== undefined)
+    map.meeting_point =
+      value.meetingPoints[0]?.address ||
+      value.meetingPoints[0]?.label ||
+      null;
   if (value.priceCents !== undefined) map.price_cents = value.priceCents;
   if (value.capacity !== undefined) map.capacity = value.capacity;
   if (value.maxDogs !== undefined) map.max_dogs = value.maxDogs;
@@ -54,6 +59,83 @@ export async function PATCH(
     .select("id, slug")
     .single();
   if (error) return Response.json({ error: error.message }, { status: 400 });
+  if (value.meetingPoints !== undefined) {
+    const meetingPoints = value.meetingPoints;
+    const { data: existingPoints, error: existingPointsError } = await supabase
+      .from("hike_meeting_points")
+      .select("id")
+      .eq("hike_id", id);
+    if (existingPointsError)
+      return Response.json(
+        { error: `No pudimos consultar los puntos de encuentro: ${existingPointsError.message}` },
+        { status: 400 },
+      );
+    const existingIds = new Set((existingPoints ?? []).map((point) => point.id));
+    const requestedExisting = meetingPoints.filter((point) => point.id);
+    if (requestedExisting.some((point) => !existingIds.has(point.id!)))
+      return Response.json(
+        { error: "Uno de los puntos de encuentro no pertenece a este hike." },
+        { status: 400 },
+      );
+    if (requestedExisting.length) {
+      const { error: updatePointsError } = await supabase
+        .from("hike_meeting_points")
+        .upsert(
+          requestedExisting.map((point) => ({
+            id: point.id!,
+            hike_id: id,
+            label: point.label,
+            address: point.address,
+            maps_url: point.mapsUrl,
+            sort_order: meetingPoints.findIndex(
+              (candidate) => candidate === point,
+            ),
+          })),
+        );
+      if (updatePointsError)
+        return Response.json(
+          { error: `No pudimos actualizar los puntos de encuentro: ${updatePointsError.message}` },
+          { status: 400 },
+        );
+    }
+    const newPoints = meetingPoints.filter((point) => !point.id);
+    if (newPoints.length) {
+      const { error: insertPointsError } = await supabase
+        .from("hike_meeting_points")
+        .insert(
+          newPoints.map((point) => ({
+            hike_id: id,
+            label: point.label,
+            address: point.address,
+            maps_url: point.mapsUrl,
+            sort_order: meetingPoints.findIndex(
+              (candidate) => candidate === point,
+            ),
+          })),
+        );
+      if (insertPointsError)
+        return Response.json(
+          { error: `No pudimos agregar los puntos de encuentro: ${insertPointsError.message}` },
+          { status: 400 },
+        );
+    }
+    const retainedIds = requestedExisting.map((point) => point.id!);
+    const removedIds = [...existingIds].filter((pointId) =>
+      !retainedIds.includes(pointId),
+    );
+    if (removedIds.length) {
+      const { error: deletePointsError } = await supabase
+        .from("hike_meeting_points")
+        .delete()
+        .eq("hike_id", id)
+        .in("id", removedIds);
+      if (deletePointsError)
+        return Response.json(
+          { error: `No pudimos eliminar los puntos de encuentro: ${deletePointsError.message}` },
+          { status: 400 },
+        );
+    }
+  }
   if (value.transportMode !== undefined) {
     const { error: transportError } = await supabase
       .from("transport_configurations")

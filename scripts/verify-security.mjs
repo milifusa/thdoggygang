@@ -117,6 +117,33 @@ check(
   capacityMigration.includes("bookings_capacity_transition_guard"),
   "El cupo no está protegido al iniciar el pago.",
 );
+const meetingPointsMigration = read(
+  "supabase/migrations/202609100001_hike_meeting_points.sql",
+);
+check(
+  meetingPointsMigration.includes(
+    "alter table public.hike_meeting_points enable row level security",
+  ) &&
+    meetingPointsMigration.includes("public.can_operate_hike") &&
+    meetingPointsMigration.includes(
+      "revoke all on table public.hike_meeting_points from anon",
+    ),
+  "Los puntos de encuentro no tienen controles de acceso adecuados.",
+);
+const hikeForm = read("app/admin/hikes/nuevo/form.tsx");
+const hikeAdminRoute = read("app/api/admin/hikes/route.ts");
+const memberAdventure = read(
+  "app/mi-manada/aventuras/[slug]/adventure-center.tsx",
+);
+check(
+  hikeForm.includes("meetingPoints") &&
+    hikeForm.includes("URL DE MAPS") &&
+    hikeAdminRoute.includes('from("hike_meeting_points")') &&
+    hikeAdminRoute.includes('protocol === "https:"') &&
+    memberAdventure.includes("visibleMeetingPoints.map") &&
+    memberAdventure.includes("point.mapsUrl"),
+  "Los hikes no administran o muestran múltiples URLs seguras de encuentro.",
+);
 const bookingDraftFix = read(
   "supabase/migrations/202609090004_fix_booking_draft_hike_lock.sql",
 );

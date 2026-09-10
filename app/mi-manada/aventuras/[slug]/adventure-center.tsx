@@ -10,8 +10,9 @@ const checklist = [
   ["DOG_TAG", "Placa y correa del perrito"], ["VACCINES", "Vacunas revisadas"],
 ] as const;
 
-export function AdventureCenter({ bookingId, status, signed, participants, checkedIn, daysUntil, meetingPoint, completedKeys, shopUrl, canReview, initialReview }: {
+export function AdventureCenter({ bookingId, status, signed, participants, checkedIn, daysUntil, meetingPoint, meetingPoints, completedKeys, shopUrl, canReview, initialReview }: {
   bookingId: string; status: string; signed: number; participants: number; checkedIn: number; daysUntil: number; meetingPoint: string;
+  meetingPoints: Array<{ id: string; label: string; address: string; mapsUrl: string }>;
   completedKeys: string[]; shopUrl: string; canReview: boolean;
   initialReview: { route_rating: number; guide_rating: number; transport_rating: number | null; body: string } | null;
 }) {
@@ -21,6 +22,14 @@ export function AdventureCenter({ bookingId, status, signed, participants, check
   const [savingReview, setSavingReview] = useState(false);
   const [downloading, setDownloading] = useState<"calendar" | "guide" | null>(null);
   const paid = status === "CONFIRMED" || status === "COMPLETED";
+  const visibleMeetingPoints = meetingPoints.length
+    ? meetingPoints
+    : [{
+        id: "legacy-location",
+        label: "Punto de encuentro",
+        address: meetingPoint,
+        mapsUrl: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(meetingPoint)}`,
+      }];
   const steps = [
     { label: "Reservación", complete: status !== "DRAFT" }, { label: "Pago", complete: paid },
     { label: "Responsivas", complete: participants > 0 && signed >= participants }, { label: "Preparación", complete: done.size >= checklist.length },
@@ -98,7 +107,7 @@ export function AdventureCenter({ bookingId, status, signed, participants, check
     <div className="adventure-progress">{steps.map((step) => <div className={step.complete ? "complete" : ""} key={step.label}><i>{step.complete ? <Check /> : null}</i><span>{step.label}</span></div>)}</div>
     <div className="adventure-tool-grid">
       <button type="button" disabled={downloading !== null} onClick={() => void downloadProtected("calendar", "aventura-the-doggy-gang.ics")}><CalendarPlus /><span><strong>{downloading === "calendar" ? "Preparando calendario…" : "Agregar al calendario"}</strong><small>Incluye alerta un día antes</small></span></button>
-      <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(meetingPoint)}`} target="_blank" rel="noreferrer"><MapPin /><span><strong>Abrir ubicación</strong><small>{meetingPoint}</small></span></a>
+      {visibleMeetingPoints.map((point) => <a className="meeting-point-tool" href={point.mapsUrl} target="_blank" rel="noreferrer" key={point.id}><MapPin /><span><strong>{meetingPoints.length > 1 ? point.label : "Abrir ubicación"}</strong><small>{point.address || "Abrir ubicación exacta"}</small>{meetingPoints.length > 1 && <em>ABRIR EN MAPS</em>}</span></a>)}
       <button type="button" disabled={downloading !== null} onClick={() => void downloadProtected("guide", "guia-the-doggy-gang.pdf")}><Download /><span><strong>{downloading === "guide" ? "Preparando guía…" : "Descargar guía"}</strong><small>PDF para consultar sin conexión</small></span></button>
       <Link href={shopUrl}><ShoppingBag /><span><strong>Agregar productos</strong><small>Recíbelos durante este hike</small></span></Link>
     </div>

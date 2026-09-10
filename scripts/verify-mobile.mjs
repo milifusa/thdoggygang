@@ -104,6 +104,13 @@ check(
     css.includes(".reward-unlock"),
   "La vista administrativa de recompensas no tiene una adaptación móvil verificable.",
 );
+check(
+  css.includes(".meeting-points-editor") &&
+    css.includes(".meeting-points-list fieldset") &&
+    css.includes(".meeting-point-url") &&
+    css.includes(".meeting-point-remove"),
+  "El editor de puntos de encuentro no tiene controles móviles verificables.",
+);
 
 if (failures.length) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));

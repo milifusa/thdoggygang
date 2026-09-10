@@ -1056,6 +1056,170 @@ footer small {
   }
 }
 
+/* Multiple meeting points in hike administration and member adventure center. */
+.meeting-points-editor {
+  padding: 18px;
+  border: 1px solid #cfc8bf;
+  background: #f7f3ec;
+}
+.meeting-points-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.meeting-points-heading > span,
+.meeting-points-heading > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+.meeting-points-heading svg {
+  width: 17px;
+}
+.meeting-points-heading > button {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid #29224f;
+  background: var(--trail-sun);
+  color: #29224f;
+  cursor: pointer;
+}
+.meeting-points-editor > p {
+  max-width: 720px;
+  margin: 8px 0 16px;
+  color: #69615b;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+.meeting-points-list {
+  display: grid;
+  gap: 10px;
+}
+.meeting-points-list fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d3ccc3;
+  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(180px, 1fr) minmax(220px, 1.25fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+.meeting-points-list legend {
+  padding: 0 7px;
+  color: #9b671b;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+.meeting-points-list label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.meeting-points-list input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid #bbb4ac;
+  background: #fff;
+}
+.meeting-point-remove {
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid #a65c55;
+  background: #fff;
+  color: #8d3933;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.54rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+.meeting-point-remove svg {
+  width: 16px;
+}
+.meeting-points-empty {
+  min-height: 82px;
+  padding: 16px;
+  border: 1px dashed #bdb5ab;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #6b635c;
+  font-size: 0.69rem;
+  text-align: center;
+}
+.meeting-points-empty svg {
+  width: 20px;
+  color: #9b671b;
+}
+.adventure-tool-grid .meeting-point-tool {
+  position: relative;
+  border-color: #cfae73;
+  background: #fffaf0;
+}
+.meeting-point-tool span {
+  min-width: 0;
+}
+.meeting-point-tool strong,
+.meeting-point-tool small {
+  overflow-wrap: anywhere;
+}
+.meeting-point-tool em {
+  margin-top: 2px;
+  color: #9b671b;
+  font-size: 0.52rem;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+@media (max-width: 1050px) {
+  .meeting-points-list fieldset {
+    grid-template-columns: 1fr 1fr;
+  }
+  .meeting-point-url {
+    grid-column: 1 / -1;
+  }
+  .meeting-point-remove {
+    justify-self: end;
+  }
+}
+@media (max-width: 650px) {
+  .meeting-points-editor {
+    padding: 14px;
+  }
+  .meeting-points-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .meeting-points-heading > button {
+    width: 100%;
+    justify-content: center;
+  }
+  .meeting-points-list fieldset {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meeting-point-url {
+    grid-column: auto;
+  }
+  .meeting-point-remove {
+    width: 100%;
+  }
+}
+
 .field-important{margin:18px 20px 6px;border:2px solid #2b231f;background:#fff9ef}.field-important-heading{display:flex;align-items:center;gap:12px;padding:14px 16px;color:#fff;background:#251c17}.field-important-heading>svg{width:24px;height:24px;color:var(--field-action);flex:none}.field-important-heading>div{display:grid;gap:2px}.field-important-heading span,.field-important-title strong{font-size:.66rem;font-weight:950;letter-spacing:.12em}.field-important-heading strong{font-size:.94rem}.field-important-grid{display:grid;grid-template-columns:1fr 1fr}.field-important-grid>article{min-width:0;padding:15px 16px}.field-important-grid>article+article{border-left:1px solid var(--field-line)}.field-important-title{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#7e5318}.field-important-title svg{width:19px;height:19px;flex:none}.field-important-row{display:grid;gap:3px;padding:10px 0;border-top:1px solid #e5d9ca}.field-important-row>strong{font-size:.92rem}.field-important-row small{color:var(--field-muted);line-height:1.35}.field-important-row p,.field-important-empty{margin:3px 0 0;font-size:.78rem;line-height:1.4}.field-important-row p{padding:8px;color:#74351f;background:#ffe8dc}.field-delivery-status{justify-self:start;margin-top:4px;padding:5px 7px;color:#754800;background:#ffe0aa;font-size:.58rem;font-weight:950;letter-spacing:.08em}.field-delivery-status.delivered{color:#21643d;background:#dff2e3}.field-important-transport{display:flex;align-items:center;gap:8px;padding:11px 16px;border-top:1px solid var(--field-line);background:#f3ede3;font-size:.78rem}.field-important-transport svg{width:19px}
 @media(max-width:620px){.field-important{margin:14px 14px 4px}.field-important-grid{grid-template-columns:1fr}.field-important-grid>article+article{border-top:1px solid var(--field-line);border-left:0}}
 

@@ -1,6 +1,20 @@
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
+const meetingPointSchema = z.object({
+  id: z.string().uuid().optional(),
+  label: z.string().trim().min(2).max(120),
+  address: z.string().trim().max(240),
+  mapsUrl: z
+    .string()
+    .trim()
+    .url()
+    .max(1200)
+    .refine((value) => new URL(value).protocol === "https:", {
+      message: "La URL de Maps debe usar HTTPS.",
+    }),
+});
+
 const hikeSchema = z.object({
   name: z.string().min(3).max(120),
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -8,6 +22,7 @@ const hikeSchema = z.object({
   storyTitle: z.string().min(5).max(240),
   startsAt: z.string().datetime({ offset: true }),
   locationName: z.string().min(3),
+  meetingPoints: z.array(meetingPointSchema).max(12),
   priceCents: z.number().int().min(0),
   capacity: z.number().int().positive(),
   maxDogs: z.number().int().positive().nullable(),
@@ -71,6 +86,8 @@ export async function POST(request: Request) {
       story_title: value.storyTitle,
       starts_at: value.startsAt,
       location_name: value.locationName,
+      meeting_point:
+        value.meetingPoints[0]?.address || value.meetingPoints[0]?.label || null,
       price_cents: value.priceCents,
       dog_price_cents: value.dogPriceCents,
       pricing_mode: value.pricingMode,
@@ -96,6 +113,26 @@ export async function POST(request: Request) {
       { error: error.code === "23505" ? "Ese slug ya existe." : error.message },
       { status: 400 },
     );
+  if (value.meetingPoints.length) {
+    const { error: meetingPointsError } = await supabase
+      .from("hike_meeting_points")
+      .insert(
+        value.meetingPoints.map((point, index) => ({
+          hike_id: data.id,
+          label: point.label,
+          address: point.address,
+          maps_url: point.mapsUrl,
+          sort_order: index,
+        })),
+      );
+    if (meetingPointsError) {
+      await supabase.from("hikes").delete().eq("id", data.id);
+      return Response.json(
+        { error: `No pudimos guardar los puntos de encuentro: ${meetingPointsError.message}` },
+        { status: 400 },
+      );
+    }
+  }
   const { error: transportError } = await supabase
     .from("transport_configurations")
     .insert({

@@ -32,7 +32,7 @@ export default async function MyAdventurePage({
   const { data: bookingRows } = await supabase
     .from("bookings")
     .select(
-      "id,booking_number,status,current_step,total_cents,profile_id,hike:hikes!inner(id,name,slug,starts_at,location_name,meeting_point,cancellation_policy,distance_km,elevation_m,duration_minutes,difficulty),booking_participants(id,snapshot),booking_dogs(id,snapshot),signed_waivers(id,booking_participant_id),check_ins(id,booking_participant_id),booking_cancellation_requests(id,status),orders(id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(status))),adventure_checklist_items(item_key),hike_reviews(route_rating,guide_rating,transport_rating,body)",
+      "id,booking_number,status,current_step,total_cents,profile_id,hike:hikes!inner(id,name,slug,starts_at,location_name,meeting_point,cancellation_policy,distance_km,elevation_m,duration_minutes,difficulty,hike_meeting_points(id,label,address,maps_url,sort_order)),booking_participants(id,snapshot),booking_dogs(id,snapshot),signed_waivers(id,booking_participant_id),check_ins(id,booking_participant_id),booking_cancellation_requests(id,status),orders(id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(status))),adventure_checklist_items(item_key),hike_reviews(route_rating,guide_rating,transport_rating,body)",
     )
     .eq("profile_id", session.profile.id)
     .eq("hike.slug", slug)
@@ -230,6 +230,14 @@ export default async function MyAdventurePage({
           checkedIn={booking.check_ins.length}
           daysUntil={daysUntil}
           meetingPoint={hike.meeting_point ?? hike.location_name}
+          meetingPoints={[...(hike.hike_meeting_points ?? [])]
+            .sort((a, b) => a.sort_order - b.sort_order)
+            .map((point) => ({
+              id: point.id,
+              label: point.label,
+              address: point.address,
+              mapsUrl: point.maps_url,
+            }))}
           completedKeys={(booking.adventure_checklist_items ?? []).map((item) => item.item_key)}
           shopUrl={`/tienda?hike=${hike.id}`}
           canReview={canReview}

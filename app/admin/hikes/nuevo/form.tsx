@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { CircleCheck } from "lucide-react";
+import { CircleCheck, MapPin, Plus, Trash2 } from "lucide-react";
 import {
   prepareImageForUpload,
   readJsonResponse,
@@ -14,6 +14,12 @@ export type HikeFormInitial = {
   storyTitle: string;
   startsAt: string;
   location: string;
+  meetingPoints: Array<{
+    id?: string;
+    label: string;
+    address: string;
+    mapsUrl: string;
+  }>;
   price: number;
   dogPrice: number;
   pricingMode: "PER_PERSON" | "PERSON_DOG_BUNDLE";
@@ -58,6 +64,12 @@ export function NewHikeForm({
   >(initial?.pricingMode ?? "PER_PERSON");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState(initial?.coverUrl ?? "");
+  const [meetingPoints, setMeetingPoints] = useState(() =>
+    (initial?.meetingPoints ?? []).map((point, index) => ({
+      ...point,
+      key: point.id ?? `existing-${index}`,
+    })),
+  );
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
@@ -77,6 +89,12 @@ export function NewHikeForm({
       storyTitle: data.get("storyTitle"),
       startsAt,
       locationName: data.get("location"),
+      meetingPoints: meetingPoints.map(({ id, label, address, mapsUrl }) => ({
+        id,
+        label: label.trim(),
+        address: address.trim(),
+        mapsUrl: mapsUrl.trim(),
+      })),
       priceCents: Math.round(Number(data.get("price")) * 100),
       dogPriceCents: Math.round(Number(data.get("dogPrice")) * 100),
       pricingMode,
@@ -270,6 +288,115 @@ export function NewHikeForm({
               defaultValue={initial?.location}
             />
           </label>
+          <div className="full-field meeting-points-editor">
+            <div className="meeting-points-heading">
+              <span>
+                <MapPin aria-hidden="true" />
+                PUNTOS DE ENCUENTRO
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  setMeetingPoints((current) => [
+                    ...current,
+                    {
+                      key: crypto.randomUUID(),
+                      label: "",
+                      address: "",
+                      mapsUrl: "",
+                    },
+                  ])
+                }
+              >
+                <Plus aria-hidden="true" /> AGREGAR PUNTO
+              </button>
+            </div>
+            <p>
+              Agrega uno o varios accesos. El nombre y la dirección serán
+              visibles para el cliente y cada botón abrirá la URL exacta de
+              Maps.
+            </p>
+            <div className="meeting-points-list">
+              {meetingPoints.map((point, index) => (
+                <fieldset key={point.key}>
+                  <legend>PUNTO {index + 1}</legend>
+                  <label>
+                    NOMBRE DEL PUNTO
+                    <input
+                      required
+                      value={point.label}
+                      placeholder="Estacionamiento principal"
+                      onChange={(event) =>
+                        setMeetingPoints((current) =>
+                          current.map((item) =>
+                            item.key === point.key
+                              ? { ...item, label: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    DIRECCIÓN O REFERENCIA
+                    <input
+                      value={point.address}
+                      placeholder="Opcional: entrada norte, frente a…"
+                      onChange={(event) =>
+                        setMeetingPoints((current) =>
+                          current.map((item) =>
+                            item.key === point.key
+                              ? { ...item, address: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <label className="meeting-point-url">
+                    URL DE MAPS
+                    <input
+                      required
+                      type="url"
+                      inputMode="url"
+                      value={point.mapsUrl}
+                      placeholder="https://maps.app.goo.gl/…"
+                      onChange={(event) =>
+                        setMeetingPoints((current) =>
+                          current.map((item) =>
+                            item.key === point.key
+                              ? { ...item, mapsUrl: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                  <button
+                    className="meeting-point-remove"
+                    type="button"
+                    aria-label={`Eliminar punto ${index + 1}`}
+                    onClick={() =>
+                      setMeetingPoints((current) =>
+                        current.filter((item) => item.key !== point.key),
+                      )
+                    }
+                  >
+                    <Trash2 aria-hidden="true" /> ELIMINAR
+                  </button>
+                </fieldset>
+              ))}
+              {!meetingPoints.length && (
+                <div className="meeting-points-empty">
+                  <MapPin aria-hidden="true" />
+                  <span>
+                    Aún no hay puntos. Se seguirá mostrando la ubicación
+                    general hasta que agregues uno.
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
       <div className="form-section">
