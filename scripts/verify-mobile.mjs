@@ -86,6 +86,13 @@ check(
     hikeMode.includes("selectedDeliveries"),
   "La ficha de check-in no destaca perritos y artículos comprados.",
 );
+check(
+  css.includes(".account-page,.account-content{min-width:0;max-width:100%}") &&
+    css.includes("@media(max-width:900px){.account-page{width:100%;overflow-x:clip}") &&
+    css.includes("grid-template-columns:repeat(2,minmax(0,1fr))") &&
+    css.includes(".next-adventure.empty-adventure{grid-template-columns:1fr!important"),
+  "Mi Manada puede volver a desbordarse horizontalmente en algunos celulares.",
+);
 
 if (failures.length) {
   console.error(failures.map((failure) => `- ${failure}`).join("\n"));
