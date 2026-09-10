@@ -56,6 +56,12 @@ check(
   "El pase móvil debe guardarse como una imagen PNG real.",
 );
 check(
+  ticket.includes('/brand/logo-horizontal-sun.png') &&
+    ticket.includes('"Protest Riot"') &&
+    ticket.includes('"Atkinson Hyperlegible"'),
+  "El pase descargable no usa el imagotipo y las tipografías oficiales.",
+);
+check(
   adventureCenter.includes('credentials: "include"') &&
     adventureCenter.includes("downloadProtected"),
   "Las descargas del Centro de aventura no conservan explícitamente la sesión.",
