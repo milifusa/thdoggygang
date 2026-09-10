@@ -32,6 +32,7 @@ type StripeDiagnostics = {
     country: string | null;
     chargesEnabled: boolean;
     detailsSubmitted: boolean;
+    ready: boolean;
   };
   keys?: { modesMatch: boolean };
   checkout?: { ready: boolean; cleanedUp: boolean; error: string | null };
@@ -326,6 +327,9 @@ export function PaymentSettingsForm({
                   <DiagnosticLine ok={Boolean(diagnostics.account?.connected)}>
                     Credenciales aceptadas por Stripe
                   </DiagnosticLine>
+                  <DiagnosticLine ok={Boolean(diagnostics.account?.ready)}>
+                    Cuenta habilitada para aceptar cargos
+                  </DiagnosticLine>
                   <DiagnosticLine ok={Boolean(diagnostics.keys?.modesMatch)}>
                     Llaves pública y secreta en el mismo modo
                   </DiagnosticLine>
@@ -344,7 +348,7 @@ export function PaymentSettingsForm({
                   <DiagnosticLine
                     ok={Boolean(diagnostics.webhook?.handlerReady)}
                   >
-                    Firma y recepción del webhook verificadas
+                    Ruta del webhook acepta la firma configurada
                   </DiagnosticLine>
                 </ul>
               )}

@@ -215,7 +215,11 @@ export async function POST(request: Request) {
     const webhookRegistered = Boolean(endpoint);
     const webhookEnabled = endpoint?.status === "enabled";
     const webhookHandlerReady = handlerResponse.ok;
+    const accountReady =
+      mode === "test" ||
+      Boolean(account.charges_enabled && account.details_submitted);
     const ok =
+      accountReady &&
       keyModesMatch &&
       checkoutReady &&
       checkoutCleanup &&
@@ -232,6 +236,7 @@ export async function POST(request: Request) {
         country: account.country ?? null,
         chargesEnabled: Boolean(account.charges_enabled),
         detailsSubmitted: Boolean(account.details_submitted),
+        ready: accountReady,
       },
       keys: { modesMatch: keyModesMatch },
       checkout: {
