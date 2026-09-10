@@ -20,6 +20,10 @@ const hikeMode = readFileSync(
   join(root, "app/admin/hike-mode/hike-mode.tsx"),
   "utf8",
 );
+const rewardsAdmin = readFileSync(
+  join(root, "app/admin/recompensas/page.tsx"),
+  "utf8",
+);
 const failures = [];
 const check = (condition, message) => {
   if (!condition) failures.push(message);
@@ -92,6 +96,13 @@ check(
     css.includes("grid-template-columns:repeat(2,minmax(0,1fr))") &&
     css.includes(".next-adventure.empty-adventure{grid-template-columns:1fr!important"),
   "Mi Manada puede volver a desbordarse horizontalmente en algunos celulares.",
+);
+check(
+  rewardsAdmin.includes('className="reward-admin-card"') &&
+    css.includes(".reward-admin-detail") &&
+    css.includes("grid-template-columns: 1fr;") &&
+    css.includes(".reward-unlock"),
+  "La vista administrativa de recompensas no tiene una adaptación móvil verificable.",
 );
 
 if (failures.length) {

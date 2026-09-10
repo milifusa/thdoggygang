@@ -190,6 +190,23 @@ check(
     clientsAdmin.includes("clientsError"),
   "Clientes puede ocultar un error de relación y mostrar cero expedientes.",
 );
+const rewardsAdmin = read("app/admin/recompensas/page.tsx");
+check(
+  rewardsAdmin.includes('from("reward_ledger")') &&
+    rewardsAdmin.includes('status === "COMPLETED"') &&
+    rewardsAdmin.includes("referralsByClient") &&
+    read("app/admin/admin-nav.tsx").includes('/admin/recompensas'),
+  "El administrador no reúne de forma verificable puntos, sellos y referidos.",
+);
+const bookingAdminActions = read(
+  "app/api/admin/bookings/[id]/actions/route.ts",
+);
+check(
+  bookingAdminActions.includes('{ status: "CANCELLED", cancelled_at: now }') &&
+    bookingAdminActions.includes("restore_product_inventory") &&
+    bookingAdminActions.includes("sendWaitlistOfferForHike"),
+  "La cancelación o el reembolso no liberan correctamente el cupo y la lista de espera.",
+);
 const hikeModePackage = read("app/api/hike-mode/package/route.ts");
 check(
   hikeModePackage.includes("profiles!bookings_profile_id_fkey") &&

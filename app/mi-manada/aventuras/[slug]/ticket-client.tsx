@@ -142,7 +142,7 @@ export function AdventureTicket({
 
       context.fillStyle = "#2b211c";
       context.font = '400 72px "Protest Riot", "Trebuchet MS", sans-serif';
-      let y = drawCenteredText(context, hikeName, 450, 1020, 76);
+      const y = drawCenteredText(context, hikeName, 450, 1020, 76);
 
       const infoY = y + 24;
       context.fillStyle = "#ffffff";

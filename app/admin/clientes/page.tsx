@@ -108,6 +108,12 @@ export default async function ClientsAdminPage() {
                         {client.person_profiles.length} personas ·{" "}
                         {client.dogs.length} perritos
                       </small>
+                      <Link
+                        className="admin-client-reward-link"
+                        href={`/admin/recompensas#cliente-${client.id}`}
+                      >
+                        VER SELLOS, PUNTOS Y REFERIDOS
+                      </Link>
                     </div>
                     <div className="admin-client-bookings">
                       {bookings.length ? (

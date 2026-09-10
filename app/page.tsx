@@ -83,7 +83,7 @@ export default async function Home() {
           {content.instagramEmbeds.map((url,index)=><iframe title={`Publicación ${index+1} de The Doggy Gang`} src={url} loading="lazy" allow="encrypted-media" key={url} />)}
         </div>
       </section>
-      <section className="quote-band"><p>“{content.quote}”</p><span>{content.quoteAttribution}</span></section>
+      <section className="quote-band"><p>{content.quote}</p><span>{content.quoteAttribution}</span></section>
       <footer>
         <Link className="wordmark footer-mark" href="/">THE DOGGY <span>GANG</span></Link><p>{content.footerText}</p>
         <div><Link href="/tienda">Tienda</Link><a href={content.footerInstagramUrl} target="_blank" rel="noreferrer">Instagram</a>{content.footerWhatsappUrl && <a href={content.footerWhatsappUrl}>WhatsApp</a>}<a href={content.footerTermsUrl}>Términos</a><Link href="/privacidad">Privacidad</Link></div><small>© 2026 THE DOGGY GANG</small>

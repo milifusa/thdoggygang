@@ -14,12 +14,14 @@ import {
   ReceiptText,
   UserCog,
   CreditCard,
+  Gift,
 } from "lucide-react";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 
 const sections = [
   { href: "/admin", label: "Dashboard", icon: House },
   { href: "/admin/clientes", label: "Clientes", icon: Users },
+  { href: "/admin/recompensas", label: "Recompensas", icon: Gift },
   { href: "/admin/hikes", label: "Hikes", icon: Mountain },
   { href: "/admin/reservaciones", label: "Reservaciones", icon: ReceiptText },
   { href: "/admin/pagos", label: "Pagos", icon: BadgeDollarSign },

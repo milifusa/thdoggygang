@@ -249,7 +249,9 @@ export function AdminBookingActions({
     if (
       (action === "REFUND" || action === "CANCEL") &&
       !window.confirm(
-        "Esta acción cambia el estado de la reservación. ¿Continuar?",
+        action === "REFUND"
+          ? "Se devolverá el pago, se restaurará el inventario comprado y se liberarán los lugares de personas y perritos. ¿Continuar?"
+          : "Se cancelará la reservación y se liberarán los lugares de personas y perritos. Esta acción no devuelve pagos. ¿Continuar?",
       )
     )
       return;
@@ -269,6 +271,11 @@ export function AdminBookingActions({
   return (
     <div className="admin-booking-actions">
       <strong>ACCIONES DE RESERVACIÓN</strong>
+      <p className="booking-capacity-note">
+        {hasPaidPayment
+          ? "REEMBOLSAR Y CANCELAR devuelve el pago, repone el inventario y libera el cupo una sola vez. Mientras una solicitud esté pendiente, sus lugares continúan reservados."
+          : "CANCELAR libera los lugares de personas y perritos. Esta reservación no tiene un pago confirmado que devolver."}
+      </p>
       <div>
         {!["CANCELLED", "COMPLETED"].includes(status) && (
           <button disabled={busy} onClick={() => void run("CANCEL")}>
