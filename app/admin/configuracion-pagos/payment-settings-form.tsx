@@ -29,28 +29,45 @@ export function PaymentSettingsForm({
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    const response = await fetch("/api/admin/payment-settings", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ...value, stripeSecretKey, stripeWebhookSecret }),
-    });
-    const result = (await response.json()) as {
-      ok?: boolean;
-      error?: string;
-      hasStripeSecret?: boolean;
-      hasStripeWebhookSecret?: boolean;
-    };
-    setBusy(false);
-    if (!response.ok)
-      return setMessage(result.error ?? "No pudimos guardar la configuración.");
-    setValue((current) => ({
-      ...current,
-      hasStripeSecret: Boolean(result.hasStripeSecret),
-      hasStripeWebhookSecret: Boolean(result.hasStripeWebhookSecret),
-    }));
-    setStripeSecretKey("");
-    setStripeWebhookSecret("");
-    setMessage("Configuración guardada de forma segura.");
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 20_000);
+    try {
+      const response = await fetch("/api/admin/payment-settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...value, stripeSecretKey, stripeWebhookSecret }),
+        signal: controller.signal,
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        hasStripeSecret?: boolean;
+        hasStripeWebhookSecret?: boolean;
+      };
+      if (!response.ok)
+        throw new Error(
+          result.error ?? "No pudimos guardar la configuración.",
+        );
+      setValue((current) => ({
+        ...current,
+        hasStripeSecret: Boolean(result.hasStripeSecret),
+        hasStripeWebhookSecret: Boolean(result.hasStripeWebhookSecret),
+      }));
+      setStripeSecretKey("");
+      setStripeWebhookSecret("");
+      setMessage("Configuración guardada de forma segura.");
+    } catch (error) {
+      setMessage(
+        error instanceof DOMException && error.name === "AbortError"
+          ? "El guardado tardó demasiado. Intenta nuevamente."
+          : error instanceof Error
+            ? error.message
+            : "No pudimos guardar la configuración.",
+      );
+    } finally {
+      window.clearTimeout(timeout);
+      setBusy(false);
+    }
   }
   return (
     <form className="payment-settings-form" onSubmit={save}>

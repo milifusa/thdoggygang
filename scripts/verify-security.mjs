@@ -52,6 +52,22 @@ check(
   "La descarga no define un nombre de archivo seguro.",
 );
 
+const paymentSettingsForm = read(
+  "app/admin/configuracion-pagos/payment-settings-form.tsx",
+);
+const paymentSettingsRoute = read("app/api/admin/payment-settings/route.ts");
+check(
+  paymentSettingsForm.includes("finally") &&
+    paymentSettingsForm.includes("setBusy(false)") &&
+    paymentSettingsForm.includes("AbortController"),
+  "El formulario de pagos puede quedarse indefinidamente en estado de guardado.",
+);
+check(
+  paymentSettingsRoute.includes("PAYMENT_SETTINGS_ENCRYPTION_FAILED") &&
+    paymentSettingsRoute.includes("status: 503"),
+  "Los errores de cifrado de credenciales no se manejan de forma segura.",
+);
+
 for (const route of [
   "app/api/adventure-checklist/route.ts",
   "app/api/notification-preferences/route.ts",

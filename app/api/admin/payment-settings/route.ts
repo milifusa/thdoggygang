@@ -80,17 +80,40 @@ export async function PATCH(request: Request) {
     return Response.json({ error: "No autorizado." }, { status: 403 });
 
   const service = createSupabaseServiceClient();
-  const { data: current } = await service
+  const { data: current, error: currentError } = await service
     .from("payment_settings")
     .select("stripe_secret_ciphertext,stripe_webhook_ciphertext")
     .eq("id", 1)
     .maybeSingle();
-  const stripeSecretCiphertext = parsed.data.stripeSecretKey
-    ? await encryptSecret(parsed.data.stripeSecretKey)
-    : (current?.stripe_secret_ciphertext ?? null);
-  const stripeWebhookCiphertext = parsed.data.stripeWebhookSecret
-    ? await encryptSecret(parsed.data.stripeWebhookSecret)
-    : (current?.stripe_webhook_ciphertext ?? null);
+  if (currentError) {
+    console.error("Payment settings read failed", { code: currentError.code });
+    return Response.json(
+      { error: "No pudimos consultar la configuración actual." },
+      { status: 500 },
+    );
+  }
+  let stripeSecretCiphertext = current?.stripe_secret_ciphertext ?? null;
+  let stripeWebhookCiphertext = current?.stripe_webhook_ciphertext ?? null;
+  try {
+    if (parsed.data.stripeSecretKey)
+      stripeSecretCiphertext = await encryptSecret(parsed.data.stripeSecretKey);
+    if (parsed.data.stripeWebhookSecret)
+      stripeWebhookCiphertext = await encryptSecret(
+        parsed.data.stripeWebhookSecret,
+      );
+  } catch (error) {
+    console.error("Payment settings encryption failed", {
+      code: "PAYMENT_SETTINGS_ENCRYPTION_FAILED",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return Response.json(
+      {
+        error:
+          "La protección de credenciales no está disponible. Intenta nuevamente en unos minutos.",
+      },
+      { status: 503 },
+    );
+  }
   if (
     parsed.data.stripeEnabled &&
     !stripeSecretCiphertext &&
