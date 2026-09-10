@@ -7,6 +7,7 @@ export type PersonOption = {
   detail: string;
   initials: string;
   isMinor: boolean;
+  birthDate: string | null;
   guardianPersonId: string | null;
 };
 export type DogOption = {
@@ -32,6 +33,7 @@ const demoContext: BookingContext = {
       detail: "Titular · Adulto",
       initials: "ML",
       isMinor: false,
+      birthDate: null,
       guardianPersonId: null,
     },
     {
@@ -40,6 +42,7 @@ const demoContext: BookingContext = {
       detail: "Acompañante · Adulto",
       initials: "EF",
       isMinor: false,
+      birthDate: null,
       guardianPersonId: null,
     },
     {
@@ -48,6 +51,7 @@ const demoContext: BookingContext = {
       detail: "Acompañante · Menor",
       initials: "MF",
       isMinor: true,
+      birthDate: "2022-10-01",
       guardianPersonId: "eduardo",
     },
   ],
@@ -132,6 +136,7 @@ export async function loadBookingContext(): Promise<BookingContext> {
       initials:
         `${person.first_name?.[0] ?? ""}${person.last_name?.[0] ?? ""}`.toUpperCase(),
       isMinor: person.is_minor,
+      birthDate: person.birth_date,
       guardianPersonId: person.guardian_person_id,
     })),
     dogs: dogOptions,

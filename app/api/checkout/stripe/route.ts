@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
+import { recalculateBookingTotal } from "../../../lib/server/booking-pricing";
 import { getStripeSecretKey } from "../../../lib/payment-config";
 
 const schema = z.object({ bookingId: z.string().uuid() });
@@ -43,6 +44,38 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   const service = createSupabaseServiceClient();
+  const profileId = (
+    await service
+      .from("profiles")
+      .select("id")
+      .eq("auth_user_id", user.id)
+      .single()
+  ).data?.id;
+  if (!profileId)
+    return Response.json(
+      { error: "No encontramos tu perfil." },
+      { status: 404 },
+    );
+  try {
+    booking.total_cents = (
+      await recalculateBookingTotal({ bookingId: booking.id, profileId })
+    ).totalCents;
+  } catch (pricingError) {
+    return Response.json(
+      {
+        error:
+          pricingError instanceof Error
+            ? pricingError.message
+            : "No pudimos verificar el total.",
+      },
+      { status: 409 },
+    );
+  }
+  if (booking.total_cents <= 0)
+    return Response.json(
+      { error: "La reservación no tiene un total pagable." },
+      { status: 409 },
+    );
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
   const { data: existingOrder } = await service
     .from("orders")
@@ -57,13 +90,7 @@ export async function POST(request: Request) {
       .from("orders")
       .insert({
         order_number: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-        profile_id: (
-          await service
-            .from("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-        ).data?.id,
+        profile_id: profileId,
         booking_id: booking.id,
         status: "PENDING",
         total_cents: booking.total_cents,
@@ -77,35 +104,45 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     order = data;
-    const productSubtotal = booking.booking_product_selections.reduce(
-      (sum, item) => sum + item.quantity * item.unit_price_cents,
-      0,
-    );
-    const items = [
-      {
-        order_id: order.id,
-        item_type: "HIKE",
-        reference_id: booking.id,
-        description: hike?.name ?? "Aventura The Doggy Gang",
-        quantity: 1,
-        unit_price_cents: booking.total_cents - productSubtotal,
-      },
-      ...booking.booking_product_selections.map((item) => {
-        const product = Array.isArray(item.product)
-          ? item.product[0]
-          : item.product;
-        return {
-          order_id: order!.id,
-          item_type: "PRODUCT",
-          reference_id: item.product_id,
-          description: `${product?.name ?? "Producto"}${item.variant ? ` · ${item.variant}` : ""}`,
-          quantity: item.quantity,
-          unit_price_cents: item.unit_price_cents,
-        };
-      }),
-    ];
-    await service.from("order_items").insert(items);
   }
+  const productSubtotal = booking.booking_product_selections.reduce(
+    (sum, item) => sum + item.quantity * item.unit_price_cents,
+    0,
+  );
+  const items = [
+    {
+      order_id: order.id,
+      item_type: "HIKE",
+      reference_id: booking.id,
+      description: hike?.name ?? "Aventura The Doggy Gang",
+      quantity: 1,
+      unit_price_cents: booking.total_cents - productSubtotal,
+    },
+    ...booking.booking_product_selections.map((item) => {
+      const product = Array.isArray(item.product)
+        ? item.product[0]
+        : item.product;
+      return {
+        order_id: order.id,
+        item_type: "PRODUCT",
+        reference_id: item.product_id,
+        description: `${product?.name ?? "Producto"}${item.variant ? ` · ${item.variant}` : ""}`,
+        quantity: item.quantity,
+        unit_price_cents: item.unit_price_cents,
+      };
+    }),
+  ];
+  await service
+    .from("orders")
+    .update({ total_cents: booking.total_cents })
+    .eq("id", order.id);
+  await service.from("order_items").delete().eq("order_id", order.id);
+  const { error: itemError } = await service.from("order_items").insert(items);
+  if (itemError)
+    return Response.json(
+      { error: "No pudimos actualizar el detalle de la orden." },
+      { status: 500 },
+    );
   const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
   const form = new URLSearchParams({
     mode: "payment",

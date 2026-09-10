@@ -117,6 +117,35 @@ check(
   ),
   "La función de borrador debe rechazar ejecución anónima.",
 );
+const minorPricingMigration = read(
+  "supabase/migrations/202609090005_minor_birth_date_and_pricing.sql",
+);
+check(
+  minorPricingMigration.includes("person_profiles_minor_birth_date_required"),
+  "Los perfiles de menores no exigen fecha de nacimiento en base de datos.",
+);
+check(
+  minorPricingMigration.includes("v_hike_date - interval '5 years'"),
+  "El precio no calcula los cinco años contra la fecha del hike.",
+);
+check(
+  minorPricingMigration.includes("v_billable_people*v_hike.price_cents"),
+  "El total del hike no usa el número de personas cobrables.",
+);
+check(
+  minorPricingMigration.includes("p.birth_date > v_hike_date"),
+  "El servidor permite fechas de nacimiento posteriores al hike.",
+);
+for (const route of [
+  "app/api/bookings/draft/route.ts",
+  "app/api/checkout/stripe/route.ts",
+  "app/api/payments/transfer/route.ts",
+]) {
+  check(
+    read(route).includes("recalculateBookingTotal"),
+    `${route} no vuelve a calcular el precio protegido antes del cobro.`,
+  );
+}
 
 for (const name of ["magic_link", "confirmation", "invite", "recovery"]) {
   const template = read(`supabase/templates/${name}.html`);

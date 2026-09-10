@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, X } from "lucide-react";
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
+import { dateInMexico, isFreeChildForDate } from "../../lib/person-age";
 import type { Product } from "../../lib/products";
 import type { BookingResume } from "./page";
 import { formatClabe, type BankTransferConfig } from "../../lib/payment-types";
@@ -125,9 +126,19 @@ export function BookingWizard({
   const [bookingId, setBookingId] = useState<string | null>(resume?.bookingId ?? null);
   const [syncMessage, setSyncMessage] = useState("");
   const [dogNeedsUpdate,setDogNeedsUpdate]=useState(false);
+  const hikeDate = useMemo(() => dateInMexico(adventure.startsAt), [adventure.startsAt]);
+  const freeChildCount = useMemo(
+    () =>
+      selectedPeople.filter((id) => {
+        const person = people.find((item) => item.id === id);
+        return person ? isFreeChildForDate(person, hikeDate) : false;
+      }).length,
+    [hikeDate, people, selectedPeople],
+  );
+  const billablePeopleCount = selectedPeople.length - freeChildCount;
   const hikeSubtotal = useMemo(
-    () => calculateHikeSubtotal(adventure, selectedPeople.length, selectedDogs.length),
-    [adventure, selectedPeople.length, selectedDogs.length],
+    () => calculateHikeSubtotal(adventure, billablePeopleCount, selectedDogs.length),
+    [adventure, billablePeopleCount, selectedDogs.length],
   );
   const productsSubtotal = useMemo(
     () => products.reduce((sum,product)=>sum+(productQuantities[product.id]??0)*(product.priceCents/100),0),
@@ -393,7 +404,12 @@ export function BookingWizard({
                         </span>
                         <span>
                           <strong>{person.name}</strong>
-                          <small>{person.detail}</small>
+                          <small>
+                            {person.detail}
+                            {isFreeChildForDate(person, hikeDate)
+                              ? " · Menor de 5 años · Sin costo"
+                              : ""}
+                          </small>
                         </span>
                         <i aria-hidden="true">
                           {selectedPeople.includes(person.id) && <Check />}
@@ -763,6 +779,12 @@ export function BookingWizard({
                 <dt>Personas</dt>
                 <dd>{selectedPeople.length}</dd>
               </div>
+              {freeChildCount > 0 && (
+                <div>
+                  <dt>Menores de 5 años</dt>
+                  <dd>{freeChildCount} · Sin costo</dd>
+                </div>
+              )}
               <div>
                 <dt>Perritos</dt>
                 <dd>{selectedDogs.length}</dd>

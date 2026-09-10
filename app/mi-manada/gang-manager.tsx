@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Plus, Trash2, X } from "lucide-react";
 import { mexicoNationalDigits } from "../lib/mexico-phone";
+import { dateInMexico } from "../lib/person-age";
 import { createSupabaseBrowserClient } from "../lib/supabase/client";
 
 export type PersonRecord = {
@@ -322,6 +323,7 @@ function PersonDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [minor, setMinor] = useState(Boolean(record?.isMinor));
+  const today = dateInMexico(new Date().toISOString());
   const adultGuardians = people.filter(
     (person) => !person.isMinor && person.id !== record?.id,
   );
@@ -429,14 +431,6 @@ function PersonDialog({
             name="whatsapp"
             defaultValue={record?.whatsapp}
           />
-          <label>
-            FECHA DE NACIMIENTO
-            <input
-              type="date"
-              name="birthDate"
-              defaultValue={record?.birthDate}
-            />
-          </label>
           <label className="check-field">
             <input
               type="checkbox"
@@ -445,6 +439,22 @@ function PersonDialog({
               onChange={(event) => setMinor(event.target.checked)}
             />{" "}
             ES MENOR DE EDAD
+          </label>
+          <label>
+            FECHA DE NACIMIENTO {minor ? "· OBLIGATORIA" : "· OPCIONAL"}
+            <input
+              type="date"
+              name="birthDate"
+              required={minor}
+              max={today}
+              defaultValue={record?.birthDate}
+            />
+            {minor && (
+              <small>
+                Se usa para calcular la edad el día del hike. Menores de 5
+                años no pagan el acceso.
+              </small>
+            )}
           </label>
           {minor && (
             <label>

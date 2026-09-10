@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { recalculateBookingTotal } from "../../../lib/server/booking-pricing";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
 const schema = z.object({
@@ -42,6 +43,8 @@ function friendlyDraftError(message?: string) {
     return "Uno de los perritos seleccionados ya no está disponible. Actualiza la página e intenta nuevamente.";
   if (/minor requires|responsable/i.test(message))
     return "Selecciona también a la persona adulta responsable del menor.";
+  if (/minor birth date required/i.test(message))
+    return "Agrega la fecha de nacimiento del menor antes de continuar.";
   if (/draft not found/i.test(message))
     return "No encontramos el borrador. Actualiza la página para continuar.";
   return "No pudimos guardar tu avance. Intenta nuevamente; tu selección sigue en pantalla.";
@@ -179,17 +182,25 @@ export async function POST(request: Request) {
     if (selectionError)
       return Response.json({ error: selectionError.message }, { status: 400 });
   }
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("total_cents")
-    .eq("id", data)
-    .single();
-  const totalCents = (booking?.total_cents ?? 0) + productSubtotal;
+  let totalCents = productSubtotal;
+  try {
+    totalCents = (
+      await recalculateBookingTotal({ bookingId: data, profileId: profile.id })
+    ).totalCents;
+  } catch (pricingError) {
+    return Response.json(
+      {
+        error:
+          pricingError instanceof Error
+            ? pricingError.message
+            : "No pudimos calcular el total de la reservación.",
+      },
+      { status: 400 },
+    );
+  }
   await supabase
     .from("bookings")
     .update({
-      subtotal_cents: totalCents,
-      total_cents: totalCents,
       current_step: parsed.data.currentStep,
       last_activity_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
