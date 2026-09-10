@@ -672,6 +672,96 @@ footer small {
     grid-column: 1;
   }
 }
+
+/* Stripe configuration diagnostics. */
+.stripe-diagnostics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #d8d2ca;
+  background: #f8f5ef;
+}
+.stripe-diagnostics > div:first-child {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+.stripe-diagnostics > div:first-child > svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  color: #99601e;
+}
+.stripe-diagnostics p {
+  margin: 4px 0 0;
+  color: #68615b;
+  font-size: .78rem;
+  line-height: 1.45;
+}
+.stripe-diagnostics > .button {
+  min-height: 44px;
+}
+.stripe-diagnostics > .button svg {
+  width: 17px;
+}
+.stripe-diagnostics-result {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border-left: 4px solid #bd7a24;
+  background: #fff;
+}
+.stripe-diagnostics-result > strong {
+  font-size: .9rem;
+}
+.stripe-diagnostics-result > small {
+  display: block;
+  margin-top: 10px;
+  font-size: .62rem;
+  font-weight: 900;
+  letter-spacing: .1em;
+}
+.stripe-diagnostics-result ul {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.stripe-diagnostics-result li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .78rem;
+}
+.stripe-diagnostics-result li svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.stripe-diagnostics-result li.is-ready {
+  color: #326747;
+}
+.stripe-diagnostics-result li.has-error {
+  color: #9b3c2b;
+}
+.spin {
+  animation: stripe-spin .8s linear infinite;
+}
+@keyframes stripe-spin {
+  to { transform: rotate(360deg); }
+}
+@media (max-width: 620px) {
+  .stripe-diagnostics {
+    grid-template-columns: 1fr;
+  }
+  .stripe-diagnostics > .button {
+    width: 100%;
+    justify-content: center;
+  }
+}
 @media (max-width: 420px) {
   .wordmark {
     font-size: 15px;

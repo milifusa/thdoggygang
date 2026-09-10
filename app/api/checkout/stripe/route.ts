@@ -109,6 +109,7 @@ export async function POST(request: Request) {
   const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
   const form = new URLSearchParams({
     mode: "payment",
+    "payment_method_types[0]": "card",
     success_url: `${origin}/reservar/confirmacion?booking=${booking.id}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/reservar/${hike?.slug ?? "sendero-del-duende"}?pago=cancelado`,
     client_reference_id: booking.id,

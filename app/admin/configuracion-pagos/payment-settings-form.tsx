@@ -1,6 +1,15 @@
 "use client";
 import { useState, type FormEvent } from "react";
-import { Check, Eye, EyeOff, LockKeyhole } from "lucide-react";
+import {
+  Check,
+  CircleCheck,
+  CircleX,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+  LockKeyhole,
+  ShieldCheck,
+} from "lucide-react";
 
 export type PaymentSettingsView = {
   bankEnabled: boolean;
@@ -14,6 +23,37 @@ export type PaymentSettingsView = {
   hasStripeWebhookSecret: boolean;
 };
 
+type StripeDiagnostics = {
+  ok: boolean;
+  mode?: "test" | "live";
+  error?: string;
+  account?: {
+    connected: boolean;
+    country: string | null;
+    chargesEnabled: boolean;
+    detailsSubmitted: boolean;
+  };
+  keys?: { modesMatch: boolean };
+  checkout?: { ready: boolean; cleanedUp: boolean; error: string | null };
+  webhook?: {
+    registered: boolean;
+    enabled: boolean;
+    listensForCheckout: boolean;
+    handlerReady: boolean;
+    listPermission: boolean;
+    listError: string | null;
+  };
+};
+
+function DiagnosticLine({ ok, children }: { ok: boolean; children: string }) {
+  return (
+    <li className={ok ? "is-ready" : "has-error"}>
+      {ok ? <CircleCheck /> : <CircleX />}
+      <span>{children}</span>
+    </li>
+  );
+}
+
 export function PaymentSettingsForm({
   initial,
 }: {
@@ -24,7 +64,11 @@ export function PaymentSettingsForm({
   const [stripeWebhookSecret, setStripeWebhookSecret] = useState("");
   const [showSecrets, setShowSecrets] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [message, setMessage] = useState("");
+  const [diagnostics, setDiagnostics] = useState<StripeDiagnostics | null>(
+    null,
+  );
   async function save(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -67,6 +111,32 @@ export function PaymentSettingsForm({
     } finally {
       window.clearTimeout(timeout);
       setBusy(false);
+    }
+  }
+  async function testStripe() {
+    setTesting(true);
+    setDiagnostics(null);
+    try {
+      const response = await fetch(
+        "/api/admin/payment-settings/diagnostics",
+        { method: "POST" },
+      );
+      const result = (await response.json().catch(() => ({}))) as
+        | StripeDiagnostics
+        | { error?: string };
+      if (!response.ok && !("account" in result))
+        throw new Error(result.error ?? "No pudimos completar la prueba.");
+      setDiagnostics(result as StripeDiagnostics);
+    } catch (error) {
+      setDiagnostics({
+        ok: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "No pudimos completar la prueba.",
+      });
+    } finally {
+      setTesting(false);
     }
   }
   return (
@@ -221,6 +291,76 @@ export function PaymentSettingsForm({
               autoComplete="new-password"
             />
           </label>
+        </div>
+        <div className="stripe-diagnostics">
+          <div>
+            <ShieldCheck />
+            <div>
+              <strong>PRUEBA DE CONEXIÓN</strong>
+              <p>
+                Valida las llaves, crea y cancela un checkout sin cobrar, y
+                comprueba el endpoint del webhook.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="button button-secondary"
+            disabled={testing || busy || !value.stripeEnabled}
+            onClick={testStripe}
+          >
+            {testing && <LoaderCircle className="spin" />}
+            {testing ? "PROBANDO…" : "PROBAR STRIPE"}
+          </button>
+          {diagnostics && (
+            <div className="stripe-diagnostics-result" role="status">
+              <strong>
+                {diagnostics.ok
+                  ? "Stripe está listo para cobrar"
+                  : "Hay puntos por corregir"}
+              </strong>
+              {diagnostics.error ? (
+                <p>{diagnostics.error}</p>
+              ) : (
+                <ul>
+                  <DiagnosticLine ok={Boolean(diagnostics.account?.connected)}>
+                    Credenciales aceptadas por Stripe
+                  </DiagnosticLine>
+                  <DiagnosticLine ok={Boolean(diagnostics.keys?.modesMatch)}>
+                    Llaves pública y secreta en el mismo modo
+                  </DiagnosticLine>
+                  <DiagnosticLine ok={Boolean(diagnostics.checkout?.ready)}>
+                    Checkout de compra creado correctamente
+                  </DiagnosticLine>
+                  <DiagnosticLine
+                    ok={Boolean(
+                      diagnostics.webhook?.registered &&
+                        diagnostics.webhook?.enabled &&
+                        diagnostics.webhook?.listensForCheckout,
+                    )}
+                  >
+                    Webhook registrado y escuchando pagos completados
+                  </DiagnosticLine>
+                  <DiagnosticLine
+                    ok={Boolean(diagnostics.webhook?.handlerReady)}
+                  >
+                    Firma y recepción del webhook verificadas
+                  </DiagnosticLine>
+                </ul>
+              )}
+              {diagnostics.mode && (
+                <small>
+                  MODO {diagnostics.mode === "live" ? "PRODUCCIÓN" : "PRUEBA"}
+                </small>
+              )}
+              {diagnostics.checkout?.error && (
+                <p>{diagnostics.checkout.error}</p>
+              )}
+              {diagnostics.webhook?.listError && (
+                <p>{diagnostics.webhook.listError}</p>
+              )}
+            </div>
+          )}
         </div>
       </section>
       {message && (
