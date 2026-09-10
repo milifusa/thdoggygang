@@ -11,6 +11,7 @@ import {
   CloudDownload,
   Dog,
   House,
+  ImageUp,
   PackageCheck,
   Phone,
   QrCode,
@@ -169,7 +170,8 @@ export function HikeMode({
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [deviceId, setDeviceId] = useState("");
   const video = useRef<HTMLVideoElement>(null);
-  const scanLoop = useRef<number | null>(null);
+  const qrScanner = useRef<import("qr-scanner").default | null>(null);
+  const scanLocked = useRef(false);
 
   const hydrateQueue = useCallback(
     async (hikeId: string) => setPending(await listOperations(hikeId)),
@@ -313,7 +315,7 @@ export function HikeMode({
         setMessage(
           "Este hike no fue preparado para trabajar sin señal. Conéctate y pulsa PREPARAR OFFLINE antes de operar.",
         );
-      if (navigator.onLine) await loadPackage(initialData.hike.id, id, true);
+      if (navigator.onLine) await loadPackage(initialData.hike.id, id);
     };
     void start();
     const onOnline = () => setOnline(true);
@@ -343,9 +345,8 @@ export function HikeMode({
   }, [data?.hike.id, demo, deviceId, loadPackage, syncing]);
   useEffect(
     () => () => {
-      const stream = video.current?.srcObject as MediaStream | null;
-      stream?.getTracks().forEach((track) => track.stop());
-      if (scanLoop.current) cancelAnimationFrame(scanLoop.current);
+      qrScanner.current?.destroy();
+      qrScanner.current = null;
     },
     [],
   );
@@ -555,10 +556,9 @@ export function HikeMode({
     setMessage("Los datos offline de este hike se eliminaron del dispositivo.");
   };
   const stopScanner = () => {
-    const stream = video.current?.srcObject as MediaStream | null;
-    stream?.getTracks().forEach((track) => track.stop());
-    if (scanLoop.current) cancelAnimationFrame(scanLoop.current);
-    scanLoop.current = null;
+    qrScanner.current?.destroy();
+    qrScanner.current = null;
+    scanLocked.current = false;
   };
   const handleQr = async (token: string) => {
     if (!data) return;
@@ -592,48 +592,55 @@ export function HikeMode({
     setMessage("");
     setScannerOpen(true);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false,
-      });
       await new Promise((resolve) => window.setTimeout(resolve, 50));
-      if (!video.current) return;
-      video.current.srcObject = stream;
-      await video.current.play();
-      const Detector = (
-        window as unknown as {
-          BarcodeDetector?: new (options: { formats: string[] }) => {
-            detect: (
-              source: HTMLVideoElement,
-            ) => Promise<Array<{ rawValue: string }>>;
-          };
-        }
-      ).BarcodeDetector;
-      if (!Detector) {
-        setMessage(
-          "Este navegador no permite leer QR con la cámara. Usa la búsqueda.",
-        );
-        return;
-      }
-      const detector = new Detector({ formats: ["qr_code"] });
-      const scan = async () => {
-        if (!video.current || video.current.readyState < 2) {
-          scanLoop.current = requestAnimationFrame(scan);
-          return;
-        }
-        const match = (
-          await detector.detect(video.current).catch(() => [])
-        ).find((code) => code.rawValue.startsWith("tdg:v2."));
-        if (match) {
-          await handleQr(match.rawValue);
-          return;
-        }
-        scanLoop.current = requestAnimationFrame(scan);
-      };
-      scanLoop.current = requestAnimationFrame(scan);
+      if (!video.current) throw new Error("La cámara no está disponible.");
+      const { default: QrScanner } = await import("qr-scanner");
+      const scanner = new QrScanner(
+        video.current,
+        (result) => {
+          const value = result.data.trim();
+          if (!value.startsWith("tdg:v2.")) {
+            setMessage("Este código no es un pase de The Doggy Gang.");
+            return;
+          }
+          if (scanLocked.current) return;
+          scanLocked.current = true;
+          void handleQr(value).finally(() => {
+            scanLocked.current = false;
+          });
+        },
+        {
+          preferredCamera: "environment",
+          maxScansPerSecond: 10,
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+          returnDetailedScanResult: true,
+          onDecodeError: () => undefined,
+        },
+      );
+      qrScanner.current = scanner;
+      await scanner.start();
+      setMessage("Cámara lista. Acerca el QR hasta verlo completo dentro del marco.");
+    } catch (error) {
+      stopScanner();
+      setMessage(
+        error instanceof Error && error.name === "NotAllowedError"
+          ? "La cámara no tiene permiso. Autorízala o selecciona una foto del QR."
+          : "No pudimos abrir la cámara. Selecciona una foto del QR o usa la búsqueda.",
+      );
+    }
+  };
+  const scanImage = async (file?: File) => {
+    if (!file) return;
+    try {
+      const { default: QrScanner } = await import("qr-scanner");
+      const result = await QrScanner.scanImage(file, {
+        returnDetailedScanResult: true,
+      });
+      await handleQr(result.data.trim());
     } catch {
       setMessage(
-        "No pudimos abrir la cámara. Revisa el permiso o usa la búsqueda.",
+        "No encontramos un QR legible en esa imagen. Acércalo, evita reflejos e intenta nuevamente.",
       );
     }
   };
@@ -943,6 +950,25 @@ export function HikeMode({
               <video ref={video} muted playsInline />
               <i />
             </div>
+            <label className="field-scan-file">
+              <ImageUp />
+              <span>LEER QR DESDE UNA FOTO</span>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  void scanImage(file);
+                }}
+              />
+            </label>
+            {message && (
+              <p className="field-scanner-feedback" role="status">
+                <CircleAlert />
+                <span>{message}</span>
+              </p>
+            )}
             <p>
               Centra el código de la reservación dentro del recuadro. Funciona
               aun sin señal si preparaste el hike.

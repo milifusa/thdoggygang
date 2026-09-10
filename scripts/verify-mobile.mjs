@@ -16,6 +16,10 @@ const adventureCenter = readFileSync(
   join(root, "app/mi-manada/aventuras/[slug]/adventure-center.tsx"),
   "utf8",
 );
+const hikeMode = readFileSync(
+  join(root, "app/admin/hike-mode/hike-mode.tsx"),
+  "utf8",
+);
 const failures = [];
 const check = (condition, message) => {
   if (!condition) failures.push(message);
@@ -65,6 +69,12 @@ check(
   adventureCenter.includes('credentials: "include"') &&
     adventureCenter.includes("downloadProtected"),
   "Las descargas del Centro de aventura no conservan explícitamente la sesión.",
+);
+check(
+  hikeMode.includes('import("qr-scanner")') &&
+    hikeMode.includes("QrScanner.scanImage") &&
+    !hikeMode.includes("BarcodeDetector"),
+  "Modo hike no tiene un lector QR compatible con iPhone, Android y fotografías.",
 );
 
 if (failures.length) {

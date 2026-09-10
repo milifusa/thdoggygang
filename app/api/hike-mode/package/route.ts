@@ -57,11 +57,11 @@ export async function GET(request: Request) {
 
   const service = createSupabaseServiceClient();
   const [
-    { data: hike },
-    { data: hikes },
-    { data: rawBookings },
-    { data: rawOrders },
-    { data: transportDeparture },
+    hikeResult,
+    hikesResult,
+    bookingsResult,
+    ordersResult,
+    transportResult,
   ] = await Promise.all([
     service
       .from("hikes")
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
     service
       .from("bookings")
       .select(
-        "id,booking_number,status,hike_id,total_cents,profile:profiles(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id,booking_participant_id),signed_waivers(id,booking_participant_id,signed_at),check_ins(id,booking_participant_id,checked_in_at)",
+        "id,booking_number,status,hike_id,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id,booking_participant_id),signed_waivers(id,booking_participant_id,signed_at),check_ins(id,booking_participant_id,checked_in_at)",
       )
       .eq("hike_id", parsed.data.hike)
       .eq("status", "CONFIRMED")
@@ -101,10 +101,23 @@ export async function GET(request: Request) {
       .eq("hike_id", parsed.data.hike)
       .maybeSingle(),
   ]);
-  if (!hike)
+  if (hikeResult.error || !hikeResult.data)
     return Response.json({ error: "Hike no encontrado." }, { status: 404 });
+  if (hikesResult.error || bookingsResult.error || ordersResult.error)
+    return Response.json(
+      {
+        error:
+          "No pudimos cargar la lista operativa. Actualiza el paquete e intenta nuevamente.",
+      },
+      { status: 500 },
+    );
+  const hike = hikeResult.data;
+  const hikes = hikesResult.data ?? [];
+  const rawBookings = bookingsResult.data ?? [];
+  const rawOrders = ordersResult.data ?? [];
+  const transportDeparture = transportResult.data;
 
-  const bookings = ((rawBookings ?? []) as unknown as HikeBooking[]).filter(
+  const bookings = (rawBookings as unknown as HikeBooking[]).filter(
     (booking) =>
       booking.booking_participants.length > 0 &&
       booking.signed_waivers.length >= booking.booking_participants.length,
@@ -115,7 +128,7 @@ export async function GET(request: Request) {
     }),
   );
   const deliveries: HikeDelivery[] = [];
-  for (const order of rawOrders ?? []) {
+  for (const order of rawOrders) {
     for (const item of order.order_items ?? []) {
       if (item.item_type !== "PRODUCT") continue;
       const fulfillment = Array.isArray(item.order_item_fulfillments)
@@ -160,7 +173,7 @@ export async function GET(request: Request) {
 
   const data: HikeModeData = {
     hike,
-    availableHikes: (hikes ?? []).map((item) => ({
+    availableHikes: hikes.map((item) => ({
       id: item.id,
       name: item.name,
       startsAt: item.starts_at,

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
   let query = supabase
     .from("booking_checkin_tokens")
     .select(
-      "id, revoked_at, used_at, expires_at, booking:bookings(id, booking_number, status, hike_id,total_cents,profile:profiles(first_name,last_name,email,phone), booking_participants(id, snapshot), booking_dogs(id, snapshot), transport_reservations(id, booking_participant_id),signed_waivers(id,booking_participant_id,signed_at), check_ins(id, booking_participant_id,checked_in_at))",
+      "id, revoked_at, used_at, expires_at, booking:bookings(id, booking_number, status, hike_id,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone), booking_participants(id, snapshot), booking_dogs(id, snapshot), transport_reservations(id, booking_participant_id),signed_waivers(id,booking_participant_id,signed_at), check_ins(id, booking_participant_id,checked_in_at))",
     )
     .eq("token_hash", tokenHash);
   if (signedPayload?.purpose === "checkin")

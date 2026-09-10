@@ -24,6 +24,10 @@ check(
   config.includes("poweredByHeader: false"),
   "Debe ocultarse X-Powered-By.",
 );
+check(
+  config.includes("worker-src 'self' blob:"),
+  "El lector QR necesita permitir su worker local sin relajar otros scripts.",
+);
 
 const proxy = read("app/lib/supabase/proxy.ts");
 check(
@@ -176,6 +180,12 @@ check(
   clientsAdmin.includes("bookings!bookings_profile_id_fkey") &&
     clientsAdmin.includes("clientsError"),
   "Clientes puede ocultar un error de relación y mostrar cero expedientes.",
+);
+const hikeModePackage = read("app/api/hike-mode/package/route.ts");
+check(
+  hikeModePackage.includes("profiles!bookings_profile_id_fkey") &&
+    hikeModePackage.includes("bookingsResult.error"),
+  "Modo hike puede ocultar un error de reservaciones y mostrar una lista vacía.",
 );
 const paymentsAdmin = read("app/admin/pagos/page.tsx");
 check(

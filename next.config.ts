@@ -10,6 +10,7 @@ const contentSecurityPolicy = [
   "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
   "frame-src https://www.instagram.com",
   "media-src 'self' blob: https://*.supabase.co",
+  "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self' https://checkout.stripe.com",

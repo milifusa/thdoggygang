@@ -673,6 +673,45 @@ footer small {
   }
 }
 
+.field-scan-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 50px;
+  margin: 0 20px 14px;
+  border: 1px solid var(--field-ink);
+  background: var(--field-action);
+  font-size: 0.69rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.field-scan-file svg {
+  width: 20px;
+}
+.field-scan-file input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.field-scanner-modal .field-scanner-feedback {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 20px 12px;
+  padding: 11px 13px;
+  background: #fff4d9;
+  color: var(--field-ink);
+  text-align: left;
+}
+.field-scanner-feedback svg {
+  width: 19px;
+  flex: 0 0 auto;
+}
+
 /* Stripe configuration diagnostics. */
 .stripe-diagnostics {
   display: grid;
