@@ -981,7 +981,14 @@ footer small {
 .hike-ops-group>div:first-child p { font-size:8px; font-weight:900; letter-spacing:.14em; }
 .hike-ops-group>div:first-child span { min-width:22px; height:22px; border-radius:50%; background:var(--yellow); display:grid; place-items:center; font-size:8px; font-weight:900; }
 .hike-ops-group>div:last-child { display:flex; flex-direction:column; gap:9px; }
-.hike-ops-card { min-height:112px; padding:10px; background:#fff; border:1px solid #e1ded7; display:grid; grid-template-columns:120px minmax(190px,.8fr) minmax(460px,1.6fr) 110px; gap:16px; align-items:center; }
+.hike-ops-card { position:relative; min-height:112px; padding:10px; background:#fff; border:1px solid #e1ded7; display:grid; grid-template-columns:120px minmax(190px,.8fr) minmax(460px,1.6fr) 110px; gap:16px; align-items:center; }
+.admin-card-hit { position:absolute; inset:0; z-index:1; border:0!important; min-height:0!important; padding:0!important; }
+.hike-ops-card:hover,.reservation-table>article:hover,.hike-detail-list>article:has(.admin-card-hit):hover,.admin-next:hover { border-color:#9b680d; box-shadow:0 8px 24px #2b211c12; }
+.hike-ops-card>img,.hike-ops-card>.hike-ops-main,.hike-ops-card>.hike-ops-stats { position:relative; z-index:2; pointer-events:none; }
+.hike-ops-card>.hike-ops-actions { position:relative; z-index:3; }
+.reservation-table>article { position:relative; }
+.reservation-table>article>div:not(.reservation-row-actions) { position:relative; z-index:2; pointer-events:none; }
+.reservation-row-actions { position:relative!important; z-index:3!important; pointer-events:auto!important; }
 .hike-ops-card>img { width:120px; height:90px; object-fit:cover; }
 .hike-ops-main>span { font-size:7px; color:#777; text-transform:uppercase; }
 .hike-ops-main h2 { margin:5px 0 9px; font-size:20px; }
@@ -1006,6 +1013,7 @@ footer small {
 .hike-detail-tabs,.site-admin-tabs { display:flex; gap:4px; overflow-x:auto; margin:0 0 18px; padding-bottom:5px; }
 .hike-detail-tabs a,.site-admin-tabs a { flex:0 0 auto; min-height:40px; padding:0 12px; background:#fff; border:1px solid #d8d4cb; display:flex; align-items:center; font-size:7px; font-weight:900; }
 .hike-detail-tabs a.active { background:#211914; color:#fff; }
+.hike-detail-kpis { grid-template-columns:repeat(5,1fr); }
 .hike-summary-grid { display:grid; grid-template-columns:1.1fr 1fr .8fr; gap:14px; }
 .hike-summary-grid>.admin-panel { padding:20px; }
 .hike-summary-grid h2 { margin:0 0 14px; font-size:20px; }
@@ -1017,7 +1025,8 @@ footer small {
 .hike-quick-actions a { min-height:38px; border:1px solid #bbb; display:flex; align-items:center; justify-content:center; font-size:7px; font-weight:900; }
 .hike-detail-list,.hike-dog-list { padding:22px; }
 .hike-detail-list>h2,.hike-dog-list>h2 { margin:0 0 15px; }
-.hike-detail-list>article { min-height:65px; border-top:1px solid #e2dfd8; display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:14px; }
+.hike-detail-list>article { position:relative; min-height:65px; border-top:1px solid #e2dfd8; display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:14px; }
+.hike-detail-list>article:has(.admin-card-hit)>:not(.admin-card-hit) { position:relative; z-index:2; pointer-events:none; }
 .hike-detail-list article>div { display:flex; flex-direction:column; gap:4px; }
 .hike-detail-list span,.hike-detail-list small { color:#777; font-size:7px; }
 .hike-detail-list strong,.hike-detail-list b,.hike-detail-list em { font-size:9px; font-style:normal; }
@@ -2980,9 +2989,19 @@ footer small {
   margin: 6px 0;
 }
 .admin-next {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(280px, 0.85fr) 1.15fr;
   background: #fff;
+}
+.admin-next > .admin-next-image,
+.admin-next > div:last-child {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+.admin-next > div:last-child a {
+  pointer-events: auto;
 }
 .admin-next-image {
   position: relative;

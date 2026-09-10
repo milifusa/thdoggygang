@@ -35,7 +35,7 @@ export default async function AdminDashboard() {
     supabase
       .from("payments")
       .select(
-        "id,amount_cents,created_at,order:orders(order_number,profile:profiles(first_name,last_name),booking:bookings(booking_number,profile:profiles(first_name,last_name)))",
+        "id,amount_cents,created_at,order:orders(order_number,profile:profiles(first_name,last_name),booking:bookings(booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name)))",
       )
       .eq("status", "UNDER_REVIEW")
       .order("created_at", { ascending: false })
@@ -47,7 +47,7 @@ export default async function AdminDashboard() {
       .is("cancelled_at", null),
     supabase
       .from("bookings")
-      .select("id,status,hike_id")
+      .select("id,status,hike_id,booking_participants(id)")
       .in("status", ["CONFIRMED", "PENDING_PAYMENT"])
       .is("cancelled_at", null),
     supabase.from("photos").select("id", { count: "exact", head: true }),
@@ -56,6 +56,14 @@ export default async function AdminDashboard() {
   const nextHike = hikes?.[0] ?? null;
   const nextBookings = (nextHikeBookings ?? []).filter(
     (booking) => booking.hike_id === nextHike?.id,
+  );
+  const nextPeople = nextBookings.reduce(
+    (sum, booking) => sum + booking.booking_participants.length,
+    0,
+  );
+  const nextAvailable = Math.max(
+    0,
+    (nextHike?.capacity ?? 0) - nextPeople,
   );
   const confirmedIncome = (paidPayments ?? []).reduce(
     (sum, payment) => sum + payment.amount_cents,
@@ -106,6 +114,11 @@ export default async function AdminDashboard() {
         </section>
         {nextHike ? (
           <section className="admin-next admin-next-compact">
+            <Link
+              className="admin-card-hit"
+              href={`/admin/hikes/${nextHike.id}`}
+              aria-label={`Administrar ${nextHike.name}`}
+            />
             <div className="admin-next-image">
               <img
                 src={hikeCoverUrl(nextHike.id, nextHike.cover_path)}
@@ -125,8 +138,8 @@ export default async function AdminDashboard() {
                   <small>RESERVAS</small>
                 </div>
                 <div>
-                  <strong>{nextHike.capacity}</strong>
-                  <small>CUPO</small>
+                  <strong>{nextAvailable}</strong>
+                  <small>LUGARES LIBRES</small>
                 </div>
                 <div>
                   <strong>{pendingPayments?.length ?? 0}</strong>

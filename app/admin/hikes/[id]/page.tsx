@@ -73,6 +73,21 @@ type Payment = {
   order:
     | {
         booking_id: string | null;
+        pickup_hike_id: string | null;
+        order_number: string;
+        fulfillment_mode: string | null;
+        profile:
+          | {
+              first_name: string;
+              last_name: string;
+              email: string | null;
+            }
+          | Array<{
+              first_name: string;
+              last_name: string;
+              email: string | null;
+            }>
+          | null;
         order_items: Array<{
           item_type: string;
           reference_id: string | null;
@@ -83,6 +98,21 @@ type Payment = {
       }
     | Array<{
         booking_id: string | null;
+        pickup_hike_id: string | null;
+        order_number: string;
+        fulfillment_mode: string | null;
+        profile:
+          | {
+              first_name: string;
+              last_name: string;
+              email: string | null;
+            }
+          | Array<{
+              first_name: string;
+              last_name: string;
+              email: string | null;
+            }>
+          | null;
         order_items: Array<{
           item_type: string;
           reference_id: string | null;
@@ -133,7 +163,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("bookings")
       .select(
-        "id,booking_number,status,total_cents,profile:profiles(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id,signed_at),check_ins(id,booking_participant_id)",
+        "id,booking_number,status,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id,signed_at),check_ins(id,booking_participant_id)",
       )
       .eq("hike_id", id)
       .neq("status", "CANCELLED")
@@ -148,7 +178,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("payments")
       .select(
-        "id,status,method,amount_cents,created_at,order:orders(booking_id,order_items(item_type,reference_id,description,quantity,unit_price_cents))",
+        "id,status,method,amount_cents,created_at,order:orders(booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(item_type,reference_id,description,quantity,unit_price_cents))",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -188,6 +218,7 @@ export default async function HikeAdminDetail({
       return Boolean(
         order &&
           ((order.booking_id && bookingIds.has(order.booking_id)) ||
+            order.pickup_hike_id === id ||
             order.order_items.some(
               (i) => i.reference_id && photoIds.has(i.reference_id),
             )),
@@ -197,6 +228,7 @@ export default async function HikeAdminDetail({
   let hikeRevenue = 0,
     transportRevenue = 0,
     photoRevenue = 0,
+    productRevenue = 0,
     refunded = 0,
     pending = 0;
   payments.forEach((payment) => {
@@ -216,9 +248,22 @@ export default async function HikeAdminDetail({
       const amount = i.quantity * i.unit_price_cents;
       if (i.item_type === "TRANSPORT") transportRevenue += amount;
       else if (i.item_type.startsWith("PHOTO")) photoRevenue += amount;
+      else if (i.item_type === "PRODUCT") productRevenue += amount;
       else if (i.item_type === "HIKE") hikeRevenue += amount;
     });
   });
+  const productsSold = payments.reduce((sum, payment) => {
+    if (payment.status !== "PAID") return sum;
+    const order = Array.isArray(payment.order)
+      ? payment.order[0]
+      : payment.order;
+    return (
+      sum +
+      (order?.order_items ?? [])
+        .filter((item) => item.item_type === "PRODUCT")
+        .reduce((count, item) => count + item.quantity, 0)
+    );
+  }, 0);
   const available = Math.max(0, hike.capacity - people);
   const trans = Array.isArray(hike.transport_configurations)
     ? hike.transport_configurations[0]
@@ -306,9 +351,19 @@ export default async function HikeAdminDetail({
               <article>
                 <span>RECAUDADO</span>
                 <strong>
-                  {money(hikeRevenue + transportRevenue + photoRevenue)}
+                  {money(
+                    hikeRevenue +
+                      transportRevenue +
+                      photoRevenue +
+                      productRevenue,
+                  )}
                 </strong>
                 <small>{money(pending)} pendiente</small>
+              </article>
+              <article>
+                <span>PRODUCTOS</span>
+                <strong>{productsSold}</strong>
+                <small>{money(productRevenue)} vendidos</small>
               </article>
             </section>
             <section className="hike-summary-grid">
@@ -363,13 +418,22 @@ export default async function HikeAdminDetail({
                     <dd>{money(photoRevenue)}</dd>
                   </div>
                   <div>
+                    <dt>Productos</dt>
+                    <dd>{money(productRevenue)}</dd>
+                  </div>
+                  <div>
                     <dt>Reembolsado</dt>
                     <dd>{money(refunded)}</dd>
                   </div>
                   <div>
                     <dt>Total generado</dt>
                     <dd>
-                      {money(hikeRevenue + transportRevenue + photoRevenue)}
+                      {money(
+                        hikeRevenue +
+                          transportRevenue +
+                          photoRevenue +
+                          productRevenue,
+                      )}
                     </dd>
                   </div>
                 </dl>
@@ -394,6 +458,11 @@ export default async function HikeAdminDetail({
             <h2>Inscripciones</h2>
             {bookings.map((b) => (
               <article key={b.id}>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/reservaciones/${b.id}`}
+                  aria-label={`Abrir ${b.booking_number}`}
+                />
                 <div>
                   <span>{b.booking_number}</span>
                   <strong>{profileName(b.profile)}</strong>
@@ -483,16 +552,23 @@ export default async function HikeAdminDetail({
             <h2>Pagos de esta aventura</h2>
             {payments.map((p) => {
               const order = Array.isArray(p.order) ? p.order[0] : p.order;
+              const purchaser = Array.isArray(order?.profile)
+                ? order.profile[0]
+                : order?.profile;
               return (
                 <article key={p.id}>
                   <div>
-                    <span>{adminDate(p.created_at)}</span>
+                    <span>
+                      {order?.order_number ?? "ORDEN"} · {adminDate(p.created_at)}
+                    </span>
                     <strong>
                       {order?.order_items
                         .map((i) => i.description)
                         .join(", ") || "Pago"}
                     </strong>
-                    <small>{p.method}</small>
+                    <small>
+                      {profileName(purchaser)} · {p.method}
+                    </small>
                   </div>
                   <b>{money(p.amount_cents)}</b>
                   <em>{p.status}</em>

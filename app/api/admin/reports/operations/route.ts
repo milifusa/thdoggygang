@@ -34,7 +34,7 @@ export async function GET(request: Request) {
     const { data } = await supabase
       .from("bookings")
       .select(
-        "booking_number,status,profile:profiles(first_name,last_name,email,phone),transport_reservations(id,price_cents,booking_participant:booking_participants(snapshot))",
+        "booking_number,status,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),transport_reservations(id,price_cents,booking_participant:booking_participants(snapshot))",
       )
       .eq("hike_id", hikeId!);
     const rows: unknown[][] = [
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     const { data } = await supabase
       .from("booking_cancellation_requests")
       .select(
-        "status,reason,refundable_amount_cents,created_at,resolved_at,resolution_note,booking:bookings!inner(booking_number,hike_id,profile:profiles(first_name,last_name,email))",
+        "status,reason,refundable_amount_cents,created_at,resolved_at,resolution_note,booking:bookings!inner(booking_number,hike_id,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email))",
       )
       .eq("booking.hike_id", hikeId!);
     const rows: unknown[][] = [

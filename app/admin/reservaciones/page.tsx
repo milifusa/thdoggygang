@@ -109,7 +109,7 @@ export default async function ReservationsAdminPage({
     supabase
       .from("bookings")
       .select(
-        "id,booking_number,status,total_cents,created_at,updated_at,last_activity_at,last_reminder_at,current_step,profile:profiles(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id),check_ins(id),booking_checkin_tokens(id,used_at,revoked_at),orders(id,status,payments(status,method,amount_cents),order_items(id,item_type,quantity,order_item_fulfillments(status)))",
+        "id,booking_number,status,total_cents,created_at,updated_at,last_activity_at,last_reminder_at,current_step,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),hike:hikes(id,name,starts_at),booking_participants(id),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id),check_ins(id),booking_checkin_tokens(id,used_at,revoked_at),orders(id,status,payments(status,method,amount_cents),order_items(id,item_type,quantity,order_item_fulfillments(status)))",
       )
       .order("created_at", { ascending: false })
       .limit(500),
@@ -423,6 +423,11 @@ export default async function ReservationsAdminPage({
             ).length;
             return (
               <article key={booking.id}>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/reservaciones/${booking.id}`}
+                  aria-label={`Abrir ${booking.booking_number}`}
+                />
                 <div>
                   <small>{booking.booking_number}</small>
                   <strong>{profileName(booking.profile)}</strong>

@@ -147,6 +147,41 @@ for (const route of [
   );
 }
 
+for (const path of [
+  "app/admin/hikes/[id]/page.tsx",
+  "app/admin/reservaciones/page.tsx",
+  "app/admin/reservaciones/[bookingId]/page.tsx",
+  "app/api/admin/reports/manifest/route.ts",
+]) {
+  check(
+    read(path).includes("profiles!bookings_profile_id_fkey"),
+    `${path} conserva una relación ambigua entre reservaciones y clientes.`,
+  );
+}
+const hikeAdmin = read("app/admin/hikes/[id]/page.tsx");
+check(
+  hikeAdmin.includes("order.pickup_hike_id === id") &&
+    hikeAdmin.includes("productRevenue") &&
+    hikeAdmin.includes("productsSold"),
+  "El detalle administrativo del hike no atribuye ventas de productos y recolecciones.",
+);
+const adminDashboard = read("app/admin/page.tsx");
+check(
+  adminDashboard.includes("nextAvailable") &&
+    adminDashboard.includes("LUGARES LIBRES"),
+  "El dashboard muestra capacidad total en vez del cupo restante.",
+);
+for (const path of [
+  "app/admin/page.tsx",
+  "app/admin/hikes/page.tsx",
+  "app/admin/reservaciones/page.tsx",
+]) {
+  check(
+    read(path).includes("admin-card-hit"),
+    `${path} no permite abrir el detalle desde toda la tarjeta.`,
+  );
+}
+
 for (const name of ["magic_link", "confirmation", "invite", "recovery"]) {
   const template = read(`supabase/templates/${name}.html`);
   check(template.includes("{{ .TokenHash }}"), `${name} no usa TokenHash.`);

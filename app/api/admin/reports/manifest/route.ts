@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const { data: bookings } = await supabase
     .from("bookings")
     .select(
-      "booking_number,status,total_cents,profile:profiles(first_name,last_name,email,phone),booking_participants(snapshot),booking_dogs(snapshot),transport_reservations(id),signed_waivers(id),check_ins(id)",
+      "booking_number,status,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(snapshot),booking_dogs(snapshot),transport_reservations(id),signed_waivers(id),check_ins(id)",
     )
     .eq("hike_id", hikeId!)
     .order("created_at");

@@ -261,6 +261,11 @@ export default async function HikesAdminPage({
                   : "DISPONIBLE";
             return (
               <article className="hike-ops-card" key={h.id}>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${h.id}`}
+                  aria-label={`Administrar ${h.name}`}
+                />
                 <img src={hikeCoverUrl(h.id, h.cover_path)} alt={h.name} />
                 <div className="hike-ops-main">
                   <span>

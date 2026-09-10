@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const { data: rows } = await supabase
     .from("payments")
     .select(
-      "provider,provider_payment_id,method,status,amount_cents,paid_at,created_at,order:orders(order_number,booking:bookings!inner(hike_id,booking_number,profile:profiles(first_name,last_name,email)))",
+      "provider,provider_payment_id,method,status,amount_cents,paid_at,created_at,order:orders(order_number,booking:bookings!inner(hike_id,booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email)))",
     )
     .eq("order.booking.hike_id", hikeId!)
     .order("created_at");
