@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     service
       .from("orders")
       .select(
-        "id,booking_id,fulfillment_mode,pickup_hike_id,status,order_items(id,item_type,description,quantity,order_item_fulfillments(id,status,delivery_location,delivered_at))",
+        "id,order_number,booking_id,fulfillment_mode,pickup_hike_id,status,order_items(id,item_type,description,quantity,unit_price_cents,order_item_fulfillments(id,status,delivery_location,delivered_at))",
       )
       .eq("pickup_hike_id", parsed.data.hike)
       .eq("fulfillment_mode", "HIKE_PICKUP")
@@ -114,8 +114,34 @@ export async function GET(request: Request) {
   const hike = hikeResult.data;
   const hikes = hikesResult.data ?? [];
   const rawBookings = bookingsResult.data ?? [];
-  const rawOrders = ordersResult.data ?? [];
   const transportDeparture = transportResult.data;
+
+  const bookingIds = rawBookings.map((booking) => booking.id);
+  const reservationOrdersResult = bookingIds.length
+    ? await service
+        .from("orders")
+        .select(
+          "id,order_number,booking_id,fulfillment_mode,pickup_hike_id,status,order_items(id,item_type,description,quantity,unit_price_cents,order_item_fulfillments(id,status,delivery_location,delivered_at))",
+        )
+        .in("booking_id", bookingIds)
+        .in("status", ["PAID", "UNDER_REVIEW"])
+    : { data: [], error: null };
+  if (reservationOrdersResult.error)
+    return Response.json(
+      {
+        error:
+          "No pudimos cargar los artículos comprados. Actualiza el paquete e intenta nuevamente.",
+      },
+      { status: 500 },
+    );
+  const rawOrders = Array.from(
+    new Map(
+      [
+        ...(ordersResult.data ?? []),
+        ...(reservationOrdersResult.data ?? []),
+      ].map((order) => [order.id, order]),
+    ).values(),
+  );
 
   const bookings = (rawBookings as unknown as HikeBooking[]).filter(
     (booking) =>
@@ -138,8 +164,10 @@ export async function GET(request: Request) {
         id: fulfillment?.id ?? item.id,
         orderItemId: item.id,
         bookingId: order.booking_id ?? "",
+        orderNumber: order.order_number,
         description: item.description,
         quantity: item.quantity,
+        unitPriceCents: item.unit_price_cents,
         status: fulfillment?.status ?? "PENDING",
         deliveryLocation: fulfillment?.delivery_location ?? null,
         deliveredAt: fulfillment?.delivered_at ?? null,

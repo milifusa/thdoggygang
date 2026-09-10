@@ -15,6 +15,7 @@ export type HikeDog = {
   snapshot: {
     name?: string;
     breed?: string;
+    size?: string;
     sociability?: string;
     reactivity?: string;
     medical_conditions?: string;
@@ -27,8 +28,10 @@ export type HikeDelivery = {
   id: string;
   orderItemId: string;
   bookingId: string;
+  orderNumber: string;
   description: string;
   quantity: number;
+  unitPriceCents: number;
   status: string;
   deliveryLocation: string | null;
   deliveredAt: string | null;

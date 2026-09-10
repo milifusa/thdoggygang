@@ -35,12 +35,14 @@ check(
   "Las acciones móviles del wizard no tienen su contenedor estable.",
 );
 check(
-  css.includes('input:not([type="checkbox"]):not([type="radio"]):not([type="range"])') &&
-    css.includes("font-size: 16px !important"),
+  css.includes(
+    'input:not([type="checkbox"]):not([type="radio"]):not([type="range"])',
+  ) && css.includes("font-size: 16px !important"),
   "Los campos pequeños pueden provocar zoom automático en Safari móvil.",
 );
 check(
-  css.includes("overflow-x: clip") && layout.includes("interactiveWidget: 'resizes-content'"),
+  css.includes("overflow-x: clip") &&
+    layout.includes("interactiveWidget: 'resizes-content'"),
   "Falta protección contra desplazamiento horizontal o teclado móvil.",
 );
 check(
@@ -50,7 +52,8 @@ check(
   "El flujo no explica qué requisito impide avanzar.",
 );
 check(
-  wizard.indexOf("{syncMessage && (") > wizard.indexOf('className="wizard-actions"'),
+  wizard.indexOf("{syncMessage && (") >
+    wizard.indexOf('className="wizard-actions"'),
   "Los errores deben mostrarse dentro del pie visible del wizard.",
 );
 check(
@@ -60,7 +63,7 @@ check(
   "El pase móvil debe guardarse como una imagen PNG real.",
 );
 check(
-  ticket.includes('/brand/logo-horizontal-sun.png') &&
+  ticket.includes("/brand/logo-horizontal-sun.png") &&
     ticket.includes('"Protest Riot"') &&
     ticket.includes('"Atkinson Hyperlegible"'),
   "El pase descargable no usa el imagotipo y las tipografías oficiales.",
@@ -76,6 +79,12 @@ check(
     hikeMode.includes('timeZone: "America/Mexico_City"') &&
     !hikeMode.includes("BarcodeDetector"),
   "Modo hike no tiene un lector QR compatible con iPhone, Android y fotografías.",
+);
+check(
+  hikeMode.includes("INFORMACIÓN IMPORTANTE") &&
+    hikeMode.includes("ARTÍCULOS COMPRADOS") &&
+    hikeMode.includes("selectedDeliveries"),
+  "La ficha de check-in no destaca perritos y artículos comprados.",
 );
 
 if (failures.length) {

@@ -7,8 +7,9 @@ alter table public.person_profiles
   add constraint person_profiles_minor_birth_date_required
   check (not is_minor or birth_date is not null) not valid;
 
-alter table public.person_profiles
-  validate constraint person_profiles_minor_birth_date_required;
+-- Keep the constraint NOT VALID so historic minors without a recorded date can
+-- still be completed by an administrator. PostgreSQL enforces it for every new
+-- or updated profile while legacy data is repaired without inventing dates.
 
 create or replace function public.save_booking_draft(
   p_hike_slug text,

@@ -41,12 +41,7 @@ import {
 import { verifySignedPayload } from "../../lib/security/signed-token";
 
 type Filter =
-  | "ALL"
-  | "PENDING"
-  | "CHECKED"
-  | "ALERTS"
-  | "TRANSPORT"
-  | "DELIVERIES";
+  "ALL" | "PENDING" | "CHECKED" | "ALERTS" | "TRANSPORT" | "DELIVERIES";
 
 function personName(person?: HikeBooking["booking_participants"][number]) {
   return (
@@ -61,9 +56,9 @@ function hasDogAlert(booking: HikeBooking) {
   return booking.booking_dogs.some((dog) =>
     Boolean(
       dog.snapshot.reactivity ||
-        dog.snapshot.medical_conditions ||
-        dog.snapshot.medications ||
-        dog.snapshot.notes,
+      dog.snapshot.medical_conditions ||
+      dog.snapshot.medications ||
+      dog.snapshot.notes,
     ),
   );
 }
@@ -74,6 +69,13 @@ function formatTime(value?: string | null) {
     minute: "2-digit",
     timeZone: "America/Mexico_City",
   }).format(new Date(value));
+}
+function formatMoney(cents: number) {
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
 }
 
 function applyPendingOperations(
@@ -379,6 +381,15 @@ export function HikeMode({
       [],
     [data?.deliveries],
   );
+  const selectedDeliveries = useMemo(
+    () =>
+      selected
+        ? (data?.deliveries ?? []).filter(
+            (delivery) => delivery.bookingId === selected.id,
+          )
+        : [],
+    [data?.deliveries, selected],
+  );
   const visibleBookings = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("es-MX");
     return (data?.bookings ?? []).filter((booking) => {
@@ -621,7 +632,9 @@ export function HikeMode({
       );
       qrScanner.current = scanner;
       await scanner.start();
-      setMessage("Cámara lista. Acerca el QR hasta verlo completo dentro del marco.");
+      setMessage(
+        "Cámara lista. Acerca el QR hasta verlo completo dentro del marco.",
+      );
     } catch (error) {
       stopScanner();
       setMessage(
@@ -990,43 +1003,104 @@ export function HikeMode({
                 <h2>{bookingName(selected)}</h2>
               </div>
             </header>
-            {selected.transport_reservations.length > 0 && (
-              <div className="field-transport-summary">
-                <BusFront />
-                <strong>
-                  {selected.transport_reservations.length} lugares de transporte
-                </strong>
-              </div>
-            )}
-            {hasDogAlert(selected) && (
-              <div className="field-dog-alert">
+            <div className="field-important">
+              <div className="field-important-heading">
                 <CircleAlert />
                 <div>
-                  <strong>INDICACIONES DE PERRITOS</strong>
-                  {selected.booking_dogs
-                    .filter(
-                      (dog) =>
-                        dog.snapshot.reactivity ||
-                        dog.snapshot.medical_conditions ||
-                        dog.snapshot.medications ||
-                        dog.snapshot.notes,
-                    )
-                    .map((dog) => (
-                      <p key={dog.id}>
-                        <b>{dog.snapshot.name ?? "Perrito"}:</b>{" "}
-                        {[
-                          dog.snapshot.reactivity,
-                          dog.snapshot.medical_conditions,
-                          dog.snapshot.medications,
-                          dog.snapshot.notes,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </p>
-                    ))}
+                  <span>INFORMACIÓN IMPORTANTE</span>
+                  <strong>Todo lo necesario antes del check-in</strong>
                 </div>
               </div>
-            )}
+              <div className="field-important-grid">
+                <article>
+                  <div className="field-important-title">
+                    <Dog />
+                    <strong>
+                      {selected.booking_dogs.length} PERRITO
+                      {selected.booking_dogs.length === 1 ? "" : "S"}
+                    </strong>
+                  </div>
+                  {selected.booking_dogs.map((dog) => {
+                    const details = [
+                      dog.snapshot.breed,
+                      dog.snapshot.size,
+                      dog.snapshot.sociability,
+                    ].filter(Boolean);
+                    const indications = [
+                      dog.snapshot.reactivity,
+                      dog.snapshot.medical_conditions,
+                      dog.snapshot.medications,
+                      dog.snapshot.notes,
+                    ].filter(Boolean);
+                    return (
+                      <div className="field-important-row" key={dog.id}>
+                        <strong>{dog.snapshot.name ?? "Perrito"}</strong>
+                        {details.length > 0 && (
+                          <small>{details.join(" · ")}</small>
+                        )}
+                        {indications.length > 0 && (
+                          <p>
+                            <b>Cuidados:</b> {indications.join(" · ")}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!selected.booking_dogs.length && (
+                    <p className="field-important-empty">
+                      Sin perritos registrados.
+                    </p>
+                  )}
+                </article>
+                <article>
+                  <div className="field-important-title">
+                    <PackageCheck />
+                    <strong>ARTÍCULOS COMPRADOS</strong>
+                  </div>
+                  {selectedDeliveries.map((delivery) => (
+                    <div
+                      className="field-important-row"
+                      key={delivery.orderItemId}
+                    >
+                      <strong>
+                        {delivery.quantity} × {delivery.description}
+                      </strong>
+                      <small>
+                        {formatMoney(
+                          delivery.unitPriceCents * delivery.quantity,
+                        )}{" "}
+                        · {delivery.orderNumber}
+                      </small>
+                      <span
+                        className={
+                          delivery.status === "DELIVERED"
+                            ? "field-delivery-status delivered"
+                            : "field-delivery-status"
+                        }
+                      >
+                        {delivery.status === "DELIVERED"
+                          ? "ENTREGADO"
+                          : "ENTREGA PENDIENTE EN ESTE HIKE"}
+                      </span>
+                    </div>
+                  ))}
+                  {!selectedDeliveries.length && (
+                    <p className="field-important-empty">
+                      Sin artículos comprados.
+                    </p>
+                  )}
+                </article>
+              </div>
+              {selected.transport_reservations.length > 0 && (
+                <div className="field-important-transport">
+                  <BusFront />
+                  <strong>
+                    {selected.transport_reservations.length} lugares de
+                    transporte
+                  </strong>
+                </div>
+              )}
+            </div>
             <div className="field-people">
               <span>ASISTENTES</span>
               {selected.booking_participants.map((person) => (
@@ -1048,16 +1122,6 @@ export function HikeMode({
                 </article>
               ))}
             </div>
-            {selected.booking_dogs.length > 0 && (
-              <div className="field-booking-dogs">
-                <span>PERRITOS</span>
-                <strong>
-                  {selected.booking_dogs
-                    .map((dog) => dog.snapshot.name ?? "Perrito")
-                    .join(" · ")}
-                </strong>
-              </div>
-            )}
             <div className="field-sheet-actions">
               <button
                 onClick={() =>

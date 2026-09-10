@@ -48,7 +48,9 @@ check(
   "Las fotos originales todavía pasan por el servidor web.",
 );
 check(
-  photoDownload.includes('from(watermarked ? "hike-watermarked" : "hike-originals")'),
+  photoDownload.includes(
+    'from(watermarked ? "hike-watermarked" : "hike-originals")',
+  ),
   "La descarga pagada no entrega el original privado.",
 );
 check(
@@ -84,17 +86,24 @@ for (const route of [
 ]) {
   check(existsSync(join(root, route)), `Falta la ruta protegida ${route}.`);
   if (existsSync(join(root, route)))
-    check(read(route).includes("auth.getUser()"), `${route} no verifica la sesión en servidor.`);
+    check(
+      read(route).includes("auth.getUser()"),
+      `${route} no verifica la sesión en servidor.`,
+    );
 }
 const memberMigration = read(
   "supabase/migrations/202609090002_member_value_features.sql",
 );
 check(
-  memberMigration.includes("alter table public.reward_ledger enable row level security"),
+  memberMigration.includes(
+    "alter table public.reward_ledger enable row level security",
+  ),
   "El libro de recompensas no activa RLS.",
 );
 check(
-  memberMigration.includes("revoke insert,update,delete on table public.reward_ledger from authenticated"),
+  memberMigration.includes(
+    "revoke insert,update,delete on table public.reward_ledger from authenticated",
+  ),
   "Los clientes podrían modificar sus propios puntos.",
 );
 check(
@@ -184,7 +193,9 @@ check(
 const hikeModePackage = read("app/api/hike-mode/package/route.ts");
 check(
   hikeModePackage.includes("profiles!bookings_profile_id_fkey") &&
-    hikeModePackage.includes("bookingsResult.error"),
+    hikeModePackage.includes("bookingsResult.error") &&
+    hikeModePackage.includes('.in("booking_id", bookingIds)') &&
+    hikeModePackage.includes("reservationOrdersResult.error"),
   "Modo hike puede ocultar un error de reservaciones y mostrar una lista vacía.",
 );
 const paymentsAdmin = read("app/admin/pagos/page.tsx");
