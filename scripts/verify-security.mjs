@@ -171,6 +171,12 @@ check(
     adminDashboard.includes("LUGARES LIBRES"),
   "El dashboard muestra capacidad total en vez del cupo restante.",
 );
+const clientsAdmin = read("app/admin/clientes/page.tsx");
+check(
+  clientsAdmin.includes("bookings!bookings_profile_id_fkey") &&
+    clientsAdmin.includes("clientsError"),
+  "Clientes puede ocultar un error de relación y mostrar cero expedientes.",
+);
 for (const path of [
   "app/admin/page.tsx",
   "app/admin/hikes/page.tsx",

@@ -29,11 +29,11 @@ type BookingRow = {
 export default async function ClientsAdminPage() {
   await requireStaffSession("/admin/clientes");
   const supabase = await createSupabaseServerClient();
-  const [{ data: clients }, { data: next }] = await Promise.all([
+  const [{ data: clients, error: clientsError }, { data: next }] = await Promise.all([
     supabase
       .from("profiles")
       .select(
-        "id,first_name,last_name,email,phone,created_at,person_profiles(id),dogs(id),bookings(id,booking_number,status,total_cents,created_at,hike:hikes(id,name,starts_at),signed_waivers(id,signed_at,pdf_path,document_hash))",
+        "id,first_name,last_name,email,phone,created_at,person_profiles(id),dogs(id),bookings:bookings!bookings_profile_id_fkey(id,booking_number,status,total_cents,created_at,hike:hikes(id,name,starts_at),signed_waivers(id,signed_at,pdf_path,document_hash))",
       )
       .eq("role", "CLIENT")
       .is("deleted_at", null)
@@ -48,6 +48,10 @@ export default async function ClientsAdminPage() {
       .limit(1)
       .maybeSingle(),
   ]);
+  if (clientsError)
+    throw new Error("No pudimos cargar los expedientes de clientes.", {
+      cause: clientsError,
+    });
 
   return (
     <main className="admin-page">
