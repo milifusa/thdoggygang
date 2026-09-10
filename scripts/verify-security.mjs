@@ -177,6 +177,12 @@ check(
     clientsAdmin.includes("clientsError"),
   "Clientes puede ocultar un error de relación y mostrar cero expedientes.",
 );
+const paymentsAdmin = read("app/admin/pagos/page.tsx");
+check(
+  paymentsAdmin.includes("paymentsResult.error") &&
+    paymentsAdmin.includes("paidPayments.length"),
+  "Pagos puede ocultar un error de consulta o no mostrar cuántos cobros confirmó.",
+);
 for (const path of [
   "app/admin/page.tsx",
   "app/admin/hikes/page.tsx",

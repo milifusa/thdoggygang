@@ -18,7 +18,7 @@ export default async function PaymentsAdminPage({
   await requireStaffSession("/admin/pagos");
   const filters = await searchParams;
   const supabase = await createSupabaseServerClient();
-  const [{ data: payments }, { data: next }] = await Promise.all([
+  const [paymentsResult, nextHikeResult] = await Promise.all([
     supabase
       .from("payments")
       .select(
@@ -35,18 +35,29 @@ export default async function PaymentsAdminPage({
       .limit(1)
       .maybeSingle(),
   ]);
+  if (paymentsResult.error) {
+    throw new Error(
+      `No fue posible cargar los pagos: ${paymentsResult.error.message}`,
+    );
+  }
+  if (nextHikeResult.error) {
+    throw new Error(
+      `No fue posible cargar el próximo hike: ${nextHikeResult.error.message}`,
+    );
+  }
+  const payments = paymentsResult.data ?? [];
+  const next = nextHikeResult.data;
+  const paidPayments = payments.filter((item) => item.status === "PAID");
   const paid =
-    payments
-      ?.filter((item) => item.status === "PAID")
-      .reduce((sum, item) => sum + item.amount_cents, 0) ?? 0;
+    paidPayments.reduce((sum, item) => sum + item.amount_cents, 0);
   const pending =
     payments
-      ?.filter((item) => ["PENDING", "UNDER_REVIEW"].includes(item.status))
-      .reduce((sum, item) => sum + item.amount_cents, 0) ?? 0;
+      .filter((item) => ["PENDING", "UNDER_REVIEW"].includes(item.status))
+      .reduce((sum, item) => sum + item.amount_cents, 0);
   const term = (filters.q ?? "").trim().toLocaleLowerCase("es-MX");
   const status = (filters.status ?? "ALL").toUpperCase();
   const method = (filters.method ?? "ALL").toUpperCase();
-  const visible = (payments ?? []).filter((payment) => {
+  const visible = payments.filter((payment) => {
     const order = Array.isArray(payment.order)
       ? payment.order[0]
       : payment.order;
@@ -84,7 +95,7 @@ export default async function PaymentsAdminPage({
           <article>
             <span>COBRADO</span>
             <strong>{money(paid)}</strong>
-            <small>pagos confirmados</small>
+            <small>{paidPayments.length} pagos confirmados</small>
           </article>
           <article>
             <span>PENDIENTE</span>
@@ -93,7 +104,7 @@ export default async function PaymentsAdminPage({
           </article>
           <article>
             <span>OPERACIONES</span>
-            <strong>{payments?.length ?? 0}</strong>
+            <strong>{payments.length}</strong>
             <small>historial completo</small>
           </article>
         </section>
