@@ -142,6 +142,9 @@ export default async function MyAdventurePage({
             <AdventureTicket
               token={token}
               bookingNumber={booking.booking_number}
+              hikeName={hike.name}
+              hikeDate={date(hike.starts_at)}
+              location={hike.meeting_point ?? hike.location_name}
             />
           ) : (
             <div className="ticket-pending">

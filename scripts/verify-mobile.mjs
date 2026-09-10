@@ -8,6 +8,14 @@ const wizard = readFileSync(
   join(root, "app/reservar/[slug]/wizard.tsx"),
   "utf8",
 );
+const ticket = readFileSync(
+  join(root, "app/mi-manada/aventuras/[slug]/ticket-client.tsx"),
+  "utf8",
+);
+const adventureCenter = readFileSync(
+  join(root, "app/mi-manada/aventuras/[slug]/adventure-center.tsx"),
+  "utf8",
+);
 const failures = [];
 const check = (condition, message) => {
   if (!condition) failures.push(message);
@@ -40,6 +48,17 @@ check(
 check(
   wizard.indexOf("{syncMessage && (") > wizard.indexOf('className="wizard-actions"'),
   "Los errores deben mostrarse dentro del pie visible del wizard.",
+);
+check(
+  ticket.includes("QRCodeCanvas") &&
+    ticket.includes('canvas.toBlob(resolve, "image/png", 1)') &&
+    !ticket.includes("window.print()"),
+  "El pase móvil debe guardarse como una imagen PNG real.",
+);
+check(
+  adventureCenter.includes('credentials: "include"') &&
+    adventureCenter.includes("downloadProtected"),
+  "Las descargas del Centro de aventura no conservan explícitamente la sesión.",
 );
 
 if (failures.length) {

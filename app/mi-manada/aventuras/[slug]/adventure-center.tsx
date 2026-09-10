@@ -19,6 +19,7 @@ export function AdventureCenter({ bookingId, status, signed, participants, check
   const [notice, setNotice] = useState("");
   const [review, setReview] = useState(initialReview ?? { route_rating: 5, guide_rating: 5, transport_rating: null, body: "" });
   const [savingReview, setSavingReview] = useState(false);
+  const [downloading, setDownloading] = useState<"calendar" | "guide" | null>(null);
   const paid = status === "CONFIRMED" || status === "COMPLETED";
   const steps = [
     { label: "Reservación", complete: status !== "DRAFT" }, { label: "Pago", complete: paid },
@@ -47,13 +48,58 @@ export function AdventureCenter({ bookingId, status, signed, participants, check
     const result = await response.json() as { error?: string }; setSavingReview(false);
     setNotice(response.ok ? "Tu reseña verificada quedó publicada." : result.error ?? "No pudimos guardar la reseña.");
   };
+  const downloadProtected = async (
+    kind: "calendar" | "guide",
+    filename: string,
+  ) => {
+    setDownloading(kind);
+    setNotice("");
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/${kind}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (response.status === 401) {
+        window.location.assign(
+          `/ingresar?next=${encodeURIComponent(window.location.pathname)}`,
+        );
+        return;
+      }
+      if (!response.ok)
+        throw new Error(
+          (await response.text()) || "No pudimos preparar el archivo.",
+        );
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
+      setNotice(
+        kind === "calendar"
+          ? "El evento quedó listo para agregar a tu calendario."
+          : "La guía se descargó correctamente.",
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "No pudimos descargar el archivo.",
+      );
+    } finally {
+      setDownloading(null);
+    }
+  };
   return <section className="adventure-center">
     <div className="adventure-center-heading"><div><p className="eyebrow">CENTRO DE AVENTURA</p><h2>Todo lo que necesitas, en un solo lugar.</h2></div><span>{daysUntil} DÍAS</span></div>
     <div className="adventure-progress">{steps.map((step) => <div className={step.complete ? "complete" : ""} key={step.label}><i>{step.complete ? <Check /> : null}</i><span>{step.label}</span></div>)}</div>
     <div className="adventure-tool-grid">
-      <a href={`/api/bookings/${bookingId}/calendar`}><CalendarPlus /><span><strong>Agregar al calendario</strong><small>Incluye alerta un día antes</small></span></a>
+      <button type="button" disabled={downloading !== null} onClick={() => void downloadProtected("calendar", "aventura-the-doggy-gang.ics")}><CalendarPlus /><span><strong>{downloading === "calendar" ? "Preparando calendario…" : "Agregar al calendario"}</strong><small>Incluye alerta un día antes</small></span></button>
       <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(meetingPoint)}`} target="_blank" rel="noreferrer"><MapPin /><span><strong>Abrir ubicación</strong><small>{meetingPoint}</small></span></a>
-      <a href={`/api/bookings/${bookingId}/guide`}><Download /><span><strong>Descargar guía</strong><small>PDF para consultar sin conexión</small></span></a>
+      <button type="button" disabled={downloading !== null} onClick={() => void downloadProtected("guide", "guia-the-doggy-gang.pdf")}><Download /><span><strong>{downloading === "guide" ? "Preparando guía…" : "Descargar guía"}</strong><small>PDF para consultar sin conexión</small></span></button>
       <Link href={shopUrl}><ShoppingBag /><span><strong>Agregar productos</strong><small>Recíbelos durante este hike</small></span></Link>
     </div>
     <div className="adventure-prep"><div><span>LISTA PERSONAL</span><strong>{done.size}/{checklist.length} preparados</strong></div>{checklist.map(([key,label]) => <button type="button" className={done.has(key) ? "done" : ""} key={key} onClick={() => void toggle(key)}><i>{done.has(key) && <Check />}</i>{label}</button>)}</div>
