@@ -48,12 +48,24 @@ export default async function PaymentsAdminPage({
   const payments = paymentsResult.data ?? [];
   const next = nextHikeResult.data;
   const paidPayments = payments.filter((item) => item.status === "PAID");
-  const paid =
-    paidPayments.reduce((sum, item) => sum + item.amount_cents, 0);
-  const pending =
-    payments
-      .filter((item) => ["PENDING", "UNDER_REVIEW"].includes(item.status))
-      .reduce((sum, item) => sum + item.amount_cents, 0);
+  const pendingPayments = payments.filter((item) =>
+    ["PENDING", "UNDER_REVIEW"].includes(item.status),
+  );
+  const refundedPayments = payments.filter(
+    (item) => item.status === "REFUNDED",
+  );
+  const paid = paidPayments.reduce(
+    (sum, item) => sum + item.amount_cents,
+    0,
+  );
+  const pending = pendingPayments.reduce(
+    (sum, item) => sum + item.amount_cents,
+    0,
+  );
+  const refunded = refundedPayments.reduce(
+    (sum, item) => sum + item.amount_cents,
+    0,
+  );
   const term = (filters.q ?? "").trim().toLocaleLowerCase("es-MX");
   const status = (filters.status ?? "ALL").toUpperCase();
   const method = (filters.method ?? "ALL").toUpperCase();
@@ -95,12 +107,30 @@ export default async function PaymentsAdminPage({
           <article>
             <span>COBRADO</span>
             <strong>{money(paid)}</strong>
-            <small>{paidPayments.length} pagos confirmados</small>
+            <small>
+              {paidPayments.length}{" "}
+              {paidPayments.length === 1 ? "pago confirmado" : "pagos confirmados"}
+            </small>
           </article>
           <article>
-            <span>PENDIENTE</span>
+            <span>POR REVISAR</span>
             <strong>{money(pending)}</strong>
-            <small>por cobrar o revisar</small>
+            <small>
+              {pendingPayments.length}{" "}
+              {pendingPayments.length === 1
+                ? "pago pendiente"
+                : "pagos pendientes"}
+            </small>
+          </article>
+          <article>
+            <span>REEMBOLSADO</span>
+            <strong>{money(refunded)}</strong>
+            <small>
+              {refundedPayments.length}{" "}
+              {refundedPayments.length === 1
+                ? "pago reembolsado"
+                : "pagos reembolsados"}
+            </small>
           </article>
           <article>
             <span>OPERACIONES</span>
