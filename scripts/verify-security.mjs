@@ -36,6 +36,20 @@ check(
 );
 check(proxy.includes("getClaims()"), "El proxy no valida/refresca la sesión.");
 
+const authConfirmPage = read("app/auth/confirm/page.tsx");
+const authConfirmRoute = read("app/auth/confirm/verify/route.ts");
+const emailLinkRoute = read("app/api/auth/email-link/route.ts");
+check(
+  authConfirmPage.includes('"signup"') &&
+    authConfirmRoute.includes('"signup"'),
+  "El primer enlace de acceso de una cuenta nueva no acepta el tipo signup.",
+);
+check(
+  emailLinkRoute.includes('from("email_access_requests")') &&
+    emailLinkRoute.includes("recentFromIp"),
+  "El envío de accesos editables no limita solicitudes por correo e IP.",
+);
+
 const photoUpload = read("app/api/admin/photos/upload-url/route.ts");
 const photoManager = read("app/admin/fotos/photo-manager.tsx");
 const photoDownload = read("app/api/photos/[id]/download/route.ts");

@@ -7,7 +7,13 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const allowedTypes = new Set(["email", "invite", "recovery", "magiclink"]);
+const allowedTypes = new Set([
+  "email",
+  "signup",
+  "invite",
+  "recovery",
+  "magiclink",
+]);
 
 export default async function ConfirmAccessPage({
   searchParams,
