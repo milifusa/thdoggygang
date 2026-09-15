@@ -33,9 +33,11 @@ export type EmailTemplateDefinition = Omit<
 };
 
 const dogRunning =
-  "https://images.unsplash.com/photo-1534361960057-19889db9621e?auto=format&fit=crop&w=1200&q=85";
+  emailAssetUrl("defaults/dog-running.jpg") ||
+  "https://www.thedoggygang.com/brand/profile-trail-sun.png";
 const dogTrail =
-  "https://images.unsplash.com/photo-1450778869180-41d0601e046e?auto=format&fit=crop&w=1200&q=85";
+  emailAssetUrl("defaults/dog-trail.jpg") ||
+  "https://www.thedoggygang.com/brand/profile-trail-sun.png";
 
 export const EMAIL_TEMPLATE_DEFINITIONS: Record<
   EmailTemplateKey,
