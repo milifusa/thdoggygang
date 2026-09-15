@@ -73,15 +73,15 @@ export function LoginContentForm({
       title: text(data, "title"),
       description: text(data, "description"),
       emailTab: text(data, "emailTab"),
-      phoneTab: text(data, "phoneTab"),
+      phoneTab: content.phoneTab,
       emailLabel: text(data, "emailLabel"),
       emailPlaceholder: text(data, "emailPlaceholder"),
       emailCta: text(data, "emailCta"),
-      phoneLabel: text(data, "phoneLabel"),
-      phonePlaceholder: text(data, "phonePlaceholder"),
-      phoneCta: text(data, "phoneCta"),
-      codeLabel: text(data, "codeLabel"),
-      verifyCta: text(data, "verifyCta"),
+      phoneLabel: content.phoneLabel,
+      phonePlaceholder: content.phonePlaceholder,
+      phoneCta: content.phoneCta,
+      codeLabel: content.codeLabel,
+      verifyCta: content.verifyCta,
       legalText: text(data, "legalText"),
       termsLabel: text(data, "termsLabel"),
       termsUrl: text(data, "termsUrl"),
@@ -278,14 +278,8 @@ export function LoginContentForm({
           </div>
         </section>
         <section>
-          <span>MÉTODOS DE ACCESO</span>
+          <span>ACCESO POR CORREO</span>
           <div className="form-grid">
-            <Field label="TAB EMAIL" name="emailTab" value={content.emailTab} />
-            <Field
-              label="TAB TELÉFONO"
-              name="phoneTab"
-              value={content.phoneTab}
-            />
             <Field
               label="LABEL EMAIL"
               name="emailLabel"
@@ -297,31 +291,6 @@ export function LoginContentForm({
               value={content.emailPlaceholder}
             />
             <Field label="CTA EMAIL" name="emailCta" value={content.emailCta} />
-            <Field
-              label="LABEL TELÉFONO"
-              name="phoneLabel"
-              value={content.phoneLabel}
-            />
-            <Field
-              label="PLACEHOLDER TELÉFONO"
-              name="phonePlaceholder"
-              value={content.phonePlaceholder}
-            />
-            <Field
-              label="CTA TELÉFONO"
-              name="phoneCta"
-              value={content.phoneCta}
-            />
-            <Field
-              label="LABEL CÓDIGO"
-              name="codeLabel"
-              value={content.codeLabel}
-            />
-            <Field
-              label="CTA VERIFICAR"
-              name="verifyCta"
-              value={content.verifyCta}
-            />
           </div>
         </section>
         <section>
@@ -375,9 +344,7 @@ export function LoginContentForm({
           <span>{content.eyebrow}</span>
           <h2>{content.title}</h2>
           <p>{content.description}</p>
-          <b>
-            {content.emailTab} · {content.phoneTab}
-          </b>
+          <b>ACCESO POR CORREO</b>
           <i>{content.emailPlaceholder}</i>
           <button>{content.emailCta}</button>
         </div>

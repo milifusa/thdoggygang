@@ -5688,6 +5688,9 @@ footer small {
     sans-serif;
   color: #666;
 }
+.login-panel > div > form {
+  margin-top: 32px;
+}
 .login-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;

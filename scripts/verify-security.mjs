@@ -39,6 +39,7 @@ check(proxy.includes("getClaims()"), "El proxy no valida/refresca la sesión.");
 const authConfirmPage = read("app/auth/confirm/page.tsx");
 const authConfirmRoute = read("app/auth/confirm/verify/route.ts");
 const emailLinkRoute = read("app/api/auth/email-link/route.ts");
+const loginForm = read("app/ingresar/login-form.tsx");
 check(
   authConfirmPage.includes('"signup"') &&
     authConfirmRoute.includes('"signup"'),
@@ -48,6 +49,12 @@ check(
   emailLinkRoute.includes('from("email_access_requests")') &&
     emailLinkRoute.includes("recentFromIp"),
   "El envío de accesos editables no limita solicitudes por correo e IP.",
+);
+check(
+  !loginForm.includes("signInWithOtp") &&
+    !loginForm.includes("verifyOtp") &&
+    !loginForm.includes("phoneTab"),
+  "El login todavía muestra o ejecuta el acceso por SMS.",
 );
 
 const photoUpload = read("app/api/admin/photos/upload-url/route.ts");

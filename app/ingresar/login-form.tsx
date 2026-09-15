@@ -2,11 +2,6 @@
 
 import { FormEvent, useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import {
-  mexicoNationalDigits,
-  normalizeMexicoPhone,
-} from "../lib/mexico-phone";
-import { createSupabaseBrowserClient } from "../lib/supabase/client";
 import type { LoginContent } from "../lib/login-content";
 
 export function LoginForm({
@@ -24,11 +19,7 @@ export function LoginForm({
   desktopImage: string;
   mobileImage: string;
 }) {
-  const [method, setMethod] = useState<"email" | "phone">("email");
   const [value, setValue] = useState("");
-  const [phoneDigits, setPhoneDigits] = useState("");
-  const [code, setCode] = useState("");
-  const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(initialMessage);
   const [cooldown, setCooldown] = useState(0);
@@ -42,14 +33,6 @@ export function LoginForm({
     return () => window.clearTimeout(timer);
   }, [cooldown]);
 
-  const changeMethod = (nextMethod: "email" | "phone") => {
-    setMethod(nextMethod);
-    setSent(false);
-    setCode("");
-    setMessage("");
-    setCooldown(0);
-  };
-
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setMessage("");
@@ -57,47 +40,26 @@ export function LoginForm({
     try {
       if (!configured)
         throw new Error("Supabase environment variables are not configured.");
-      const supabase = createSupabaseBrowserClient();
-      if (method === "email") {
-        const response = await fetch("/api/auth/email-link", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            email: value.trim().toLowerCase(),
-            next: nextPath,
-          }),
-        });
-        const result = (await response.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        if (!response.ok)
-          throw Object.assign(new Error(result.error ?? "No pudimos enviar el enlace."), {
-            code: response.status === 429 ? "rate_limit" : "email_send",
-          });
-        setSent(true);
-        setCooldown(60);
-        setMessage(
-          "Te enviamos un enlace de acceso. Ábrelo desde tu correo; funciona incluso si usas otro navegador.",
+      const response = await fetch("/api/auth/email-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email: value.trim().toLowerCase(),
+          next: nextPath,
+        }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok)
+        throw Object.assign(
+          new Error(result.error ?? "No pudimos enviar el enlace."),
+          { code: response.status === 429 ? "rate_limit" : "email_send" },
         );
-      } else {
-        const phone = normalizeMexicoPhone(phoneDigits);
-        if (!phone) throw new Error("El teléfono debe tener 10 dígitos.");
-        if (!sent) {
-          const { error } = await supabase.auth.signInWithOtp({ phone });
-          if (error) throw error;
-          setSent(true);
-          setCooldown(60);
-          setMessage("Te enviamos un código por SMS.");
-        } else {
-          const { error } = await supabase.auth.verifyOtp({
-            phone,
-            token: code,
-            type: "sms",
-          });
-          if (error) throw error;
-          window.location.assign(nextPath);
-        }
-      }
+      setCooldown(60);
+      setMessage(
+        "Te enviamos un enlace de acceso. Ábrelo desde tu correo; funciona incluso si usas otro navegador.",
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message.toLowerCase() : "";
       const code =
@@ -117,21 +79,8 @@ export function LoginForm({
         );
       else if (detail.includes("rate") || detail.includes("security"))
         setMessage("Espera 60 segundos antes de pedir otro acceso.");
-      else if (
-        detail.includes("phone provider") ||
-        detail.includes("phone signups")
-      )
-        setMessage(
-          "El acceso por teléfono todavía no está disponible. Usa tu correo mientras lo activamos.",
-        );
-      else if (detail.includes("10 dígitos"))
-        setMessage("Escribe los 10 dígitos de tu teléfono de México.");
       else
-        setMessage(
-          method === "email"
-            ? "No pudimos enviar el enlace. Revisa tu correo e intenta de nuevo."
-            : "No pudimos validar el teléfono o el código. Revisa los datos e intenta de nuevo.",
-        );
+        setMessage("No pudimos enviar el enlace. Revisa tu correo e intenta de nuevo.");
     } finally {
       setSubmitting(false);
     }
@@ -162,88 +111,28 @@ export function LoginForm({
           <p className="eyebrow">{content.eyebrow}</p>
           <h1>{content.title}</h1>
           <p>{content.description}</p>
-          <div className="login-tabs">
-            <button
-              type="button"
-              onClick={() => changeMethod("email")}
-              className={method === "email" ? "active" : ""}
-            >
-              {content.emailTab}
-            </button>
-            <button
-              type="button"
-              onClick={() => changeMethod("phone")}
-              className={method === "phone" ? "active" : ""}
-            >
-              {content.phoneTab}
-            </button>
-          </div>
           <form onSubmit={submit}>
-            {method === "email" ? (
-              <label>
-                {content.emailLabel}
-                <input
-                  required
-                  value={value}
-                  onChange={(event) => setValue(event.target.value)}
-                  type="email"
-                  autoComplete="email"
-                  placeholder={content.emailPlaceholder}
-                />
-              </label>
-            ) : (
-              <label>
-                {content.phoneLabel}
-                <span className="mexico-phone">
-                  <b>MX +52</b>
-                  <input
-                    required
-                    value={phoneDigits}
-                    onChange={(event) =>
-                      setPhoneDigits(mexicoNationalDigits(event.target.value))
-                    }
-                    type="tel"
-                    inputMode="numeric"
-                    autoComplete="tel-national"
-                    pattern="[0-9]{10}"
-                    minLength={10}
-                    maxLength={10}
-                    placeholder={content.phonePlaceholder}
-                  />
-                </span>
-                <small>10 dígitos · sólo teléfonos de México</small>
-              </label>
-            )}
-            {method === "phone" && sent && (
-              <label>
-                {content.codeLabel}
-                <input
-                  required
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  value={code}
-                  onChange={(event) =>
-                    setCode(event.target.value.replace(/\D/g, "").slice(0, 6))
-                  }
-                  placeholder="000000"
-                />
-              </label>
-            )}
+            <label>
+              {content.emailLabel}
+              <input
+                required
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                type="email"
+                autoComplete="email"
+                placeholder={content.emailPlaceholder}
+              />
+            </label>
             <button
               className="button button-primary"
-              disabled={
-                submitting || (cooldown > 0 && (method === "email" || !sent))
-              }
+              disabled={submitting || cooldown > 0}
               type="submit"
             >
               {submitting
                 ? "ENVIANDO…"
-                : cooldown > 0 && (method === "email" || !sent)
+                : cooldown > 0
                   ? `REENVIAR EN ${cooldown}s`
-                  : method === "phone" && sent
-                    ? `${content.verifyCta} →`
-                    : `${method === "email" ? content.emailCta : content.phoneCta} →`}
+                  : `${content.emailCta} →`}
             </button>
           </form>
           {message && (
