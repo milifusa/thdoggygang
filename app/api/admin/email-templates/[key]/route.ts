@@ -1,8 +1,10 @@
 import { z } from "zod";
+import { isEmailTemplateKey } from "../../../../lib/email-template-config";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 
 const schema = z.object({
   subject: z.string().min(3).max(180),
+  eyebrow: z.string().min(2).max(100),
   heading: z.string().min(3).max(180),
   body: z.string().min(10).max(5000),
   buttonLabel: z.string().min(2).max(100),
@@ -31,19 +33,20 @@ export async function PATCH(
   if (!profile?.active || profile.role !== "ADMIN")
     return Response.json({ error: "No autorizado." }, { status: 403 });
   const { key } = await params;
-  if (key !== "BOOKING_REMINDER")
+  if (!isEmailTemplateKey(key))
     return Response.json({ error: "Plantilla inválida." }, { status: 404 });
   const { error } = await supabase
     .from("email_templates")
-    .update({
+    .upsert({
+      key,
       subject: parsed.data.subject,
+      eyebrow: parsed.data.eyebrow,
       heading: parsed.data.heading,
       body: parsed.data.body,
       button_label: parsed.data.buttonLabel,
-      active: parsed.data.active,
+      active: key === "AUTH_ACCESS" ? true : parsed.data.active,
       updated_at: new Date().toISOString(),
-    })
-    .eq("key", key);
+    }, { onConflict: "key" });
   return error
     ? Response.json(
         { error: "No pudimos guardar la plantilla." },

@@ -15,6 +15,7 @@ import {
   UserCog,
   CreditCard,
   Gift,
+  Mail,
 } from "lucide-react";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 
@@ -33,6 +34,7 @@ const sections = [
   { href: "/admin/fotos", label: "Fotografías", icon: Camera },
   { href: "/admin/productos", label: "Productos", icon: ShoppingBag },
   { href: "/admin/reportes", label: "Reportes", icon: ChartNoAxesCombined },
+  { href: "/admin/emails", label: "Emails", icon: Mail },
   { href: "/admin/sitio", label: "Sitio", icon: PanelsTopLeft },
   { href: "/admin/equipo", label: "Equipo", icon: UserCog },
 ] as const;

@@ -17,7 +17,6 @@ import {
   ReminderButton,
   ReservationRowMenu,
 } from "./reservation-actions";
-import { EmailTemplateEditor } from "./email-template-editor";
 
 export const dynamic = "force-dynamic";
 type Payment = { status: string; method: string; amount_cents: number };
@@ -104,7 +103,6 @@ export default async function ReservationsAdminPage({
     { data: rawBookings },
     { data: hikes },
     { data: next },
-    { data: template },
   ] = await Promise.all([
     supabase
       .from("bookings")
@@ -126,11 +124,6 @@ export default async function ReservationsAdminPage({
       .is("deleted_at", null)
       .order("starts_at")
       .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("email_templates")
-      .select("key,subject,heading,body,button_label,active")
-      .eq("key", "BOOKING_REMINDER")
       .maybeSingle(),
   ]);
   const bookings = (rawBookings ?? []) as unknown as Booking[];
@@ -396,7 +389,6 @@ export default async function ReservationsAdminPage({
           <input type="hidden" name="view" value={view} />
           <button>FILTRAR</button>
         </form>
-        {template && <EmailTemplateEditor template={template} />}
         <section className="reservation-table">
           <div className="reservation-table-head">
             <span>CLIENTE / RESERVACIÓN</span>

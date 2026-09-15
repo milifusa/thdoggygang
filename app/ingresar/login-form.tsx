@@ -59,13 +59,21 @@ export function LoginForm({
         throw new Error("Supabase environment variables are not configured.");
       const supabase = createSupabaseBrowserClient();
       if (method === "email") {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: value.trim().toLowerCase(),
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`,
-          },
+        const response = await fetch("/api/auth/email-link", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: value.trim().toLowerCase(),
+            next: nextPath,
+          }),
         });
-        if (error) throw error;
+        const result = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!response.ok)
+          throw Object.assign(new Error(result.error ?? "No pudimos enviar el enlace."), {
+            code: response.status === 429 ? "rate_limit" : "email_send",
+          });
         setSent(true);
         setCooldown(60);
         setMessage(
