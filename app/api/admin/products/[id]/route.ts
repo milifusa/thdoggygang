@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { adminClient } from "../../hikes/route";
-import { parseProductForm, uploadImage } from "../route";
+import {
+  parseProductForm,
+  productFormError,
+  productResponse,
+  uploadImage,
+} from "../route";
 
 export async function PATCH(
   request: Request,
@@ -15,18 +20,26 @@ export async function PATCH(
   const { form, parsed } = await parseProductForm(request);
   if (!parsed.success)
     return Response.json(
-      { error: "Revisa los datos del producto." },
+      { error: productFormError(parsed.error) },
       { status: 400 },
     );
-  const { data: current } = await supabase
+  const { data: current, error: currentError } = await supabase
     .from("products")
     .select("image_path")
     .eq("id", id)
-    .single();
+    .maybeSingle();
+  if (currentError)
+    return Response.json({ error: currentError.message }, { status: 400 });
+  if (!current)
+    return Response.json({ error: "El producto ya no existe." }, { status: 404 });
   let imagePath = current?.image_path ?? null;
+  let uploadedPath: string | null = null;
   try {
     const uploaded = await uploadImage(supabase, form.get("image"), id);
-    if (uploaded) imagePath = uploaded;
+    if (uploaded) {
+      imagePath = uploaded;
+      uploadedPath = uploaded;
+    }
   } catch (error) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Imagen inválida." },
@@ -34,7 +47,7 @@ export async function PATCH(
     );
   }
   const v = parsed.data;
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("products")
     .update({
       name: v.name,
@@ -51,7 +64,11 @@ export async function PATCH(
       active: v.active,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error && uploadedPath)
+    await supabase.storage.from("product-images").remove([uploadedPath]);
   if (
     !error &&
     imagePath !== current?.image_path &&
@@ -61,7 +78,10 @@ export async function PATCH(
     await supabase.storage.from("product-images").remove([current.image_path]);
   return error
     ? Response.json({ error: error.message }, { status: 400 })
-    : Response.json({ ok: true });
+    : Response.json({
+        ok: true,
+        product: productResponse(updated as Record<string, unknown>),
+      });
 }
 export async function DELETE(
   _: Request,

@@ -1,5 +1,5 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PackagePlus, Save, Trash2 } from "lucide-react";
 import type { ShopSettings } from "../../lib/shop-settings";
@@ -22,7 +22,55 @@ export type AdminProduct = {
   shipping_enabled: boolean;
   shipping_fee_cents: number;
   active: boolean;
+  updated_at: string;
 };
+
+function ProductImageField({ currentImage }: { currentImage?: string }) {
+  const [selectedPreview, setSelectedPreview] = useState("");
+  const [fileName, setFileName] = useState("");
+
+  useEffect(
+    () => () => {
+      if (selectedPreview) URL.revokeObjectURL(selectedPreview);
+    },
+    [selectedPreview],
+  );
+
+  function selectImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    setSelectedPreview((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return file ? URL.createObjectURL(file) : "";
+    });
+    setFileName(file?.name ?? "");
+  }
+
+  return (
+    <label className="product-image-field full-field">
+      IMAGEN DEL PRODUCTO
+      <span className="product-image-picker">
+        <img
+          src={selectedPreview || currentImage || "/brand/profile-trail-sun.png"}
+          alt="Vista previa del producto"
+        />
+        <span>
+          <strong>
+            {fileName ? "NUEVA IMAGEN SELECCIONADA" : "CAMBIAR IMAGEN"}
+          </strong>
+          <small>
+            {fileName || "JPG, PNG, WebP o una foto compatible del celular"}
+          </small>
+          <input
+            name="image"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            onChange={selectImage}
+          />
+        </span>
+      </span>
+    </label>
+  );
+}
 
 function ProductFields({ product }: { product?: AdminProduct }) {
   return (
@@ -32,13 +80,13 @@ function ProductFields({ product }: { product?: AdminProduct }) {
         <input required name="name" defaultValue={product?.name} />
       </label>
       <label>
-        SLUG
+        DIRECCIÓN DEL PRODUCTO
         <input
-          required
-          pattern="[a-z0-9-]+"
           name="slug"
           defaultValue={product?.slug}
+          placeholder="Se crea automáticamente"
         />
+        <small>Puede dejarse vacía; se genera a partir del nombre.</small>
       </label>
       <label className="full-field">
         DESCRIPCIÓN
@@ -62,7 +110,7 @@ function ProductFields({ product }: { product?: AdminProduct }) {
         <input
           required
           min="0"
-          step="1"
+          step="0.01"
           name="price"
           type="number"
           defaultValue={product ? product.price_cents / 100 : ""}
@@ -73,6 +121,7 @@ function ProductFields({ product }: { product?: AdminProduct }) {
         <input
           required
           min="0"
+          step="1"
           name="stock"
           type="number"
           defaultValue={product?.stock ?? 0}
@@ -91,19 +140,13 @@ function ProductFields({ product }: { product?: AdminProduct }) {
         <input
           required
           min="0"
+          step="0.01"
           name="shippingFee"
           type="number"
           defaultValue={product ? product.shipping_fee_cents / 100 : 80}
         />
       </label>
-      <label>
-        IMAGEN
-        <input
-          name="image"
-          type="file"
-          accept="image/*"
-        />
-      </label>
+      <ProductImageField currentImage={product?.image} />
       <label className="product-check">
         <input
           name="pickupEnabled"
@@ -139,58 +182,112 @@ export function ProductManager({
   shopSettings: ShopSettings;
 }) {
   const router = useRouter();
-  const [busy, setBusy] = useState("");
+  const [catalog, setCatalog] = useState(products);
+  const [newFormVersion, setNewFormVersion] = useState(0);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState("");
+  const [productMessages, setProductMessages] = useState<
+    Record<string, { kind: "success" | "error"; text: string }>
+  >({});
+
+  function setBusyFor(key: string, value: boolean) {
+    setBusy((current) => ({ ...current, [key]: value }));
+  }
+
+  function setProductMessage(
+    key: string,
+    kind: "success" | "error",
+    text: string,
+  ) {
+    setProductMessages((current) => ({ ...current, [key]: { kind, text } }));
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>, id?: string) {
     event.preventDefault();
-    setBusy(id ?? "new");
+    const form = event.currentTarget;
+    const key = id ?? "new";
+    setBusyFor(key, true);
+    if (id)
+      setProductMessages((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
     setMessage("");
-    const body = new FormData(event.currentTarget);
+    const body = new FormData(form);
     const image = body.get("image");
     if (image instanceof File && image.size) {
       try {
-        setMessage("Preparando y optimizando la imagen…");
+        if (id)
+          setProductMessage(id, "success", "Preparando la nueva imagen…");
+        else setMessage("Preparando y optimizando la imagen…");
         body.set("image", await prepareImageForUpload(image));
       } catch (error) {
-        setBusy("");
-        return setMessage(
+        setBusyFor(key, false);
+        const text =
           error instanceof Error
             ? error.message
-            : "No pudimos preparar la imagen.",
-        );
+            : "No pudimos preparar la imagen.";
+        if (id) return setProductMessage(id, "error", text);
+        return setMessage(text);
       }
     }
-    const response = await fetch(
-      id ? `/api/admin/products/${id}` : "/api/admin/products",
-      {
-        method: id ? "PATCH" : "POST",
-        body,
-      },
-    );
-    const result = await readJsonResponse<{ error?: string }>(response);
-    setBusy("");
-    if (!response.ok)
-      return setMessage(result.error ?? "No pudimos guardar el producto.");
-    setMessage(id ? "Producto actualizado." : "Producto creado.");
-    if (!id) event.currentTarget.reset();
-    router.refresh();
+    try {
+      const response = await fetch(
+        id ? `/api/admin/products/${id}` : "/api/admin/products",
+        {
+          method: id ? "PATCH" : "POST",
+          body,
+        },
+      );
+      const result = await readJsonResponse<{
+        error?: string;
+        product?: AdminProduct;
+      }>(response);
+      if (!response.ok || !result.product) {
+        const text = result.error ?? "No pudimos guardar el producto.";
+        if (id) return setProductMessage(id, "error", text);
+        return setMessage(text);
+      }
+      if (id) {
+        setCatalog((current) =>
+          current.map((product) =>
+            product.id === id ? result.product! : product,
+          ),
+        );
+        setProductMessage(id, "success", "Cambios guardados correctamente.");
+      } else {
+        setCatalog((current) => [...current, result.product!]);
+        setMessage("Producto creado.");
+        form.reset();
+        setNewFormVersion((current) => current + 1);
+      }
+      router.refresh();
+    } catch {
+      const text = "Se perdió la conexión. Intenta guardar nuevamente.";
+      if (id) setProductMessage(id, "error", text);
+      else setMessage(text);
+    } finally {
+      setBusyFor(key, false);
+    }
   }
   async function remove(id: string) {
     if (!window.confirm("¿Quitar este producto de la tienda?")) return;
-    setBusy(id);
+    setBusyFor(id, true);
     const response = await fetch(`/api/admin/products/${id}`, {
       method: "DELETE",
     });
     const result = (await response.json()) as { error?: string };
-    setBusy("");
+    setBusyFor(id, false);
     if (!response.ok)
       return setMessage(result.error ?? "No pudimos eliminarlo.");
     setMessage("Producto retirado.");
+    setCatalog((current) => current.filter((product) => product.id !== id));
     router.refresh();
   }
   async function saveShopSettings(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setBusy("settings");
+    setBusyFor("settings", true);
     const data = new FormData(event.currentTarget);
     const threshold = String(data.get("threshold") ?? "");
     const response = await fetch("/api/admin/shop-settings", {
@@ -205,7 +302,7 @@ export function ProductManager({
       }),
     });
     const result = (await response.json()) as { error?: string };
-    setBusy("");
+    setBusyFor("settings", false);
     setMessage(
       response.ok
         ? "Configuración de envíos guardada."
@@ -250,7 +347,7 @@ export function ProductManager({
             defaultValue={shopSettings.shippingNote}
           />
         </label>
-        <button disabled={busy === "settings"}>
+        <button disabled={busy.settings}>
           <Save />
           GUARDAR ENVÍOS
         </button>
@@ -260,15 +357,15 @@ export function ProductManager({
           <PackagePlus /> CARGAR NUEVO PRODUCTO
         </summary>
         <form onSubmit={(event) => void submit(event)}>
-          <ProductFields />
-          <button className="button button-primary" disabled={busy === "new"}>
-            {busy === "new" ? "GUARDANDO…" : "CREAR PRODUCTO"}
+          <ProductFields key={newFormVersion} />
+          <button className="button button-primary" disabled={busy.new}>
+            {busy.new ? "GUARDANDO…" : "CREAR PRODUCTO"}
           </button>
         </form>
       </details>
       {message && <p className="admin-feedback">{message}</p>}
       <div className="admin-products-grid">
-        {products.map((product) => (
+        {catalog.map((product) => (
           <article key={product.id}>
             <img src={product.image} alt={product.name} />
             <div className="product-admin-title">
@@ -279,14 +376,25 @@ export function ProductManager({
             <details>
               <summary>EDITAR PRODUCTO</summary>
               <form onSubmit={(event) => void submit(event, product.id)}>
-                <ProductFields product={product} />
+                <ProductFields
+                  key={`${product.id}:${product.updated_at}`}
+                  product={product}
+                />
+                {productMessages[product.id] && (
+                  <p
+                    className={`product-save-feedback ${productMessages[product.id].kind}`}
+                    aria-live="polite"
+                  >
+                    {productMessages[product.id].text}
+                  </p>
+                )}
                 <div className="admin-photo-actions">
-                  <button disabled={busy === product.id}>
-                    <Save /> GUARDAR
+                  <button disabled={busy[product.id]}>
+                    <Save /> {busy[product.id] ? "GUARDANDO…" : "GUARDAR CAMBIOS"}
                   </button>
                   <button
                     type="button"
-                    disabled={busy === product.id}
+                    disabled={busy[product.id]}
                     onClick={() => void remove(product.id)}
                   >
                     <Trash2 /> RETIRAR

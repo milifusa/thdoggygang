@@ -50,6 +50,7 @@ export default async function ProductsAdminPage() {
     shipping_enabled: p.shipping_enabled,
     shipping_fee_cents: p.shipping_fee_cents,
     active: p.active,
+    updated_at: p.updated_at,
   }));
   return (
     <main className="admin-page">

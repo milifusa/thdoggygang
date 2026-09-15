@@ -24,6 +24,14 @@ const rewardsAdmin = readFileSync(
   join(root, "app/admin/recompensas/page.tsx"),
   "utf8",
 );
+const productManager = readFileSync(
+  join(root, "app/admin/productos/product-manager.tsx"),
+  "utf8",
+);
+const productRoute = readFileSync(
+  join(root, "app/api/admin/products/[id]/route.ts"),
+  "utf8",
+);
 const failures = [];
 const check = (condition, message) => {
   if (!condition) failures.push(message);
@@ -110,6 +118,15 @@ check(
     css.includes(".meeting-point-url") &&
     css.includes(".meeting-point-remove"),
   "El editor de puntos de encuentro no tiene controles móviles verificables.",
+);
+check(
+  productManager.includes("product-image-picker") &&
+    productManager.includes("product-save-feedback") &&
+    productManager.includes("setCatalog") &&
+    css.includes(".product-image-picker") &&
+    productRoute.includes('.select("*")') &&
+    productRoute.includes("productResponse(updated"),
+  "La edición de productos no confirma junto a cada tarjeta la imagen y los datos realmente guardados.",
 );
 
 if (failures.length) {

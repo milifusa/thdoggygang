@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { adminClient } from "../hikes/route";
+import { productImageUrl } from "../../../lib/products";
 
 const schema = z.object({
   name: z.string().min(2).max(140),
@@ -15,15 +16,42 @@ const schema = z.object({
   active: z.boolean(),
 });
 
+function normalizeSlug(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function productFormError(error: z.ZodError) {
+  const field = String(error.issues[0]?.path[0] ?? "producto");
+  const messages: Record<string, string> = {
+    name: "Escribe un nombre de al menos 2 caracteres.",
+    slug: "El nombre no permite crear una dirección válida.",
+    description: "La descripción debe tener entre 10 y 2,000 caracteres.",
+    category: "Escribe una categoría válida.",
+    priceCents: "El precio debe ser un número válido mayor o igual a cero.",
+    stock: "El inventario debe ser un número entero mayor o igual a cero.",
+    variants: "Revisa las variantes; sepáralas con comas.",
+    shippingFeeCents: "El costo de envío debe ser un número válido.",
+  };
+  return messages[field] ?? "Revisa los datos del producto.";
+}
+
 async function parseProductForm(request: Request) {
   const form = await request.formData();
+  const name = String(form.get("name") ?? "").trim();
+  const requestedSlug = String(form.get("slug") ?? "").trim();
   const values = String(form.get("variants") ?? "")
     .split(/[,\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
   const parsed = schema.safeParse({
-    name: form.get("name"),
-    slug: form.get("slug"),
+    name,
+    slug: normalizeSlug(requestedSlug || name),
     description: form.get("description"),
     category: form.get("category"),
     priceCents: Math.round(Number(form.get("price")) * 100),
@@ -62,6 +90,27 @@ async function uploadImage(
   if (error) throw new Error("No pudimos subir la imagen.");
   return path;
 }
+
+function productResponse(row: Record<string, unknown>) {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    slug: String(row.slug),
+    description: String(row.description),
+    category: String(row.category),
+    price_cents: Number(row.price_cents),
+    stock: Number(row.stock),
+    variants: Array.isArray(row.variants) ? row.variants.map(String) : [],
+    image: productImageUrl(
+      typeof row.image_path === "string" ? row.image_path : null,
+    ),
+    pickup_enabled: Boolean(row.pickup_enabled),
+    shipping_enabled: Boolean(row.shipping_enabled),
+    shipping_fee_cents: Number(row.shipping_fee_cents ?? 0),
+    active: Boolean(row.active),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
+  };
+}
 export async function POST(request: Request) {
   const supabase = await adminClient();
   if (!supabase)
@@ -69,7 +118,7 @@ export async function POST(request: Request) {
   const { form, parsed } = await parseProductForm(request);
   if (!parsed.success)
     return Response.json(
-      { error: "Revisa los datos del producto." },
+      { error: productFormError(parsed.error) },
       { status: 400 },
     );
   const id = crypto.randomUUID();
@@ -100,15 +149,29 @@ export async function POST(request: Request) {
       shipping_fee_cents: v.shippingFeeCents,
       active: v.active,
     })
-    .select("id")
+    .select("*")
     .single();
+  if (error && imagePath)
+    await supabase.storage.from("product-images").remove([imagePath]);
   return error
     ? Response.json(
         {
-          error: error.code === "23505" ? "Ese slug ya existe." : error.message,
+          error:
+            error.code === "23505"
+              ? "Ya existe un producto con ese nombre o dirección. Cambia uno de los dos."
+              : error.message,
         },
         { status: 400 },
       )
-    : Response.json({ product: data }, { status: 201 });
+    : Response.json(
+        { product: productResponse(data as Record<string, unknown>) },
+        { status: 201 },
+      );
 }
-export { parseProductForm, uploadImage };
+export {
+  normalizeSlug,
+  parseProductForm,
+  productFormError,
+  productResponse,
+  uploadImage,
+};
