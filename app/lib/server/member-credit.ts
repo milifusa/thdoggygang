@@ -13,7 +13,7 @@ const defaults: CancellationSettings = {
   policyText:
     "Puedes cancelar hasta 48 horas antes del inicio. El importe pagado no se devuelve en efectivo: se acredita a tu cuenta para reservar otro hike.",
   lateMessage:
-    "¡Ups! Por ahora ya no podemos darte la pata. Cuando faltan menos de 48 horas ya no podemos cancelar, porque toda la aventura se organizó contando contigo. Si surgió algo extraordinario, escríbenos y revisamos tu caso.",
+    "¡Ups! Por ahora ya no podemos darte la pata. Cuando faltan menos de 48 horas ya no podemos cancelar, porque toda la aventura se organizó contando contigo.",
 };
 
 export async function getCancellationSettings(): Promise<CancellationSettings> {
