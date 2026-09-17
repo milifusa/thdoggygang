@@ -1,5 +1,6 @@
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 import { sendBookingReminder, sendUpcomingHikeReminder, sendWaitlistOfferForHike } from "../../../lib/server/booking-reminder";
+import { expireStripeCheckout } from "../../../lib/server/stripe-payment-reconciliation";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -21,6 +22,41 @@ export async function GET(request: Request) {
       { status: 503 },
     );
   const stale = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const { data: staleStripePayments, error: staleStripeError } = await service
+    .from("payments")
+    .select("provider_payment_id,order_id")
+    .eq("provider", "stripe")
+    .eq("method", "CARD")
+    .eq("status", "PENDING")
+    .lt("created_at", stale)
+    .order("created_at")
+    .limit(100);
+  if (staleStripeError)
+    return Response.json(
+      { error: "No pudimos consultar los pagos vencidos." },
+      { status: 500 },
+    );
+  const expiredPayments = [];
+  for (const payment of staleStripePayments ?? []) {
+    if (!payment.provider_payment_id) continue;
+    try {
+      expiredPayments.push({
+        sessionId: payment.provider_payment_id,
+        ...(await expireStripeCheckout({
+          sessionId: payment.provider_payment_id,
+          orderId: payment.order_id,
+          rawStatus: "checkout.session.expired:cron",
+        })),
+        ok: true,
+      });
+    } catch (error) {
+      expiredPayments.push({
+        sessionId: payment.provider_payment_id,
+        ok: false,
+        error: error instanceof Error ? error.message : "No conciliado",
+      });
+    }
+  }
   const reminderLimit = new Date(
     Date.now() - 24 * 60 * 60 * 1000,
   ).toISOString();
@@ -76,5 +112,6 @@ export async function GET(request: Request) {
     results,
     upcoming: upcomingResults,
     waitlist: waitlistResults,
+    expiredPayments,
   });
 }

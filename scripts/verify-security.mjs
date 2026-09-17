@@ -269,6 +269,33 @@ check(
     paymentsAdmin.includes("paidPayments.length"),
   "Pagos puede ocultar un error de consulta o no mostrar cuántos cobros confirmó.",
 );
+const stripeWebhook = read("app/api/webhooks/stripe/route.ts");
+const stripeCheckout = read("app/api/checkout/stripe/route.ts");
+const stripeCleanup = read(
+  "app/lib/server/stripe-payment-reconciliation.ts",
+);
+const bookingCron = read("app/api/cron/booking-reminders/route.ts");
+check(
+  stripeWebhook.includes('event.type === "checkout.session.expired"') &&
+    stripeWebhook.includes("expireStripeCheckout"),
+  "Stripe no procesa de forma verificable los checkouts vencidos.",
+);
+check(
+  stripeCleanup.includes('.eq("status", "PENDING")') &&
+    stripeCleanup.includes('status: "DRAFT"') &&
+    stripeCleanup.includes('current_step: "pago"') &&
+    stripeCleanup.includes("newer_attempt_exists"),
+  "La conciliación de Stripe no libera cupo de forma segura o pisa reintentos nuevos.",
+);
+check(
+  bookingCron.includes("staleStripePayments") &&
+    bookingCron.includes("expireStripeCheckout"),
+  "No existe respaldo para conciliar checkouts cuyo webhook de vencimiento no llegó.",
+);
+check(
+  stripeCheckout.includes('status: "PENDING"'),
+  "Un reintento de Stripe no reactiva la orden pendiente.",
+);
 for (const path of [
   "app/admin/page.tsx",
   "app/admin/hikes/page.tsx",

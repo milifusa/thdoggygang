@@ -22,7 +22,7 @@ export default async function PaymentsAdminPage({
     supabase
       .from("payments")
       .select(
-        "id,provider,method,status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(order_number,profile:profiles(first_name,last_name),order_items(item_type,description),booking:bookings(booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
+        "id,provider,method,status,raw_status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(order_number,profile:profiles(first_name,last_name),order_items(item_type,description),booking:bookings(booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
       )
       .order("created_at", { ascending: false })
       .limit(300),
@@ -209,7 +209,10 @@ export default async function PaymentsAdminPage({
                   </span>
                   <strong>{money(payment.amount_cents)}</strong>
                   <em className={payment.status === "PAID" ? "paid" : ""}>
-                    {paymentStatus(payment.status)}
+                    {payment.status === "FAILED" &&
+                    payment.raw_status?.startsWith("checkout.session.expired")
+                      ? "EXPIRADO"
+                      : paymentStatus(payment.status)}
                   </em>
                   <small>
                     {adminDate(payment.paid_at ?? payment.created_at)}

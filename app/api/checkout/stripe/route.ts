@@ -134,7 +134,7 @@ export async function POST(request: Request) {
   ];
   await service
     .from("orders")
-    .update({ total_cents: booking.total_cents })
+    .update({ total_cents: booking.total_cents, status: "PENDING" })
     .eq("id", order.id);
   await service.from("order_items").delete().eq("order_id", order.id);
   const { error: itemError } = await service.from("order_items").insert(items);

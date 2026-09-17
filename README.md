@@ -50,7 +50,7 @@ Las plantillas de acceso, confirmación, invitación y recuperación están vers
 
 ## Pagos
 
-El flujo de tarjeta crea un Stripe Checkout alojado y verifica `checkout.session.completed` mediante `Stripe-Signature`. El flujo de transferencia sube el comprobante al bucket privado, lo deja en revisión y permite que ADMIN lo apruebe. Ambos métodos confirman la reservación y generan un token QR cifrado; la base sólo usa su hash para validarlo.
+El flujo de tarjeta crea un Stripe Checkout alojado y verifica `checkout.session.completed` y `checkout.session.expired` mediante `Stripe-Signature`. Un checkout vencido se marca como fallido, libera el cupo y conserva la reservación como borrador para reintentar. El flujo de transferencia sube el comprobante al bucket privado, lo deja en revisión y permite que ADMIN lo apruebe. Ambos métodos confirmados generan un token QR cifrado; la base sólo usa su hash para validarlo.
 
 ## Vercel
 

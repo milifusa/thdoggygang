@@ -141,11 +141,18 @@ export async function POST(request: Request) {
         return false;
       }
     });
-    const listensForCheckout = Boolean(
+    const listensForCheckoutCompleted = Boolean(
       endpoint?.enabled_events.some(
         (event) => event === "*" || event === "checkout.session.completed",
       ),
     );
+    const listensForCheckoutExpired = Boolean(
+      endpoint?.enabled_events.some(
+        (event) => event === "*" || event === "checkout.session.expired",
+      ),
+    );
+    const listensForCheckout =
+      listensForCheckoutCompleted && listensForCheckoutExpired;
 
     const sessionForm = new URLSearchParams({
       mode: "payment",
@@ -248,6 +255,8 @@ export async function POST(request: Request) {
         registered: webhookRegistered,
         enabled: webhookEnabled,
         listensForCheckout,
+        listensForCheckoutCompleted,
+        listensForCheckoutExpired,
         handlerReady: webhookHandlerReady,
         listPermission: endpointsResponse.ok,
         listError: endpointsResponse.ok

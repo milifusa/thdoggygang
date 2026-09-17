@@ -40,6 +40,8 @@ type StripeDiagnostics = {
     registered: boolean;
     enabled: boolean;
     listensForCheckout: boolean;
+    listensForCheckoutCompleted: boolean;
+    listensForCheckoutExpired: boolean;
     handlerReady: boolean;
     listPermission: boolean;
     listError: string | null;
@@ -238,7 +240,8 @@ export function PaymentSettingsForm({
           <LockKeyhole />
           <p>
             Configura en Stripe el webhook <strong>/api/webhooks/stripe</strong>{" "}
-            y escucha el evento <strong>checkout.session.completed</strong>.
+            y escucha los eventos <strong>checkout.session.completed</strong> y{" "}
+            <strong>checkout.session.expired</strong>.
           </p>
           <button
             type="button"
@@ -343,7 +346,7 @@ export function PaymentSettingsForm({
                         diagnostics.webhook?.listensForCheckout,
                     )}
                   >
-                    Webhook registrado y escuchando pagos completados
+                    Webhook registrado y escuchando pagos completados y vencidos
                   </DiagnosticLine>
                   <DiagnosticLine
                     ok={Boolean(diagnostics.webhook?.handlerReady)}

@@ -1,6 +1,7 @@
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
 import { getStripeWebhookSecret } from "../../../lib/payment-config";
+import { expireStripeCheckout } from "../../../lib/server/stripe-payment-reconciliation";
 
 function parseSignature(header: string) {
   const timestamp = header
@@ -147,6 +148,23 @@ export async function POST(request: Request) {
           );
         await ensureBookingQrToken(bookingId);
       }
+    }
+  }
+  if (
+    event.type === "checkout.session.expired" ||
+    event.type === "checkout.session.async_payment_failed"
+  ) {
+    try {
+      await expireStripeCheckout({
+        sessionId: event.data.object.id,
+        orderId: event.data.object.metadata?.order_id,
+        rawStatus: event.type,
+      });
+    } catch {
+      return Response.json(
+        { error: "No pudimos cerrar el intento de pago." },
+        { status: 500 },
+      );
     }
   }
   return Response.json({ received: true, duplicate });
