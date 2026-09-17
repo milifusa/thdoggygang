@@ -6,6 +6,46 @@ import {
   expireStripeCheckout,
 } from "../../../lib/server/stripe-payment-reconciliation";
 
+async function hasNewerPaymentForSameHike(
+  bookingId: string,
+  after: string,
+) {
+  const service = createSupabaseServiceClient();
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select("profile_id,hike_id")
+    .eq("id", bookingId)
+    .single();
+  if (bookingError || !booking)
+    throw new Error("No pudimos verificar la reservación rechazada.");
+  const { data: relatedBookings, error: relatedError } = await service
+    .from("bookings")
+    .select("id")
+    .eq("profile_id", booking.profile_id)
+    .eq("hike_id", booking.hike_id)
+    .neq("id", bookingId);
+  if (relatedError)
+    throw new Error("No pudimos verificar reservaciones posteriores.");
+  const relatedIds = (relatedBookings ?? []).map((item) => item.id);
+  if (!relatedIds.length) return false;
+  const { data: orders, error: orderError } = await service
+    .from("orders")
+    .select("id")
+    .in("booking_id", relatedIds);
+  if (orderError) throw new Error("No pudimos verificar órdenes posteriores.");
+  const orderIds = (orders ?? []).map((order) => order.id);
+  if (!orderIds.length) return false;
+  const { count, error: paymentError } = await service
+    .from("payments")
+    .select("id", { count: "exact", head: true })
+    .in("order_id", orderIds)
+    .in("status", ["PENDING", "UNDER_REVIEW", "PAID"])
+    .gt("created_at", after);
+  if (paymentError)
+    throw new Error("No pudimos verificar pagos posteriores.");
+  return (count ?? 0) > 0;
+}
+
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`)
@@ -25,14 +65,19 @@ export async function GET(request: Request) {
       { error: "No existe un administrador activo." },
       { status: 503 },
     );
-  const stale = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const staleCardPayment = new Date(
+    Date.now() - 48 * 60 * 60 * 1000,
+  ).toISOString();
+  const staleDraft = new Date(
+    Date.now() - 24 * 60 * 60 * 1000,
+  ).toISOString();
   const { data: staleStripePayments, error: staleStripeError } = await service
     .from("payments")
-    .select("provider_payment_id,order_id")
+    .select("provider_payment_id,order_id,created_at")
     .eq("provider", "stripe")
     .eq("method", "CARD")
     .eq("status", "PENDING")
-    .lt("created_at", stale)
+    .lt("created_at", staleCardPayment)
     .order("created_at")
     .limit(100);
   if (staleStripeError)
@@ -40,7 +85,7 @@ export async function GET(request: Request) {
       { error: "No pudimos consultar los pagos vencidos." },
       { status: 500 },
     );
-  const expiredPayments = [];
+  const expiredPayments: Array<Record<string, unknown>> = [];
   const stripeKey = await getStripeSecretKey();
   for (const payment of staleStripePayments ?? []) {
     if (!payment.provider_payment_id) continue;
@@ -93,14 +138,29 @@ export async function GET(request: Request) {
         });
         continue;
       }
+      const reconciliation = await expireStripeCheckout({
+        sessionId: payment.provider_payment_id,
+        orderId: payment.order_id,
+        rawStatus: "checkout.session.expired:cron",
+      });
+      let reminder: "sent" | "skipped_newer_payment" | "not_applicable" =
+        "not_applicable";
+      if (reconciliation.bookingReleased && reconciliation.bookingId) {
+        const newerPayment = await hasNewerPaymentForSameHike(
+          reconciliation.bookingId,
+          payment.created_at,
+        );
+        if (newerPayment) reminder = "skipped_newer_payment";
+        else {
+          await sendBookingReminder(reconciliation.bookingId, admin.id);
+          reminder = "sent";
+        }
+      }
       expiredPayments.push({
         sessionId: payment.provider_payment_id,
-        ...(await expireStripeCheckout({
-          sessionId: payment.provider_payment_id,
-          orderId: payment.order_id,
-          rawStatus: "checkout.session.expired:cron",
-        })),
+        ...reconciliation,
         reconciledAs: "expired",
+        reminder,
         ok: true,
       });
     } catch (error) {
@@ -118,7 +178,7 @@ export async function GET(request: Request) {
     .from("bookings")
     .select("id")
     .in("status", ["DRAFT", "PENDING_PAYMENT"])
-    .lt("last_activity_at", stale)
+    .lt("last_activity_at", staleDraft)
     .or(`last_reminder_at.is.null,last_reminder_at.lt.${reminderLimit}`)
     .order("last_activity_at")
     .limit(50);

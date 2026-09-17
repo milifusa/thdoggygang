@@ -11,7 +11,12 @@ export type ExpireStripeCheckoutResult = {
   paymentExpired: boolean;
   orderExpired: boolean;
   bookingReleased: boolean;
-  reason?: "not_found" | "already_resolved" | "newer_attempt_exists" | "paid";
+  reason?:
+    | "not_found"
+    | "already_resolved"
+    | "newer_attempt_exists"
+    | "paid"
+    | "grace_period";
 };
 
 async function closePendingPaymentsForOrders(
@@ -194,15 +199,17 @@ export async function expireStripeCheckout({
   sessionId,
   orderId,
   rawStatus = "checkout.session.expired",
+  minimumAgeHours = 0,
 }: {
   sessionId: string;
   orderId?: string | null;
   rawStatus?: string;
+  minimumAgeHours?: number;
 }): Promise<ExpireStripeCheckoutResult> {
   const service = createSupabaseServiceClient();
   let paymentQuery = service
     .from("payments")
-    .select("id,order_id,status")
+    .select("id,order_id,status,created_at")
     .eq("provider", "stripe")
     .eq("provider_payment_id", sessionId);
   if (orderId) paymentQuery = paymentQuery.eq("order_id", orderId);
@@ -228,6 +235,20 @@ export async function expireStripeCheckout({
       orderExpired: false,
       bookingReleased: false,
       reason: payment.status === "PAID" ? "paid" : "already_resolved",
+    };
+  if (
+    minimumAgeHours > 0 &&
+    Date.now() - new Date(payment.created_at).getTime() <
+      minimumAgeHours * 60 * 60 * 1000
+  )
+    return {
+      paymentId: payment.id,
+      orderId: payment.order_id,
+      bookingId: null,
+      paymentExpired: false,
+      orderExpired: false,
+      bookingReleased: false,
+      reason: "grace_period",
     };
 
   const now = new Date().toISOString();

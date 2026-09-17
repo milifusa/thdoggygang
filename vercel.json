@@ -3,6 +3,6 @@
   "framework": "nextjs",
   "buildCommand": "npx next build",
   "crons": [
-    { "path": "/api/cron/booking-reminders", "schedule": "0 14 * * *" }
+    { "path": "/api/cron/booking-reminders", "schedule": "0 * * * *" }
   ]
 }

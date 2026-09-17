@@ -300,7 +300,10 @@ check(
   bookingCron.includes("staleStripePayments") &&
     bookingCron.includes("expireStripeCheckout") &&
     bookingCron.includes("confirmStripeCheckout") &&
-    bookingCron.includes("api.stripe.com/v1/checkout/sessions"),
+    bookingCron.includes("api.stripe.com/v1/checkout/sessions") &&
+    bookingCron.includes("48 * 60 * 60 * 1000") &&
+    bookingCron.includes("hasNewerPaymentForSameHike") &&
+    bookingCron.includes("sendBookingReminder(reconciliation.bookingId"),
   "El respaldo no verifica en Stripe los pagos cuyo webhook no llegó.",
 );
 check(

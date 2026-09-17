@@ -124,6 +124,8 @@ export async function POST(request: Request) {
         sessionId: event.data.object.id,
         orderId: event.data.object.metadata?.order_id,
         rawStatus: event.type,
+        minimumAgeHours:
+          event.type === "checkout.session.expired" ? 48 : 0,
       });
     } catch {
       return Response.json(
