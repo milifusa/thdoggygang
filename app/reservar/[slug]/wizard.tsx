@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, WalletCards, X } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, UserRound, WalletCards, X } from "lucide-react";
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 import { dateInMexico, isFreeChildForDate } from "../../lib/person-age";
@@ -110,6 +110,7 @@ export function BookingWizard({
     resume?.personIds.length ? resume.personIds : people[0] ? [people[0].id] : [],
   );
   const [selectedDogs, setSelectedDogs] = useState(resume?.dogIds.length ? resume.dogIds : dogs[0] ? [dogs[0].id] : []);
+  const [dogChoiceMade, setDogChoiceMade] = useState(Boolean(resume) || dogs.length > 0);
   const [transport, setTransport] = useState(Boolean(resume?.transportPersonIds.length));
   const [transportPeople, setTransportPeople] = useState(
     resume?.transportPersonIds.length ? resume.transportPersonIds : people[0] ? [people[0].id] : [],
@@ -177,6 +178,15 @@ export function BookingWizard({
     if(person?.isMinor&&person.guardianPersonId&&!next.includes(person.guardianPersonId))next.push(person.guardianPersonId);
     setSelectedPeople(next);
     setSyncMessage(person?.isMinor&&person.guardianPersonId?"También seleccionamos a su persona adulta responsable.":"");
+  };
+  const toggleDog = (id: string) => {
+    setDogChoiceMade(true);
+    toggle(id, selectedDogs, setSelectedDogs);
+  };
+  const chooseNoDog = () => {
+    setSelectedDogs([]);
+    setDogChoiceMade(true);
+    setDogNeedsUpdate(false);
   };
   const persistDraft = async () => {
     if (context.mode === "demo") return bookingId;
@@ -287,7 +297,7 @@ export function BookingWizard({
     step === 0
       ? selectedPeople.length > 0 && selectedPeople.every((id)=>{const person=people.find((item)=>item.id===id);return !person?.isMinor||Boolean(person.guardianPersonId&&selectedPeople.includes(person.guardianPersonId));})
       : step === 1
-        ? selectedDogs.length > 0
+        ? dogChoiceMade
         : step === 4
           ? Boolean(signatureData || waiverSaved) && accepted
           : step === 5 && context.mode === "live" && payment === "transfer"
@@ -303,8 +313,8 @@ export function BookingWizard({
         : "AGREGA UNA PERSONA"
       : step === 1 && !canContinue
         ? dogs.length
-          ? "SELECCIONA UN PERRITO"
-          : "AGREGA UN PERRITO"
+          ? "SELECCIONA UN PERRITO O ELIGE SIN PERRITO"
+          : "AGREGA UN PERRITO O ELIGE SIN PERRITO"
         : step === 4 && !canContinue
           ? signatureData || waiverSaved
             ? "ACTIVA HE LEÍDO Y ACEPTO"
@@ -452,35 +462,50 @@ export function BookingWizard({
                   vienen?
                 </h1>
                 <p className="wizard-lead">
-                  Ellos también cuentan cada aventura. Selecciona a los
-                  exploradores de cuatro patas.
+                  Selecciona a los exploradores de cuatro patas o indícanos
+                  que esta vez vienes sin perrito.
                 </p>
-                {dogs.length ? (
-                  <div className="select-list">
-                    {dogs.map((dog) => (
-                      <button
-                        type="button"
-                        aria-pressed={selectedDogs.includes(dog.id)}
-                        className={`select-card dog-select ${selectedDogs.includes(dog.id) ? "selected" : ""}`}
-                        key={dog.id}
-                        onClick={() =>
-                          toggle(dog.id, selectedDogs, setSelectedDogs)
-                        }
-                      >
-                        <img src={dog.image} alt={dog.name} />
-                        <span>
-                          <strong>{dog.name}</strong>
-                          <small>{dog.detail}</small>
-                        </span>
-                        <i aria-hidden="true">
-                          {selectedDogs.includes(dog.id) && <Check />}
-                        </i>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
+                <div className="select-list">
+                  <button
+                    type="button"
+                    aria-pressed={dogChoiceMade && selectedDogs.length === 0}
+                    className={`select-card dog-select no-dog-select ${dogChoiceMade && selectedDogs.length === 0 ? "selected" : ""}`}
+                    onClick={chooseNoDog}
+                  >
+                    <div className="no-dog-icon" aria-hidden="true">
+                      <UserRound />
+                    </div>
+                    <span>
+                      <strong>Sin perrito</strong>
+                      <small>Esta aventura la hago sólo con humanos</small>
+                    </span>
+                    <i aria-hidden="true">
+                      {dogChoiceMade && selectedDogs.length === 0 && <Check />}
+                    </i>
+                  </button>
+                  {dogs.map((dog) => (
+                    <button
+                      type="button"
+                      aria-pressed={selectedDogs.includes(dog.id)}
+                      className={`select-card dog-select ${selectedDogs.includes(dog.id) ? "selected" : ""}`}
+                      key={dog.id}
+                      onClick={() => toggleDog(dog.id)}
+                    >
+                      <img src={dog.image} alt={dog.name} />
+                      <span>
+                        <strong>{dog.name}</strong>
+                        <small>{dog.detail}</small>
+                      </span>
+                      <i aria-hidden="true">
+                        {selectedDogs.includes(dog.id) && <Check />}
+                      </i>
+                    </button>
+                  ))}
+                </div>
+                {!dogs.length && (
                   <p className="wizard-empty">
-                    Primero agrega a un perrito a tu manada.
+                    No tienes perritos registrados. Puedes continuar sin
+                    perrito o agregar uno para futuras aventuras.
                   </p>
                 )}
                 {dogs.find((dog) => selectedDogs.includes(dog.id)) && (

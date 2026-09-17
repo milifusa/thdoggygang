@@ -143,7 +143,8 @@ export function GangManager({
                 type="button"
                 onClick={() => setDialog({ kind: "person", record: person })}
               >
-                EDITAR PERFIL <ArrowRight aria-hidden="true" />
+                {index === 0 ? "EDITAR MI PERFIL" : "EDITAR PERFIL"}{" "}
+                <ArrowRight aria-hidden="true" />
               </button>
             </article>
           ))}
@@ -222,6 +223,9 @@ export function GangManager({
         <PersonDialog
           people={people}
           record={dialog.record}
+          isPrimary={Boolean(
+            dialog.record && people[0]?.id === dialog.record.id,
+          )}
           onClose={() => setDialog(null)}
           onSaved={() =>
             saved(
@@ -312,11 +316,13 @@ function MexicoPhoneField({
 function PersonDialog({
   people,
   record,
+  isPrimary,
   onClose,
   onSaved,
 }: {
   people: PersonRecord[];
   record?: PersonRecord;
+  isPrimary: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -386,8 +392,18 @@ function PersonDialog({
   };
   return (
     <Dialog
-      title={record ? "Edita a tu acompañante" : "Agrega a una persona"}
-      intro="Guarda sus datos una vez y selecciónala fácilmente en futuras aventuras."
+      title={
+        record
+          ? isPrimary
+            ? "Edita tu perfil"
+            : "Edita a tu acompañante"
+          : "Agrega a una persona"
+      }
+      intro={
+        isPrimary
+          ? "Este nombre aparecerá en tu cuenta, reservaciones y próximas aventuras."
+          : "Guarda sus datos una vez y selecciónala fácilmente en futuras aventuras."
+      }
       onClose={onClose}
     >
       <form className="gang-form" onSubmit={submit}>

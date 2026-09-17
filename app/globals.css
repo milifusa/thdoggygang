@@ -2148,6 +2148,20 @@ footer small {
   border-radius: 50%;
   object-fit: cover;
 }
+.no-dog-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--navy);
+  display: grid;
+  place-items: center;
+}
+.no-dog-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.8;
+}
 .add-row {
   margin-top: 20px;
   border: 0;
