@@ -72,7 +72,7 @@ export default async function PaymentsAdminPage({
     supabase
       .from("payments")
       .select(
-        "id,provider,method,status,raw_status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(id,order_number,status,profile:profiles(first_name,last_name),order_items(item_type,description,quantity),booking:bookings(id,booking_number,status,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
+        "id,provider,method,status,raw_status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(id,order_number,status,profile:profiles(first_name,last_name),order_items(item_type,description,quantity),booking:bookings(id,booking_number,status,credit_applied_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
       )
       .order("created_at", { ascending: false })
       .limit(300),
@@ -257,6 +257,7 @@ export default async function PaymentsAdminPage({
                   <div className={styles.amountBlock}>
                     <strong>{money(payment.amount_cents)}</strong>
                     <span><MethodIcon aria-hidden="true" />{payment.method === "CARD" ? "Tarjeta" : "Transferencia"}</span>
+                    {booking?.credit_applied_cents > 0 && <small>+ {money(booking.credit_applied_cents)} de crédito</small>}
                   </div>
                   <dl className={styles.details}>
                     <div><dt>PEDIDO</dt><dd>{order?.order_number ?? "Sin folio"}</dd></div>

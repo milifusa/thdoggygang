@@ -2,6 +2,8 @@ import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 import { recalculateBookingTotal } from "../../../lib/server/booking-pricing";
 import { getBankTransferConfig } from "../../../lib/payment-config";
+import { commitMemberCredit, reserveMemberCredit } from "../../../lib/server/member-credit";
+import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "application/pdf"]);
 
@@ -14,14 +16,10 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const bookingId = form.get("bookingId");
   const receipt = form.get("receipt");
-  if (
-    typeof bookingId !== "string" ||
-    !(receipt instanceof File) ||
-    !allowedTypes.has(receipt.type) ||
-    receipt.size > 10 * 1024 * 1024
-  )
+  const useCredit = form.get("useCredit") !== "false";
+  if (typeof bookingId !== "string")
     return Response.json(
-      { error: "Usa una imagen o PDF de máximo 10 MB." },
+      { error: "Reservación inválida." },
       { status: 400 },
     );
   const supabase = await createSupabaseServerClient();
@@ -52,13 +50,14 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   const service = createSupabaseServiceClient();
+  let hikeSubtotal = 0;
   try {
-    booking.total_cents = (
-      await recalculateBookingTotal({
+    const pricing = await recalculateBookingTotal({
         bookingId: booking.id,
         profileId: booking.profile_id,
-      })
-    ).totalCents;
+      });
+    booking.total_cents = pricing.totalCents;
+    hikeSubtotal = pricing.hikeSubtotal;
   } catch (pricingError) {
     return Response.json(
       {
@@ -70,6 +69,31 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
+  let creditApplied = 0;
+  try {
+    creditApplied = await reserveMemberCredit({
+      bookingId: booking.id,
+      profileId: booking.profile_id,
+      maximumCents: hikeSubtotal,
+      enabled: useCredit,
+    });
+  } catch (creditError) {
+    return Response.json(
+      { error: creditError instanceof Error ? creditError.message : "No pudimos aplicar tu crédito." },
+      { status: 409 },
+    );
+  }
+  const amountDue = Math.max(0, booking.total_cents - creditApplied);
+  if (
+    amountDue > 0 &&
+    (!(receipt instanceof File) ||
+      !allowedTypes.has(receipt.type) ||
+      receipt.size > 10 * 1024 * 1024)
+  )
+    return Response.json(
+      { error: "Usa una imagen o PDF de máximo 10 MB." },
+      { status: 400 },
+    );
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
   let { data: order } = await service
     .from("orders")
@@ -136,6 +160,19 @@ export async function POST(request: Request) {
       { error: "No pudimos actualizar el detalle de la orden." },
       { status: 500 },
     );
+  if (amountDue === 0) {
+    const now = new Date().toISOString();
+    const { error: inventoryError } = await service.rpc("commit_product_inventory", { p_order_id: order.id });
+    if (inventoryError)
+      return Response.json({ error: "No pudimos confirmar los productos de la orden." }, { status: 500 });
+    await commitMemberCredit(booking.id);
+    await service.from("orders").update({ status: "PAID" }).eq("id", order.id);
+    await service.from("bookings").update({ status: "CONFIRMED", confirmed_at: now, expires_at: null }).eq("id", booking.id);
+    await ensureBookingQrToken(booking.id);
+    return Response.json({ ok: true, confirmed: true, creditAppliedCents: creditApplied });
+  }
+  if (!(receipt instanceof File))
+    return Response.json({ error: "Sube tu comprobante." }, { status: 400 });
   const extension =
     receipt.type === "application/pdf"
       ? "pdf"
@@ -162,7 +199,7 @@ export async function POST(request: Request) {
       provider_payment_id: `transfer:${crypto.randomUUID()}`,
       method: "TRANSFER",
       status: "UNDER_REVIEW",
-      amount_cents: booking.total_cents,
+      amount_cents: amountDue,
     })
     .select("id")
     .single();

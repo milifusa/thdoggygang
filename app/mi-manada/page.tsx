@@ -11,12 +11,14 @@ import {
   ShoppingBag,
   Sparkles,
   Users,
+  WalletCards,
 } from "lucide-react";
 import { requireClientSession } from "../lib/auth/guards";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { GangManager, type DogRecord, type PersonRecord } from "./gang-manager";
 import { getAdventures, hikeCoverUrl } from "../lib/data";
 import { recommendAdventures } from "../lib/recommendations";
+import { getMemberCreditBalance } from "../lib/server/member-credit";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +93,7 @@ export default async function MyGangPage({
   const query = await searchParams;
   if (session.mode !== "live" || !session.profile) return null;
   const supabase = await createSupabaseServerClient();
+  const creditBalanceCents = await getMemberCreditBalance(session.profile.id);
   const [{ data: peopleData }, { data: dogsData }, { data: bookingsData }] =
     await Promise.all([
       supabase
@@ -333,6 +336,14 @@ export default async function MyGangPage({
             BUSCAR AVENTURA →
           </Link>
         </div>
+        {creditBalanceCents > 0 && (
+          <section className="member-credit-banner">
+            <div><WalletCards /><span>CRÉDITO DE TU MANADA</span></div>
+            <strong>{(creditBalanceCents / 100).toLocaleString("es-MX", { style: "currency", currency: "MXN" })}</strong>
+            <p>Disponible para descontar automáticamente al reservar tu próximo hike.</p>
+            <Link href="/#aventuras">ELEGIR MI PRÓXIMA AVENTURA →</Link>
+          </section>
+        )}
         <nav className="account-quick-actions" aria-label="Accesos rápidos">
           <a href="#aventuras">
             <CalendarDays />

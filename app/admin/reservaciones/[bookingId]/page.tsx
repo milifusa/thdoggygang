@@ -74,7 +74,7 @@ export default async function ReservationDetail({
     supabase
       .from("bookings")
       .select(
-        "id,booking_number,status,subtotal_cents,total_cents,currency,current_step,created_at,updated_at,last_activity_at,last_reminder_at,expires_at,confirmed_at,cancelled_at,profile:profiles!bookings_profile_id_fkey(id,first_name,last_name,email,phone,emergency_contact_name,emergency_contact_phone),hike:hikes(id,name,slug,starts_at,location_name,meeting_point),booking_participants(id,guardian_booking_participant_id,snapshot),booking_dogs(id,snapshot),transport_reservations(id,booking_participant_id,price_cents,dog_ids),signed_waivers(id,booking_participant_id,signed_at,pdf_path,document_hash),check_ins(id,booking_participant_id,checked_in_at,method),booking_cancellation_requests(id,status,reason,refundable_amount_cents,created_at,resolution_note),orders(id,order_number,status,total_cents,fulfillment_mode,pickup_hike_id,shipping_address,tracking_number,payments(id,status,method,amount_cents,paid_at,provider,raw_status,payment_receipts(id,storage_path,created_at)),order_items(id,item_type,description,quantity,unit_price_cents,order_item_fulfillments(id,status,delivery_location,delivered_at,note)))",
+        "id,booking_number,status,subtotal_cents,total_cents,credit_applied_cents,currency,current_step,created_at,updated_at,last_activity_at,last_reminder_at,expires_at,confirmed_at,cancelled_at,profile:profiles!bookings_profile_id_fkey(id,first_name,last_name,email,phone,emergency_contact_name,emergency_contact_phone),hike:hikes(id,name,slug,starts_at,location_name,meeting_point),booking_participants(id,guardian_booking_participant_id,snapshot),booking_dogs(id,snapshot),transport_reservations(id,booking_participant_id,price_cents,dog_ids),signed_waivers(id,booking_participant_id,signed_at,pdf_path,document_hash),check_ins(id,booking_participant_id,checked_in_at,method),booking_cancellation_requests(id,status,reason,refundable_amount_cents,credit_amount_cents,created_at,resolution_note),orders(id,order_number,status,total_cents,fulfillment_mode,pickup_hike_id,shipping_address,tracking_number,payments(id,status,method,amount_cents,paid_at,provider,raw_status,payment_receipts(id,storage_path,created_at)),order_items(id,item_type,description,quantity,unit_price_cents,order_item_fulfillments(id,status,delivery_location,delivered_at,note)))",
       )
       .eq("id", bookingId)
       .maybeSingle(),
@@ -130,9 +130,11 @@ export default async function ReservationDetail({
     booking.booking_participants.length > 0 &&
     waivers.length >= booking.booking_participants.length &&
     booking.check_ins.length < booking.booking_participants.length;
-  const cancellation = (booking.booking_cancellation_requests ?? []).find(
+  const cancellations = booking.booking_cancellation_requests ?? [];
+  const pendingCancellation = cancellations.find(
     (request) => request.status === "REQUESTED",
   );
+  const cancellation = pendingCancellation ?? cancellations[0];
   return (
     <main className="admin-page">
       <AdminNav active="/admin/reservaciones" hikeId={hike?.id} />
@@ -381,12 +383,19 @@ export default async function ReservationDetail({
                 ))}
               {cancellation && (
                 <div className="cancellation-request">
-                  <strong>SOLICITUD DE CANCELACIÓN</strong>
+                  <strong>{cancellation.status === "CREDITED" ? "CANCELACIÓN ACREDITADA" : "SOLICITUD DE CANCELACIÓN"}</strong>
                   <p>{cancellation.reason}</p>
                   <small>
-                    {adminDate(cancellation.created_at)} · Reembolso estimado{" "}
-                    {money(cancellation.refundable_amount_cents)}
+                    {adminDate(cancellation.created_at)} · Crédito otorgado{" "}
+                    {money(cancellation.credit_amount_cents)}
                   </small>
+                </div>
+              )}
+              {booking.credit_applied_cents > 0 && (
+                <div className="cancellation-request">
+                  <strong>CRÉDITO APLICADO A ESTA RESERVACIÓN</strong>
+                  <p>{money(booking.credit_applied_cents)}</p>
+                  <small>El resto del total se cubrió con el método de pago registrado.</small>
                 </div>
               )}
               <AdminBookingActions
@@ -395,7 +404,7 @@ export default async function ReservationDetail({
                 hasPaidPayment={payments.some(
                   (entry) => entry.status === "PAID",
                 )}
-                hasCancellationRequest={Boolean(cancellation)}
+                hasCancellationRequest={Boolean(pendingCancellation)}
               />
             </section>
             <section className="reservation-panel">

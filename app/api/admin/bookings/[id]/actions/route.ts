@@ -12,6 +12,7 @@ const schema = z.object({
     "REOPEN",
     "REJECT_CANCELLATION",
     "REFUND",
+    "ISSUE_CREDIT",
   ]),
   reason: z.string().trim().min(3).max(1200),
 });
@@ -45,7 +46,7 @@ export async function POST(
   const { data: booking } = await service
     .from("bookings")
     .select(
-      "id,status,hike_id,orders(id,status,payments(id,provider,provider_payment_id,status,amount_cents))",
+      "id,status,hike_id,profile_id,orders(id,status,payments(id,provider,provider_payment_id,status,amount_cents))",
     )
     .eq("id", id)
     .single();
@@ -55,7 +56,27 @@ export async function POST(
       { status: 404 },
     );
   const now = new Date().toISOString();
-  if (parsed.data.action === "REFUND") {
+  const hasPaidPayment = (booking.orders ?? [])
+    .flatMap((order) => order.payments ?? [])
+    .some((payment) => payment.status === "PAID");
+  if (
+    parsed.data.action === "ISSUE_CREDIT" ||
+    (parsed.data.action === "CANCEL" && hasPaidPayment)
+  ) {
+    const { error: creditError } = await service.rpc("cancel_booking_to_credit", {
+      p_booking_id: booking.id,
+      p_profile_id: booking.profile_id,
+      p_reason: parsed.data.reason,
+      p_actor_profile_id: admin.id,
+      p_enforce_deadline: false,
+    });
+    if (creditError)
+      return Response.json(
+        { error: "No pudimos cancelar y acreditar la reservación." },
+        { status: 409 },
+      );
+    await closePendingPaymentsForBooking(booking.id).catch(() => null);
+  } else if (parsed.data.action === "REFUND") {
     const payment = (booking.orders ?? [])
       .flatMap((order) => order.payments ?? [])
       .find((item) => item.status === "PAID");
@@ -165,6 +186,7 @@ export async function POST(
     if (parsed.data.action === "CANCEL")
       await Promise.all([
         closePendingPaymentsForBooking(booking.id),
+        service.rpc("release_booking_credit", { p_booking_id: booking.id }),
         service
           .from("booking_cancellation_requests")
           .update({
@@ -186,7 +208,7 @@ export async function POST(
       entity_id: booking.id,
       metadata: { reason: parsed.data.reason },
     });
-  if (["CANCEL", "REFUND"].includes(parsed.data.action))
+  if (["CANCEL", "REFUND", "ISSUE_CREDIT"].includes(parsed.data.action))
     await sendWaitlistOfferForHike(booking.hike_id).catch(() => null);
   return Response.json({ ok: true });
 }

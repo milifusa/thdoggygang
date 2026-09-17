@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, X } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, WalletCards, X } from "lucide-react";
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 import { dateInMexico, isFreeChildForDate } from "../../lib/person-age";
@@ -92,6 +92,7 @@ export function BookingWizard({
   products,
   cardPaymentsEnabled,
   bankTransfer,
+  creditBalanceCents,
   resume,
 }: {
   adventure: Adventure;
@@ -99,6 +100,7 @@ export function BookingWizard({
   products: Product[];
   cardPaymentsEnabled: boolean;
   bankTransfer: BankTransferConfig | null;
+  creditBalanceCents: number;
   resume?: BookingResume;
 }) {
   const people = context.people;
@@ -120,6 +122,7 @@ export function BookingWizard({
   const [waiverSaved, setWaiverSaved] = useState(Boolean(resume?.waiverSigned));
   const [accepted, setAccepted] = useState(Boolean(resume?.waiverSigned));
   const [payment, setPayment] = useState<"card" | "transfer">(cardPaymentsEnabled ? "card" : "transfer");
+  const [useCredit, setUseCredit] = useState(creditBalanceCents > 0);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [transferPending, setTransferPending] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -148,6 +151,9 @@ export function BookingWizard({
     () => hikeSubtotal + (transport ? transportPeople.length * adventure.transportPrice : 0) + productsSubtotal,
     [hikeSubtotal, transport, transportPeople.length, adventure.transportPrice,productsSubtotal],
   );
+  const availableCredit = creditBalanceCents / 100;
+  const creditApplied = useCredit ? Math.min(availableCredit, hikeSubtotal) : 0;
+  const payableTotal = Math.max(0, total - creditApplied);
   const toggle = (
     id: string,
     values: string[],
@@ -226,11 +232,11 @@ export function BookingWizard({
         setWaiverSaved(true);
       }
       if (step === 5 && context.mode === "live") {
-        if (payment === "card") {
+        if (payment === "card" || payableTotal === 0) {
           const response = await fetch("/api/checkout/stripe", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ bookingId: savedBookingId }),
+            body: JSON.stringify({ bookingId: savedBookingId, useCredit }),
           });
           const payload = (await response.json()) as {
             url?: string;
@@ -245,6 +251,7 @@ export function BookingWizard({
           throw new Error("Selecciona tu comprobante antes de continuar.");
         const form = new FormData();
         form.set("bookingId", savedBookingId);
+        form.set("useCredit", String(useCredit));
         form.set("receipt", receiptFile);
         const response = await fetch("/api/payments/transfer", {
           method: "POST",
@@ -284,9 +291,9 @@ export function BookingWizard({
         : step === 4
           ? Boolean(signatureData || waiverSaved) && accepted
           : step === 5 && context.mode === "live" && payment === "transfer"
-            ? Boolean(bankTransfer && receiptFile)
+            ? payableTotal === 0 || Boolean(bankTransfer && receiptFile)
             : step === 5 && context.mode === "live" && payment === "card"
-              ? cardPaymentsEnabled
+              ? payableTotal === 0 || cardPaymentsEnabled
             : true;
   const continueLabel = processing
     ? "GUARDANDO…"
@@ -303,9 +310,11 @@ export function BookingWizard({
             ? "ACTIVA HE LEÍDO Y ACEPTO"
             : "FIRMA PARA CONTINUAR"
           : step === 5
-            ? payment === "transfer" && !receiptFile
+            ? payableTotal === 0
+              ? `USAR $${creditApplied.toLocaleString("es-MX")} DE CRÉDITO`
+              : payment === "transfer" && !receiptFile
               ? "SUBE TU COMPROBANTE"
-              : `PAGAR $${total.toLocaleString("es-MX")} MXN`
+              : `PAGAR $${payableTotal.toLocaleString("es-MX")} MXN`
             : "CONTINUAR";
   const progress = `${Math.round((step / (steps.length - 1)) * 100)}%`;
   const goBack = () => {
@@ -360,7 +369,7 @@ export function BookingWizard({
           </div>
           <div className="wizard-mobile-total">
             <span>{adventure.title}</span>
-            <strong>${total.toLocaleString("es-MX")} MXN</strong>
+            <strong>${payableTotal.toLocaleString("es-MX")} MXN</strong>
           </div>
           <div
             className="wizard-dog-track"
@@ -679,7 +688,14 @@ export function BookingWizard({
                   Elige cómo quieres pagar. Tu QR se genera cuando confirmemos
                   el pago.
                 </p>
-                <div className="payment-tabs">
+                {creditBalanceCents > 0 && (
+                  <label className="booking-credit-option">
+                    <input type="checkbox" role="switch" checked={useCredit} onChange={(event) => setUseCredit(event.target.checked)} />
+                    <span className="booking-credit-toggle"><i>{useCredit && <Check />}</i></span>
+                    <span><strong>USAR CRÉDITO DE MI MANADA</strong><small>Tienes ${availableCredit.toLocaleString("es-MX")} disponibles. Aplicaremos hasta ${creditApplied.toLocaleString("es-MX")} a este hike.</small></span>
+                  </label>
+                )}
+                {payableTotal > 0 && <div className="payment-tabs">
                   <button
                     className={payment === "card" ? "active" : ""}
                     onClick={() => setPayment("card")}
@@ -694,13 +710,19 @@ export function BookingWizard({
                   >
                     {bankTransfer ? "TRANSFERENCIA" : "TRANSFERENCIA · NO DISPONIBLE"}
                   </button>
-                </div>
-                {!cardPaymentsEnabled && !bankTransfer && (
+                </div>}
+                {payableTotal > 0 && !cardPaymentsEnabled && !bankTransfer && (
                   <p className="payment-unavailable" role="alert">
                     Los pagos están temporalmente deshabilitados. La reservación puede guardarse como borrador, pero no se cobrará hasta que el administrador configure un método real.
                   </p>
                 )}
-                {payment === "card" ? (
+                {payableTotal === 0 ? (
+                  <div className="credit-covers-total">
+                    <WalletCards />
+                    <strong>Tu crédito cubre esta aventura</strong>
+                    <p>No necesitas tarjeta ni transferencia. Al continuar confirmaremos tu lugar y descontaremos el crédito.</p>
+                  </div>
+                ) : payment === "card" ? (
                   <div className="stripe-checkout-box">
                     <div>TDG</div>
                     <span>PAGO SEGURO</span>
@@ -810,10 +832,16 @@ export function BookingWizard({
                   <dd>${productsSubtotal.toLocaleString("es-MX")}</dd>
                 </div>
               )}
+              {creditApplied > 0 && (
+                <div className="summary-credit">
+                  <dt>Crédito de tu manada</dt>
+                  <dd>−${creditApplied.toLocaleString("es-MX")}</dd>
+                </div>
+              )}
               <div className="summary-total">
-                <dt>TOTAL</dt>
+                <dt>{creditApplied > 0 ? "TOTAL A PAGAR" : "TOTAL"}</dt>
                 <dd>
-                  ${total.toLocaleString("es-MX")} <small>MXN</small>
+                  ${payableTotal.toLocaleString("es-MX")} <small>MXN</small>
                 </dd>
               </div>
             </dl>

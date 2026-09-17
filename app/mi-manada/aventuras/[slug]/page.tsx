@@ -8,6 +8,7 @@ import { AdventureTicket } from "./ticket-client";
 import { CancelBookingButton } from "./cancel-booking-button";
 import { AdventureCenter } from "./adventure-center";
 import { assessDogSuitability } from "../../../lib/dog-suitability";
+import { getCancellationSettings } from "../../../lib/server/member-credit";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function MyAdventurePage({
   const session = await requireClientSession(`/mi-manada/aventuras/${slug}`);
   if (session.mode !== "live" || !session.profile) return null;
   const supabase = await createSupabaseServerClient();
+  const cancellationSettings = await getCancellationSettings();
   const { data: bookingRows } = await supabase
     .from("bookings")
     .select(
@@ -206,6 +208,11 @@ export default async function MyAdventurePage({
             {hike.cancellation_policy ??
               "El equipo revisará tu solicitud conforme a las condiciones de esta aventura."}
           </p>
+          <p>{cancellationSettings.policyText}</p>
+          <small>
+            El plazo cierra {cancellationSettings.minimumNoticeHours} horas
+            antes del inicio de la aventura.
+          </small>
         </div>
         {dogAssessments.length > 0 && (
           <section className="dog-suitability-results">
@@ -247,6 +254,11 @@ export default async function MyAdventurePage({
           bookingId={booking.id}
           status={booking.status}
           hasRequest={hasCancellationRequest}
+          hoursRemaining={Math.max(0, Math.ceil((new Date(hike.starts_at).getTime() - Date.now()) / 3_600_000))}
+          totalCents={booking.total_cents}
+          minimumNoticeHours={cancellationSettings.minimumNoticeHours}
+          policyText={cancellationSettings.policyText}
+          lateMessage={cancellationSettings.lateMessage}
         />
       </section>
     </main>

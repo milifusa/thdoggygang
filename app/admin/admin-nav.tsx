@@ -16,6 +16,7 @@ import {
   CreditCard,
   Gift,
   Mail,
+  CalendarX2,
 } from "lucide-react";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 
@@ -26,6 +27,7 @@ const sections = [
   { href: "/admin/hikes", label: "Hikes", icon: Mountain },
   { href: "/admin/reservaciones", label: "Reservaciones", icon: ReceiptText },
   { href: "/admin/pagos", label: "Pagos", icon: BadgeDollarSign },
+  { href: "/admin/cancelaciones", label: "Cancelaciones y créditos", icon: CalendarX2 },
   {
     href: "/admin/configuracion-pagos",
     label: "Configuración de pagos",

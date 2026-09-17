@@ -321,6 +321,36 @@ for (const path of [
   );
 }
 
+const creditMigration = read(
+  "supabase/migrations/202609170002_cancellation_policy_and_member_credits.sql",
+);
+check(
+  creditMigration.includes(
+    "alter table public.member_credit_transactions enable row level security",
+  ) &&
+    creditMigration.includes(
+      "revoke all on table public.member_credit_transactions from anon, authenticated",
+    ),
+  "El libro de créditos no está aislado de modificaciones del cliente.",
+);
+check(
+  creditMigration.includes("pg_advisory_xact_lock") &&
+    creditMigration.includes("reserve_booking_credit") &&
+    creditMigration.includes("cancel_booking_to_credit"),
+  "Los créditos no tienen protección transaccional contra doble uso.",
+);
+const memberCancelRoute = read("app/api/bookings/[id]/cancel/route.ts");
+check(
+  memberCancelRoute.includes('rpc("cancel_booking_to_credit"') &&
+    memberCancelRoute.includes("minimumNoticeHours"),
+  "La cancelación del cliente no aplica el plazo ni acredita de forma atómica.",
+);
+check(
+  stripeCheckout.includes("reserveMemberCredit") &&
+    stripeCleanup.includes("commitMemberCredit"),
+  "Stripe no reserva y confirma el crédito junto con el pago.",
+);
+
 for (const name of ["magic_link", "confirmation", "invite", "recovery"]) {
   const template = read(`supabase/templates/${name}.html`);
   check(template.includes("{{ .TokenHash }}"), `${name} no usa TokenHash.`);

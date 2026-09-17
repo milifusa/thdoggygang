@@ -3,6 +3,7 @@ import "server-only";
 import { ensureBookingQrToken } from "../domain/checkin-token";
 import { getStripeSecretKey } from "../payment-config";
 import { createSupabaseServiceClient } from "../supabase/service";
+import { commitMemberCredit } from "./member-credit";
 
 export type ExpireStripeCheckoutResult = {
   paymentId: string | null;
@@ -135,11 +136,16 @@ async function closeSupersededPayments(
     "SUPERSEDED_BY_PAID_BOOKING",
   );
   if (previousBookingIds.length)
-    await service
-      .from("bookings")
-      .update({ status: "CANCELLED", cancelled_at: new Date().toISOString() })
-      .in("id", previousBookingIds)
-      .in("status", ["DRAFT", "PENDING_PAYMENT"]);
+    await Promise.all([
+      service
+        .from("bookings")
+        .update({ status: "CANCELLED", cancelled_at: new Date().toISOString() })
+        .in("id", previousBookingIds)
+        .in("status", ["DRAFT", "PENDING_PAYMENT"]),
+      ...previousBookingIds.map((id) =>
+        service.rpc("release_booking_credit", { p_booking_id: id }),
+      ),
+    ]);
 }
 
 export async function confirmStripeCheckout({
@@ -179,6 +185,7 @@ export async function confirmStripeCheckout({
   if (inventoryError) throw new Error("No pudimos confirmar el inventario.");
 
   if (bookingId) {
+    await commitMemberCredit(bookingId);
     await closeSupersededPayments(bookingId, orderId);
     const { error: bookingError } = await service
       .from("bookings")

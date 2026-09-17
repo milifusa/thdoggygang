@@ -6,6 +6,7 @@ import { SiteHeader } from '../../components/SiteHeader';
 import { getAdventure, getAdventureReviews } from '../../lib/data';
 import { SITE_ORIGIN } from '../../lib/site-url';
 import { WaitlistButton } from './waitlist-button';
+import { getCancellationSettings } from '../../lib/server/member-credit';
 
 const origin = SITE_ORIGIN;
 const concise = (value: string, length = 155) => value.length <= length ? value : `${value.slice(0, length - 1).trim()}…`;
@@ -36,7 +37,7 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const hike = await getAdventure(slug);
   if (!hike) notFound();
-  const reviews = await getAdventureReviews(hike.id);
+  const [reviews, cancellationSettings] = await Promise.all([getAdventureReviews(hike.id), getCancellationSettings()]);
   const url = `${origin}/aventuras/${hike.slug}`;
   const image = hike.image.startsWith('http') ? hike.image : `${origin}${hike.image}`;
   const endsAt = hike.durationMinutes
@@ -110,7 +111,7 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
           </div>
           {hike.excludes.length > 0 && <div className="not-included"><h3>No incluye</h3><ul>{hike.excludes.map((item) => <li key={item}>{item}</li>)}</ul></div>}
           <div className="recommendation"><span>DG</span><div><strong>¿Esta ruta es para mi perrito?</strong><p>{hike.dogSuitability}</p></div></div>
-          <div className="rules-block"><h3>Antes de caminar juntos</h3><details open><summary>Reglas de la manada</summary><p>{hike.rules}</p></details><details><summary>Cancelaciones</summary><p>{hike.cancellationPolicy}</p></details></div>
+          <div className="rules-block"><h3>Antes de caminar juntos</h3><details open><summary>Reglas de la manada</summary><p>{hike.rules}</p></details><details><summary>Cancelaciones y crédito</summary><p>{hike.cancellationPolicy}</p><p>{cancellationSettings.policyText}</p><strong>El plazo cierra {cancellationSettings.minimumNoticeHours} horas antes del inicio.</strong></details></div>
         </div>
         <aside className="booking-card">
           <p className="booking-date">{hike.date}</p><h3>{hike.time}</h3><p className="muted">Punto de encuentro confirmado 24 horas antes.</p>

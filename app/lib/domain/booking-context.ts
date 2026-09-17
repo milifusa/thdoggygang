@@ -19,6 +19,7 @@ export type DogOption = {
 export type BookingContext = {
   mode: "demo" | "live";
   authenticated: boolean;
+  profileId: string | null;
   people: PersonOption[];
   dogs: DogOption[];
 };
@@ -26,6 +27,7 @@ export type BookingContext = {
 const demoContext: BookingContext = {
   mode: "demo",
   authenticated: true,
+  profileId: null,
   people: [
     {
       id: "mishele",
@@ -78,14 +80,14 @@ export async function loadBookingContext(): Promise<BookingContext> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user)
-    return { mode: "live", authenticated: false, people: [], dogs: [] };
+    return { mode: "live", authenticated: false, profileId: null, people: [], dogs: [] };
   const { data: profile } = await supabase
     .from("profiles")
     .select("id")
     .eq("auth_user_id", user.id)
     .single();
   if (!profile)
-    return { mode: "live", authenticated: true, people: [], dogs: [] };
+    return { mode: "live", authenticated: true, profileId: null, people: [], dogs: [] };
   const [{ data: people }, { data: dogs }] = await Promise.all([
     supabase
       .from("person_profiles")
@@ -129,6 +131,7 @@ export async function loadBookingContext(): Promise<BookingContext> {
   return {
     mode: "live",
     authenticated: true,
+    profileId: profile.id,
     people: (people ?? []).map((person, index) => ({
       id: person.id,
       name: `${person.first_name} ${person.last_name}`.trim(),

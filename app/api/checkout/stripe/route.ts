@@ -3,19 +3,18 @@ import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 import { recalculateBookingTotal } from "../../../lib/server/booking-pricing";
 import { getStripeSecretKey } from "../../../lib/payment-config";
+import { commitMemberCredit, reserveMemberCredit } from "../../../lib/server/member-credit";
+import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
 
-const schema = z.object({ bookingId: z.string().uuid() });
+const schema = z.object({
+  bookingId: z.string().uuid(),
+  useCredit: z.boolean().default(true),
+});
 
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
     return Response.json({ error: "Reservación inválida." }, { status: 400 });
-  const stripeKey = await getStripeSecretKey();
-  if (!stripeKey)
-    return Response.json(
-      { error: "El pago con tarjeta aún no está configurado." },
-      { status: 503 },
-    );
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -56,10 +55,11 @@ export async function POST(request: Request) {
       { error: "No encontramos tu perfil." },
       { status: 404 },
     );
+  let hikeSubtotal = 0;
   try {
-    booking.total_cents = (
-      await recalculateBookingTotal({ bookingId: booking.id, profileId })
-    ).totalCents;
+    const pricing = await recalculateBookingTotal({ bookingId: booking.id, profileId });
+    booking.total_cents = pricing.totalCents;
+    hikeSubtotal = pricing.hikeSubtotal;
   } catch (pricingError) {
     return Response.json(
       {
@@ -76,6 +76,21 @@ export async function POST(request: Request) {
       { error: "La reservación no tiene un total pagable." },
       { status: 409 },
     );
+  let creditApplied = 0;
+  try {
+    creditApplied = await reserveMemberCredit({
+      bookingId: booking.id,
+      profileId,
+      maximumCents: hikeSubtotal,
+      enabled: parsed.data.useCredit,
+    });
+  } catch (creditError) {
+    return Response.json(
+      { error: creditError instanceof Error ? creditError.message : "No pudimos aplicar tu crédito." },
+      { status: 409 },
+    );
+  }
+  const amountDue = Math.max(0, booking.total_cents - creditApplied);
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
   const { data: existingOrder } = await service
     .from("orders")
@@ -144,6 +159,23 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
+  if (amountDue === 0) {
+    const now = new Date().toISOString();
+    const { error: inventoryError } = await service.rpc("commit_product_inventory", { p_order_id: order.id });
+    if (inventoryError)
+      return Response.json({ error: "No pudimos confirmar los productos de la orden." }, { status: 500 });
+    await commitMemberCredit(booking.id);
+    await service.from("orders").update({ status: "PAID" }).eq("id", order.id);
+    await service.from("bookings").update({ status: "CONFIRMED", confirmed_at: now, expires_at: null }).eq("id", booking.id);
+    await ensureBookingQrToken(booking.id);
+    return Response.json({ url: `${origin}/reservar/confirmacion?booking=${booking.id}`, creditAppliedCents: creditApplied });
+  }
+  const stripeKey = await getStripeSecretKey();
+  if (!stripeKey)
+    return Response.json(
+      { error: "El pago con tarjeta aún no está configurado." },
+      { status: 503 },
+    );
   const form = new URLSearchParams({
     mode: "payment",
     "payment_method_types[0]": "card",
@@ -161,7 +193,7 @@ export async function POST(request: Request) {
         booking.booking_product_selections.reduce(
           (sum, item) => sum + item.quantity * item.unit_price_cents,
           0,
-        ),
+        ) - creditApplied,
       quantity: 1,
     },
     ...booking.booking_product_selections.map((item) => {
@@ -175,7 +207,7 @@ export async function POST(request: Request) {
       };
     }),
   ];
-  checkoutLines.forEach((line, index) => {
+  checkoutLines.filter((line) => line.amount > 0).forEach((line, index) => {
     form.set(
       `line_items[${index}][price_data][currency]`,
       booking.currency.toLowerCase(),
@@ -217,7 +249,7 @@ export async function POST(request: Request) {
         provider_payment_id: checkout.id,
         method: "CARD",
         status: "PENDING",
-        amount_cents: booking.total_cents,
+        amount_cents: amountDue,
       },
       { onConflict: "provider,provider_payment_id" },
     );

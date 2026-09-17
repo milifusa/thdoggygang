@@ -234,11 +234,11 @@ export function AdminBookingActions({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const run = async (
-    action: "CANCEL" | "COMPLETE" | "REOPEN" | "REJECT_CANCELLATION" | "REFUND",
+    action: "CANCEL" | "COMPLETE" | "REOPEN" | "REJECT_CANCELLATION" | "ISSUE_CREDIT",
   ) => {
     const label =
-      action === "REFUND"
-        ? "reembolso"
+      action === "ISSUE_CREDIT"
+        ? "crédito"
         : action === "REJECT_CANCELLATION"
           ? "rechazo"
           : "cambio";
@@ -247,10 +247,10 @@ export function AdminBookingActions({
       ?.trim();
     if (!reason) return;
     if (
-      (action === "REFUND" || action === "CANCEL") &&
+      (action === "ISSUE_CREDIT" || action === "CANCEL") &&
       !window.confirm(
-        action === "REFUND"
-          ? "Se devolverá el pago, se restaurará el inventario comprado y se liberarán los lugares de personas y perritos. ¿Continuar?"
+        action === "ISSUE_CREDIT"
+          ? "Se cancelará la reservación, se liberará el cupo y el importe quedará como crédito del cliente para otro hike. No se devolverá dinero. ¿Continuar?"
           : "Se cancelará la reservación y se liberarán los lugares de personas y perritos. Esta acción no devuelve pagos. ¿Continuar?",
       )
     )
@@ -273,7 +273,7 @@ export function AdminBookingActions({
       <strong>ACCIONES DE RESERVACIÓN</strong>
       <p className="booking-capacity-note">
         {hasPaidPayment
-          ? "REEMBOLSAR Y CANCELAR devuelve el pago, repone el inventario y libera el cupo una sola vez. Mientras una solicitud esté pendiente, sus lugares continúan reservados."
+          ? "CANCELAR Y DAR CRÉDITO libera el cupo y conserva el importe pagado como saldo para otro hike. No se devuelve dinero al método original."
           : "CANCELAR libera los lugares de personas y perritos. Esta reservación no tiene un pago confirmado que devolver."}
       </p>
       <div>
@@ -299,10 +299,10 @@ export function AdminBookingActions({
           <button
             className="danger"
             disabled={busy}
-            onClick={() => void run("REFUND")}
+            onClick={() => void run("ISSUE_CREDIT")}
           >
             <RotateCcw />
-            REEMBOLSAR Y CANCELAR
+            CANCELAR Y DAR CRÉDITO
           </button>
         )}
         {hasCancellationRequest && (

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../../../lib/supabase/service";
 import { ensureBookingQrToken } from "../../../../../lib/domain/checkin-token";
+import { commitMemberCredit } from "../../../../../lib/server/member-credit";
 
 export async function POST(
   _: Request,
@@ -51,6 +52,7 @@ export async function POST(
     p_order_id: payment.order_id,
   });
   if (bookingId) {
+    await commitMemberCredit(bookingId);
     await service
       .from("bookings")
       .update({ status: "CONFIRMED", confirmed_at: new Date().toISOString() })

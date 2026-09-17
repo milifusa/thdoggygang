@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     const { data } = await supabase
       .from("booking_cancellation_requests")
       .select(
-        "status,reason,refundable_amount_cents,created_at,resolved_at,resolution_note,booking:bookings!inner(booking_number,hike_id,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email))",
+        "status,reason,credit_amount_cents,created_at,resolved_at,resolution_note,booking:bookings!inner(booking_number,hike_id,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email))",
       )
       .eq("booking.hike_id", hikeId!);
     const rows: unknown[][] = [
@@ -82,7 +82,7 @@ export async function GET(request: Request) {
         "Email",
         "Estatus",
         "Motivo",
-        "Reembolso MXN",
+        "Crédito otorgado MXN",
         "Solicitada",
         "Resuelta",
         "Resolución",
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
         profile?.email,
         item.status,
         item.reason,
-        (item.refundable_amount_cents / 100).toFixed(2),
+        (item.credit_amount_cents / 100).toFixed(2),
         item.created_at,
         item.resolved_at,
         item.resolution_note,

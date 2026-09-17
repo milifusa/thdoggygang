@@ -26,7 +26,7 @@ export default async function LiveConfirmationPage({
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "id, booking_number, status, total_cents, currency, hike:hikes(name, starts_at, location_name), booking_participants(id), booking_dogs(id), transport_reservations(id)",
+      "id, booking_number, status, total_cents, credit_applied_cents, currency, hike:hikes(name, starts_at, location_name), booking_participants(id), booking_dogs(id), transport_reservations(id)",
     )
     .eq("id", bookingId)
     .single();
@@ -73,6 +73,18 @@ export default async function LiveConfirmationPage({
               Nos vemos en <strong>{hike?.name}</strong>. Guarda este QR; lo
               escanearemos al llegar.
             </p>
+            {booking.credit_applied_cents > 0 && (
+              <div className="confirmation-credit-note">
+                Usaste{" "}
+                <strong>
+                  {(booking.credit_applied_cents / 100).toLocaleString("es-MX", {
+                    style: "currency",
+                    currency: "MXN",
+                  })}
+                </strong>{" "}
+                de crédito de tu manada en esta reservación.
+              </div>
+            )}
             {token ? (
               <LiveQr token={token} reference={booking.booking_number} />
             ) : (
