@@ -3,7 +3,7 @@ create table if not exists public.cancellation_settings (
   id smallint primary key default 1 check (id = 1),
   minimum_notice_hours integer not null default 48 check (minimum_notice_hours between 1 and 720),
   policy_text text not null default 'Puedes cancelar hasta 48 horas antes del inicio. El importe pagado no se devuelve en efectivo: se acredita a tu cuenta para reservar otro hike.',
-  late_message text not null default 'Las mochilas están listas, las correas formadas y la ruta ya cuenta tus huellitas. A menos de 48 horas, tu lugar ya está incluido en transporte, equipo y logística, por eso las cancelaciones están cerradas. Si pasó algo extraordinario, escríbenos y lo revisamos contigo.',
+  late_message text not null default '¡Ups! Por ahora ya no podemos darte la pata. Cuando faltan menos de 48 horas ya no podemos cancelar, porque toda la aventura se organizó contando contigo. Si surgió algo extraordinario, escríbenos y revisamos tu caso.',
   updated_by uuid references public.profiles(id),
   updated_at timestamptz not null default now()
 );
