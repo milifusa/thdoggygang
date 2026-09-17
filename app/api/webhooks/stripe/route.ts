@@ -1,7 +1,9 @@
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
-import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
 import { getStripeWebhookSecret } from "../../../lib/payment-config";
-import { expireStripeCheckout } from "../../../lib/server/stripe-payment-reconciliation";
+import {
+  confirmStripeCheckout,
+  expireStripeCheckout,
+} from "../../../lib/server/stripe-payment-reconciliation";
 
 function parseSignature(header: string) {
   const timestamp = header
@@ -98,55 +100,18 @@ export async function POST(request: Request) {
     const bookingId = event.data.object.metadata?.booking_id;
     const orderId = event.data.object.metadata?.order_id;
     if (orderId) {
-      const { data: payment, error: paymentError } = await service
-        .from("payments")
-        .update({
-          status: "PAID",
-          paid_at: new Date().toISOString(),
-          raw_status: event.type,
-        })
-        .eq("provider", "stripe")
-        .eq("provider_payment_id", event.data.object.id)
-        .eq("order_id", orderId)
-        .select("id")
-        .maybeSingle();
-      if (paymentError || !payment)
+      try {
+        await confirmStripeCheckout({
+          sessionId: event.data.object.id,
+          orderId,
+          bookingId,
+          rawStatus: event.type,
+        });
+      } catch {
         return Response.json(
           { error: "No pudimos conciliar el pago." },
           { status: 500 },
         );
-      const { error: orderError } = await service
-        .from("orders")
-        .update({ status: "PAID" })
-        .eq("id", orderId);
-      if (orderError)
-        return Response.json(
-          { error: "No pudimos confirmar la orden." },
-          { status: 500 },
-        );
-      const { error: inventoryError } = await service.rpc(
-        "commit_product_inventory",
-        { p_order_id: orderId },
-      );
-      if (inventoryError)
-        return Response.json(
-          { error: "No pudimos confirmar el inventario." },
-          { status: 500 },
-        );
-      if (bookingId) {
-        const { error: bookingError } = await service
-          .from("bookings")
-          .update({
-            status: "CONFIRMED",
-            confirmed_at: new Date().toISOString(),
-          })
-          .eq("id", bookingId);
-        if (bookingError)
-          return Response.json(
-            { error: "No pudimos confirmar la reservación." },
-            { status: 500 },
-          );
-        await ensureBookingQrToken(bookingId);
       }
     }
   }

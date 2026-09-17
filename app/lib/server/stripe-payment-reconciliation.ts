@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ensureBookingQrToken } from "../domain/checkin-token";
 import { createSupabaseServiceClient } from "../supabase/service";
 
 export type ExpireStripeCheckoutResult = {
@@ -11,6 +12,53 @@ export type ExpireStripeCheckoutResult = {
   bookingReleased: boolean;
   reason?: "not_found" | "already_resolved" | "newer_attempt_exists" | "paid";
 };
+
+export async function confirmStripeCheckout({
+  sessionId,
+  orderId,
+  bookingId,
+  rawStatus = "checkout.session.completed",
+}: {
+  sessionId: string;
+  orderId: string;
+  bookingId?: string | null;
+  rawStatus?: string;
+}) {
+  const service = createSupabaseServiceClient();
+  const now = new Date().toISOString();
+  const { data: payment, error: paymentError } = await service
+    .from("payments")
+    .update({ status: "PAID", paid_at: now, raw_status: rawStatus })
+    .eq("provider", "stripe")
+    .eq("provider_payment_id", sessionId)
+    .eq("order_id", orderId)
+    .select("id")
+    .maybeSingle();
+  if (paymentError || !payment)
+    throw new Error("No pudimos conciliar el pago.");
+
+  const { error: orderError } = await service
+    .from("orders")
+    .update({ status: "PAID" })
+    .eq("id", orderId);
+  if (orderError) throw new Error("No pudimos confirmar la orden.");
+
+  const { error: inventoryError } = await service.rpc(
+    "commit_product_inventory",
+    { p_order_id: orderId },
+  );
+  if (inventoryError) throw new Error("No pudimos confirmar el inventario.");
+
+  if (bookingId) {
+    const { error: bookingError } = await service
+      .from("bookings")
+      .update({ status: "CONFIRMED", confirmed_at: now, expires_at: null })
+      .eq("id", bookingId);
+    if (bookingError) throw new Error("No pudimos confirmar la reservación.");
+    await ensureBookingQrToken(bookingId);
+  }
+  return { paymentId: payment.id, orderId, bookingId: bookingId ?? null };
+}
 
 /**
  * Closes one abandoned Stripe Checkout without destroying the reservation.

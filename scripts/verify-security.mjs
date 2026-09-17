@@ -289,8 +289,10 @@ check(
 );
 check(
   bookingCron.includes("staleStripePayments") &&
-    bookingCron.includes("expireStripeCheckout"),
-  "No existe respaldo para conciliar checkouts cuyo webhook de vencimiento no llegó.",
+    bookingCron.includes("expireStripeCheckout") &&
+    bookingCron.includes("confirmStripeCheckout") &&
+    bookingCron.includes("api.stripe.com/v1/checkout/sessions"),
+  "El respaldo no verifica en Stripe los pagos cuyo webhook no llegó.",
 );
 check(
   stripeCheckout.includes('status: "PENDING"'),

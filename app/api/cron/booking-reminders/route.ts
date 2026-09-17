@@ -1,6 +1,10 @@
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
+import { getStripeSecretKey } from "../../../lib/payment-config";
 import { sendBookingReminder, sendUpcomingHikeReminder, sendWaitlistOfferForHike } from "../../../lib/server/booking-reminder";
-import { expireStripeCheckout } from "../../../lib/server/stripe-payment-reconciliation";
+import {
+  confirmStripeCheckout,
+  expireStripeCheckout,
+} from "../../../lib/server/stripe-payment-reconciliation";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -37,9 +41,58 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   const expiredPayments = [];
+  const stripeKey = await getStripeSecretKey();
   for (const payment of staleStripePayments ?? []) {
     if (!payment.provider_payment_id) continue;
+    if (!stripeKey) {
+      expiredPayments.push({
+        sessionId: payment.provider_payment_id,
+        ok: false,
+        error: "Stripe no está configurado para verificar el intento.",
+      });
+      continue;
+    }
     try {
+      const stripeResponse = await fetch(
+        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(payment.provider_payment_id)}`,
+        {
+          headers: { Authorization: `Bearer ${stripeKey}` },
+          cache: "no-store",
+          signal: AbortSignal.timeout(12_000),
+        },
+      );
+      const session = (await stripeResponse.json()) as {
+        status?: "open" | "complete" | "expired";
+        payment_status?: string;
+        metadata?: { booking_id?: string; order_id?: string };
+        error?: { message?: string };
+      };
+      if (!stripeResponse.ok)
+        throw new Error(
+          session.error?.message ?? "Stripe no pudo verificar el intento.",
+        );
+      if (session.status === "complete" && session.payment_status === "paid") {
+        expiredPayments.push({
+          sessionId: payment.provider_payment_id,
+          ...(await confirmStripeCheckout({
+            sessionId: payment.provider_payment_id,
+            orderId: session.metadata?.order_id ?? payment.order_id,
+            bookingId: session.metadata?.booking_id,
+            rawStatus: "checkout.session.completed:cron",
+          })),
+          reconciledAs: "paid",
+          ok: true,
+        });
+        continue;
+      }
+      if (session.status !== "expired") {
+        expiredPayments.push({
+          sessionId: payment.provider_payment_id,
+          reconciledAs: "open",
+          ok: true,
+        });
+        continue;
+      }
       expiredPayments.push({
         sessionId: payment.provider_payment_id,
         ...(await expireStripeCheckout({
@@ -47,6 +100,7 @@ export async function GET(request: Request) {
           orderId: payment.order_id,
           rawStatus: "checkout.session.expired:cron",
         })),
+        reconciledAs: "expired",
         ok: true,
       });
     } catch (error) {
