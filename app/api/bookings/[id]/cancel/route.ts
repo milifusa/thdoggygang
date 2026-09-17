@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { closePendingPaymentsForBooking } from "../../../../lib/server/stripe-payment-reconciliation";
 
 const schema = z.object({ reason: z.string().trim().min(10).max(1200) });
 
@@ -60,6 +61,7 @@ export async function POST(
       .from("bookings")
       .update({ status: "CANCELLED", cancelled_at: new Date().toISOString() })
       .eq("id", booking.id);
+    await closePendingPaymentsForBooking(booking.id);
     return Response.json({ ok: true, status: "CANCELLED" });
   }
   const { error } = await supabase

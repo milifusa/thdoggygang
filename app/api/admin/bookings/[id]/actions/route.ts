@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../../../lib/supabase/service";
 import { getStripeSecretKey } from "../../../../../lib/payment-config";
 import { sendWaitlistOfferForHike } from "../../../../../lib/server/booking-reminder";
+import { closePendingPaymentsForBooking } from "../../../../../lib/server/stripe-payment-reconciliation";
 
 const schema = z.object({
   action: z.enum([
@@ -162,16 +163,19 @@ export async function POST(
           : { status: "DRAFT", cancelled_at: null, confirmed_at: null };
     await service.from("bookings").update(update).eq("id", booking.id);
     if (parsed.data.action === "CANCEL")
-      await service
-        .from("booking_cancellation_requests")
-        .update({
-          status: "APPROVED",
-          resolved_by: admin.id,
-          resolution_note: parsed.data.reason,
-          resolved_at: now,
-        })
-        .eq("booking_id", booking.id)
-        .eq("status", "REQUESTED");
+      await Promise.all([
+        closePendingPaymentsForBooking(booking.id),
+        service
+          .from("booking_cancellation_requests")
+          .update({
+            status: "APPROVED",
+            resolved_by: admin.id,
+            resolution_note: parsed.data.reason,
+            resolved_at: now,
+          })
+          .eq("booking_id", booking.id)
+          .eq("status", "REQUESTED"),
+      ]);
   }
   await service
     .from("audit_logs")

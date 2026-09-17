@@ -22,7 +22,7 @@ export default async function PaymentsAdminPage({
     supabase
       .from("payments")
       .select(
-        "id,provider,method,status,raw_status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(order_number,profile:profiles(first_name,last_name),order_items(item_type,description),booking:bookings(booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
+        "id,provider,method,status,raw_status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(order_number,status,profile:profiles(first_name,last_name),order_items(item_type,description),booking:bookings(booking_number,status,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
       )
       .order("created_at", { ascending: false })
       .limit(300),
@@ -48,9 +48,17 @@ export default async function PaymentsAdminPage({
   const payments = paymentsResult.data ?? [];
   const next = nextHikeResult.data;
   const paidPayments = payments.filter((item) => item.status === "PAID");
-  const pendingPayments = payments.filter((item) =>
-    ["PENDING", "UNDER_REVIEW"].includes(item.status),
-  );
+  const pendingPayments = payments.filter((item) => {
+    const order = Array.isArray(item.order) ? item.order[0] : item.order;
+    const booking = Array.isArray(order?.booking)
+      ? order.booking[0]
+      : order?.booking;
+    return (
+      ["PENDING", "UNDER_REVIEW"].includes(item.status) &&
+      order?.status !== "FAILED" &&
+      booking?.status !== "CANCELLED"
+    );
+  });
   const refundedPayments = payments.filter(
     (item) => item.status === "REFUNDED",
   );
@@ -212,6 +220,12 @@ export default async function PaymentsAdminPage({
                     {payment.status === "FAILED" &&
                     payment.raw_status?.startsWith("checkout.session.expired")
                       ? "EXPIRADO"
+                      : payment.status === "FAILED" &&
+                          payment.raw_status === "SUPERSEDED_BY_PAID_BOOKING"
+                        ? "REEMPLAZADO"
+                        : payment.status === "FAILED" &&
+                            payment.raw_status === "booking.cancelled"
+                          ? "CANCELADO"
                       : paymentStatus(payment.status)}
                   </em>
                   <small>

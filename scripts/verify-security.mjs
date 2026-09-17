@@ -288,6 +288,15 @@ check(
   "La conciliación de Stripe no libera cupo de forma segura o pisa reintentos nuevos.",
 );
 check(
+  stripeCleanup.includes("closeSupersededPayments") &&
+    stripeCleanup.includes("SUPERSEDED_BY_PAID_BOOKING") &&
+    read("app/api/bookings/[id]/cancel/route.ts").includes(
+      "closePendingPaymentsForBooking",
+    ) &&
+    paymentsAdmin.includes('booking?.status !== "CANCELLED"'),
+  "Los intentos abandonados pueden seguir sumándose después de cancelar o pagar otra reservación.",
+);
+check(
   bookingCron.includes("staleStripePayments") &&
     bookingCron.includes("expireStripeCheckout") &&
     bookingCron.includes("confirmStripeCheckout") &&

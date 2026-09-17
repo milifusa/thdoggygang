@@ -1,6 +1,7 @@
 import "server-only";
 
 import { ensureBookingQrToken } from "../domain/checkin-token";
+import { getStripeSecretKey } from "../payment-config";
 import { createSupabaseServiceClient } from "../supabase/service";
 
 export type ExpireStripeCheckoutResult = {
@@ -12,6 +13,129 @@ export type ExpireStripeCheckoutResult = {
   bookingReleased: boolean;
   reason?: "not_found" | "already_resolved" | "newer_attempt_exists" | "paid";
 };
+
+async function closePendingPaymentsForOrders(
+  orderIds: string[],
+  rawStatus: "booking.cancelled" | "SUPERSEDED_BY_PAID_BOOKING",
+) {
+  if (!orderIds.length) return { paymentsClosed: 0, ordersClosed: 0 };
+  const service = createSupabaseServiceClient();
+  const { data: pendingPayments, error: paymentReadError } = await service
+    .from("payments")
+    .select("id,provider,provider_payment_id")
+    .in("order_id", orderIds)
+    .in("status", ["PENDING", "UNDER_REVIEW"]);
+  if (paymentReadError)
+    throw new Error("No pudimos consultar los intentos pendientes.");
+
+  const stripeKey = pendingPayments?.some(
+    (payment) => payment.provider === "stripe" && payment.provider_payment_id,
+  )
+    ? await getStripeSecretKey()
+    : null;
+  if (stripeKey) {
+    await Promise.allSettled(
+      (pendingPayments ?? [])
+        .filter(
+          (payment) =>
+            payment.provider === "stripe" && payment.provider_payment_id,
+        )
+        .map((payment) =>
+          fetch(
+            `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(payment.provider_payment_id!)}/expire`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${stripeKey}` },
+              cache: "no-store",
+              signal: AbortSignal.timeout(12_000),
+            },
+          ),
+        ),
+    );
+  }
+
+  const paymentIds = (pendingPayments ?? []).map((payment) => payment.id);
+  const now = new Date().toISOString();
+  if (paymentIds.length) {
+    const { error: paymentUpdateError } = await service
+      .from("payments")
+      .update({ status: "FAILED", raw_status: rawStatus, updated_at: now })
+      .in("id", paymentIds)
+      .in("status", ["PENDING", "UNDER_REVIEW"]);
+    if (paymentUpdateError)
+      throw new Error("No pudimos cerrar los intentos pendientes.");
+  }
+  const { data: closedOrders, error: orderUpdateError } = await service
+    .from("orders")
+    .update({ status: "FAILED", updated_at: now })
+    .in("id", orderIds)
+    .eq("status", "PENDING")
+    .select("id");
+  if (orderUpdateError) throw new Error("No pudimos cerrar las órdenes.");
+  return {
+    paymentsClosed: paymentIds.length,
+    ordersClosed: closedOrders?.length ?? 0,
+  };
+}
+
+export async function closePendingPaymentsForBooking(
+  bookingId: string,
+  rawStatus: "booking.cancelled" | "SUPERSEDED_BY_PAID_BOOKING" =
+    "booking.cancelled",
+) {
+  const service = createSupabaseServiceClient();
+  const { data: orders, error } = await service
+    .from("orders")
+    .select("id")
+    .eq("booking_id", bookingId);
+  if (error) throw new Error("No pudimos consultar las órdenes.");
+  return closePendingPaymentsForOrders(
+    (orders ?? []).map((order) => order.id),
+    rawStatus,
+  );
+}
+
+async function closeSupersededPayments(
+  bookingId: string,
+  paidOrderId: string,
+) {
+  const service = createSupabaseServiceClient();
+  const { data: booking, error: bookingError } = await service
+    .from("bookings")
+    .select("profile_id,hike_id")
+    .eq("id", bookingId)
+    .single();
+  if (bookingError || !booking)
+    throw new Error("No pudimos identificar la reservación pagada.");
+  const { data: previousBookings, error: previousBookingError } = await service
+    .from("bookings")
+    .select("id")
+    .eq("profile_id", booking.profile_id)
+    .eq("hike_id", booking.hike_id)
+    .neq("id", bookingId);
+  if (previousBookingError)
+    throw new Error("No pudimos consultar reservaciones anteriores.");
+  const previousBookingIds = (previousBookings ?? []).map((item) => item.id);
+  const { data: previousOrders, error: previousOrderError } = previousBookingIds.length
+    ? await service
+        .from("orders")
+        .select("id")
+        .in("booking_id", previousBookingIds)
+    : { data: [], error: null };
+  if (previousOrderError)
+    throw new Error("No pudimos consultar intentos anteriores.");
+
+  await closePendingPaymentsForOrders(
+    [paidOrderId, ...(previousOrders ?? []).map((order) => order.id)],
+    "SUPERSEDED_BY_PAID_BOOKING",
+  );
+  if (previousBookingIds.length)
+    await service
+      .from("bookings")
+      .update({ status: "CANCELLED", cancelled_at: new Date().toISOString() })
+      .in("id", previousBookingIds)
+      .in("status", ["DRAFT", "PENDING_PAYMENT"]);
+}
 
 export async function confirmStripeCheckout({
   sessionId,
@@ -50,6 +174,7 @@ export async function confirmStripeCheckout({
   if (inventoryError) throw new Error("No pudimos confirmar el inventario.");
 
   if (bookingId) {
+    await closeSupersededPayments(bookingId, orderId);
     const { error: bookingError } = await service
       .from("bookings")
       .update({ status: "CONFIRMED", confirmed_at: now, expires_at: null })

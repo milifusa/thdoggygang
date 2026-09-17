@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { adminClient } from "../../route";
+import { closePendingPaymentsForBooking } from "../../../../../lib/server/stripe-payment-reconciliation";
 
 const schema = z.object({
   action: z.enum(["DUPLICATE", "PUBLISH", "UNPUBLISH", "CANCEL"]),
@@ -59,6 +60,7 @@ export async function POST(
           .from("bookings")
           .update({ status: "CANCELLED", cancelled_at: now })
           .eq("id", booking.id);
+        await closePendingPaymentsForBooking(booking.id);
         if (admin && paid > 0)
           await supabase
             .from("booking_cancellation_requests")
