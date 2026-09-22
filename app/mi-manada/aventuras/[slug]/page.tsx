@@ -164,7 +164,9 @@ export default async function MyAdventurePage({
                     : "Falta completar la responsiva de todas las personas."}
               </span>
               {!checkedIn && booking.status !== "CANCELLED" && (
-                <Link href={`/reservar/${hike.slug}`}>
+                <Link
+                  href={`/reservar/${hike.slug}?booking=${booking.id}&step=${booking.current_step}`}
+                >
                   CONTINUAR RESERVACIÓN
                 </Link>
               )}

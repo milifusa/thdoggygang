@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: 'Arma tu aventura | The Doggy Gang', 
 
 export type BookingResume = { bookingId:string; step:number; personIds:string[]; dogIds:string[]; transportPersonIds:string[]; productSelections:Array<{productId:string;variant:string;quantity:number}>; waiverSigned:boolean; creditAppliedCents:number };
 
-export default async function BookingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ booking?:string; step?:string }> }) {
+export default async function BookingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ booking?:string; step?:string; pago?:string }> }) {
   const { slug } = await params;
   const requested = await searchParams;
   const adventure = await getAdventure(slug);
@@ -20,9 +20,29 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
   const [context, products] = await Promise.all([loadBookingContext(), getProducts()]);
   if (context.mode === 'live' && !context.authenticated) redirect(`/ingresar?next=/reservar/${encodeURIComponent(slug)}`);
   let resume: BookingResume | undefined;
+  if (context.mode === 'live' && context.profileId && !requested.booking) {
+    const supabase = await createSupabaseServerClient();
+    const { data: activeBooking } = await supabase
+      .from('bookings')
+      .select('id,current_step')
+      .eq('profile_id', context.profileId)
+      .eq('hike_id', adventure.id)
+      .in('status', ['DRAFT', 'PENDING_PAYMENT'])
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (activeBooking) {
+      const params = new URLSearchParams({
+        booking: activeBooking.id,
+        step: activeBooking.current_step || 'personas',
+      });
+      if (requested.pago) params.set('pago', requested.pago);
+      redirect(`/reservar/${encodeURIComponent(slug)}?${params.toString()}`);
+    }
+  }
   if (context.mode === 'live' && requested.booking) {
     const supabase = await createSupabaseServerClient();
-    const { data: booking } = await supabase.from('bookings').select('id,current_step,credit_applied_cents,hike:hikes(slug),booking_participants(id,person_profile_id),booking_dogs(dog_id),transport_reservations(booking_participant_id),booking_product_selections(product_id,variant,quantity),signed_waivers(id)').eq('id',requested.booking).in('status',['DRAFT','PENDING_PAYMENT']).maybeSingle();
+    const { data: booking } = await supabase.from('bookings').select('id,current_step,credit_applied_cents,hike:hikes(slug),booking_participants(id,person_profile_id),booking_dogs(dog_id),transport_reservations(booking_participant_id),booking_product_selections(product_id,variant,quantity),signed_waivers(id)').eq('id',requested.booking).eq('profile_id',context.profileId).in('status',['DRAFT','PENDING_PAYMENT']).maybeSingle();
     const hike = Array.isArray(booking?.hike) ? booking?.hike[0] : booking?.hike;
     if (booking && hike?.slug === slug) {
       const stepNames=['personas','perritos','transporte','productos','responsiva','pago','confirmacion'];

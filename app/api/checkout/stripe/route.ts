@@ -180,7 +180,7 @@ export async function POST(request: Request) {
     mode: "payment",
     "payment_method_types[0]": "card",
     success_url: `${origin}/reservar/confirmacion?booking=${booking.id}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/reservar/${hike?.slug ?? "sendero-del-duende"}?pago=cancelado`,
+    cancel_url: `${origin}/reservar/${hike?.slug ?? "sendero-del-duende"}?booking=${booking.id}&step=pago&pago=cancelado`,
     client_reference_id: booking.id,
     "metadata[booking_id]": booking.id,
     "metadata[order_id]": order.id,
@@ -219,6 +219,44 @@ export async function POST(request: Request) {
     form.set(`line_items[${index}][price_data][product_data][name]`, line.name);
     form.set(`line_items[${index}][quantity]`, String(line.quantity));
   });
+  const { data: previousPending } = await service
+    .from("payments")
+    .select("id,provider_payment_id,amount_cents")
+    .eq("order_id", order.id)
+    .eq("provider", "stripe")
+    .eq("status", "PENDING")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (
+    previousPending?.provider_payment_id &&
+    previousPending.amount_cents === amountDue
+  ) {
+    const previousResponse = await fetch(
+      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(previousPending.provider_payment_id)}`,
+      {
+        headers: { Authorization: `Bearer ${stripeKey}` },
+        cache: "no-store",
+        signal: AbortSignal.timeout(12_000),
+      },
+    ).catch(() => null);
+    if (previousResponse?.ok) {
+      const previousCheckout = (await previousResponse.json()) as {
+        status?: "open" | "complete" | "expired";
+        url?: string | null;
+      };
+      if (previousCheckout.status === "open" && previousCheckout.url)
+        return Response.json({ url: previousCheckout.url, resumed: true });
+      await service
+        .from("payments")
+        .update({
+          status: "FAILED",
+          raw_status: `checkout.session.${previousCheckout.status ?? "unavailable"}:resume`,
+        })
+        .eq("id", previousPending.id)
+        .eq("status", "PENDING");
+    }
+  }
   const stripeResponse = await fetch(
     "https://api.stripe.com/v1/checkout/sessions",
     {
