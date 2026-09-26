@@ -1094,10 +1094,23 @@ export function HikeMode({
               {selected.transport_reservations.length > 0 && (
                 <div className="field-important-transport">
                   <BusFront />
-                  <strong>
-                    {selected.transport_reservations.length} lugares de
-                    transporte
-                  </strong>
+                  <div>
+                    <strong>
+                      {selected.transport_reservations.length} lugares de
+                      transporte
+                    </strong>
+                    <small>
+                      Pasajeros: {selected.transport_reservations
+                        .flatMap((reservation) => {
+                          const person = selected.booking_participants.find(
+                            (person) =>
+                              person.id === reservation.booking_participant_id,
+                          );
+                          return person ? [personName(person)] : [];
+                        })
+                        .join(", ")}
+                    </small>
+                  </div>
                 </div>
               )}
             </div>

@@ -11,6 +11,10 @@ import {
 import { requireStaffSession } from "../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { hikeCoverUrl } from "../../lib/data";
+import {
+  dateInMexico,
+  snapshotIsFreeChildForDate,
+} from "../../lib/person-age";
 import { AdminMobileNav, AdminNav } from "../admin-nav";
 import { adminDate, money } from "../admin-utils";
 import { HikeQuickActions } from "./hike-quick-actions";
@@ -30,7 +34,10 @@ type HikeRow = {
   bookings: Array<{
     id: string;
     status: string;
-    booking_participants: Array<{ id: string }>;
+    booking_participants: Array<{
+      id: string;
+      snapshot: Record<string, unknown>;
+    }>;
     booking_dogs: Array<{ id: string }>;
     transport_reservations: Array<{ id: string }>;
     signed_waivers: Array<{ id: string }>;
@@ -97,7 +104,7 @@ export default async function HikesAdminPage({
   let hikesQuery = supabase
     .from("hikes")
     .select(
-      "id,name,slug,starts_at,location_name,capacity,max_dogs,published,cancelled_at,cover_path,bookings(id,status,booking_participants(id),booking_dogs(id),transport_reservations(id),signed_waivers(id),check_ins(id)),transport_configurations(mode,capacity),hike_galleries(id,published_at,photos:photos!photos_gallery_id_fkey(id))",
+      "id,name,slug,starts_at,location_name,capacity,max_dogs,published,cancelled_at,cover_path,bookings(id,status,booking_participants(id,snapshot),booking_dogs(id),transport_reservations(id),signed_waivers(id),check_ins(id)),transport_configurations(mode,capacity),hike_galleries(id,published_at,photos:photos!photos_gallery_id_fkey(id))",
     )
     .is("deleted_at", null)
     .order("starts_at");
@@ -138,8 +145,14 @@ export default async function HikesAdminPage({
       const active = h.bookings.filter((b) =>
         activeStatuses.includes(b.status),
       );
+      const hikeDate = dateInMexico(h.starts_at);
       const confirmedPeople = active.reduce(
-        (sum, b) => sum + b.booking_participants.length,
+        (sum, b) =>
+          sum +
+          b.booking_participants.filter((participant) => {
+            const snapshot = participant.snapshot ?? {};
+            return !snapshotIsFreeChildForDate(snapshot, hikeDate);
+          }).length,
         0,
       );
       const dogs = active.reduce((sum, b) => sum + b.booking_dogs.length, 0);

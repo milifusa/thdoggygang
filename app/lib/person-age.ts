@@ -50,3 +50,17 @@ export function isFreeChildForDate(
   const age = ageOnDate(person.birthDate, onDate);
   return age !== null && age >= 0 && age < CHILD_FREE_UNDER_AGE;
 }
+
+export function snapshotIsFreeChildForDate(
+  snapshot: Record<string, unknown>,
+  onDate: string,
+) {
+  return isFreeChildForDate(
+    {
+      isMinor: snapshot.is_minor === true,
+      birthDate:
+        typeof snapshot.birth_date === "string" ? snapshot.birth_date : null,
+    },
+    onDate,
+  );
+}

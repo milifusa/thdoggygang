@@ -13,6 +13,10 @@ import {
 import { requireStaffSession } from "../../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { hikeCoverUrl } from "../../../lib/data";
+import {
+  dateInMexico,
+  snapshotIsFreeChildForDate,
+} from "../../../lib/person-age";
 import { AdminMobileNav, AdminNav } from "../../admin-nav";
 import {
   adminDate,
@@ -59,11 +63,37 @@ type Booking = {
     id: string;
     snapshot: Record<string, unknown>;
   }>;
-  booking_dogs: Array<{ id: string; snapshot: Record<string, unknown> }>;
-  transport_reservations: Array<{ id: string }>;
+  booking_dogs: Array<{
+    id: string;
+    dog_id: string | null;
+    snapshot: Record<string, unknown>;
+  }>;
+  transport_reservations: Array<{
+    id: string;
+    booking_participant_id: string;
+    dog_ids: string[];
+  }>;
   signed_waivers: Array<{ id: string; signed_at: string }>;
   check_ins: Array<{ id: string; booking_participant_id: string }>;
 };
+
+function participantName(snapshot: Record<string, unknown>) {
+  return (
+    [snapshot.first_name, snapshot.last_name]
+      .filter(
+        (value): value is string =>
+          typeof value === "string" && Boolean(value.trim()),
+      )
+      .join(" ") || "Persona sin nombre"
+  );
+}
+
+function participantIsFreeChild(
+  snapshot: Record<string, unknown>,
+  hikeDate: string,
+) {
+  return snapshotIsFreeChildForDate(snapshot, hikeDate);
+}
 type Payment = {
   id: string;
   status: string;
@@ -163,7 +193,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("bookings")
       .select(
-        "id,booking_number,status,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,snapshot),transport_reservations(id),signed_waivers(id,signed_at),check_ins(id,booking_participant_id)",
+        "id,booking_number,status,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,dog_id,snapshot),transport_reservations(id,booking_participant_id,dog_ids),signed_waivers(id,signed_at),check_ins(id,booking_participant_id)",
       )
       .eq("hike_id", id)
       .neq("status", "CANCELLED")
@@ -197,10 +227,20 @@ export default async function HikeAdminDetail({
   const active = bookings.filter((b) =>
     ["PENDING_PAYMENT", "CONFIRMED"].includes(b.status),
   );
+  const hikeDate = dateInMexico(hike.starts_at);
   const people = active.reduce(
     (sum, b) => sum + b.booking_participants.length,
     0,
   );
+  const freeChildren = active.reduce(
+    (sum, booking) =>
+      sum +
+      booking.booking_participants.filter((participant) =>
+        participantIsFreeChild(participant.snapshot, hikeDate),
+      ).length,
+    0,
+  );
+  const occupiedSpots = people - freeChildren;
   const dogs = active.reduce((sum, b) => sum + b.booking_dogs.length, 0);
   const transport = active.reduce(
     (sum, b) => sum + b.transport_reservations.length,
@@ -264,10 +304,23 @@ export default async function HikeAdminDetail({
         .reduce((count, item) => count + item.quantity, 0)
     );
   }, 0);
-  const available = Math.max(0, hike.capacity - people);
+  const available = Math.max(0, hike.capacity - occupiedSpots);
   const trans = Array.isArray(hike.transport_configurations)
     ? hike.transport_configurations[0]
     : hike.transport_configurations;
+  const transportPassengers = active.flatMap((booking) =>
+    booking.transport_reservations.map((reservation) => {
+      const participant = booking.booking_participants.find(
+        (candidate) => candidate.id === reservation.booking_participant_id,
+      );
+      const dogNames = booking.booking_dogs
+        .filter(
+          (dog) => dog.dog_id && reservation.dog_ids.includes(dog.dog_id),
+        )
+        .map((dog) => String(dog.snapshot.name ?? "Perrito"));
+      return { booking, reservation, participant, dogNames };
+    }),
+  );
   const photos: AdminPhoto[] = await Promise.all(
     (gallery?.photos ?? []).map(async (photo) => {
       const bucket =
@@ -336,7 +389,12 @@ export default async function HikeAdminDetail({
               <article>
                 <span>PERSONAS</span>
                 <strong>{people}</strong>
-                <small>{available} lugares libres</small>
+                <small>
+                  {occupiedSpots} lugares ocupados · {available} libres
+                  {freeChildren > 0
+                    ? ` · ${freeChildren} menores de 5 sin ocupar lugar`
+                    : ""}
+                </small>
               </article>
               <article>
                 <span>PERRITOS</span>
@@ -456,25 +514,37 @@ export default async function HikeAdminDetail({
         {tab === "inscripciones" && (
           <section className="admin-panel hike-detail-list">
             <h2>Inscripciones</h2>
-            {bookings.map((b) => (
-              <article key={b.id}>
-                <Link
-                  className="admin-card-hit"
-                  href={`/admin/reservaciones/${b.id}`}
-                  aria-label={`Abrir ${b.booking_number}`}
-                />
-                <div>
-                  <span>{b.booking_number}</span>
-                  <strong>{profileName(b.profile)}</strong>
-                  <small>
-                    {b.booking_participants.length} personas ·{" "}
-                    {b.booking_dogs.length} perritos
-                  </small>
-                </div>
-                <b>{money(b.total_cents)}</b>
-                <em>{bookingStatus(b.status)}</em>
-              </article>
-            ))}
+            {active.map((b) => {
+              const bookingFreeChildren = b.booking_participants.filter(
+                (participant) =>
+                  participantIsFreeChild(participant.snapshot, hikeDate),
+              ).length;
+              return (
+                <article key={b.id}>
+                  <Link
+                    className="admin-card-hit"
+                    href={`/admin/reservaciones/${b.id}`}
+                    aria-label={`Abrir ${b.booking_number}`}
+                  />
+                  <div>
+                    <span>{b.booking_number}</span>
+                    <strong>{profileName(b.profile)}</strong>
+                    <small>
+                      {b.booking_participants.length} personas ·{" "}
+                      {b.booking_dogs.length} perritos
+                      {bookingFreeChildren > 0
+                        ? ` · ${bookingFreeChildren} menores de 5 sin ocupar lugar`
+                        : ""}
+                    </small>
+                  </div>
+                  <b>{money(b.total_cents)}</b>
+                  <em>{bookingStatus(b.status)}</em>
+                </article>
+              );
+            })}
+            {!active.length && (
+              <p>No hay inscripciones activas para este hike.</p>
+            )}
           </section>
         )}
         {tab === "perritos" && (
@@ -503,7 +573,7 @@ export default async function HikeAdminDetail({
           </section>
         )}
         {tab === "transporte" && (
-          <section className="admin-panel transport-detail">
+          <section className="admin-panel transport-detail transport-manifest">
             <BusFront />
             <div>
               <p>CONFIGURACIÓN DE TRANSPORTE</p>
@@ -521,6 +591,41 @@ export default async function HikeAdminDetail({
               <p>{trans?.return_details}</p>
               <small>{trans?.rules}</small>
               <Link href={`/admin/hikes/${id}/editar`}>EDITAR TRANSPORTE</Link>
+
+              {trans?.mode !== "NONE" && trans && (
+                <div className="transport-passenger-list">
+                  <header>
+                    <span>LISTA DE PASAJEROS</span>
+                    <strong>{transportPassengers.length}</strong>
+                  </header>
+                  {transportPassengers.map(
+                    ({ booking, reservation, participant, dogNames }) => (
+                      <article key={reservation.id}>
+                        <div>
+                          <strong>
+                            {participant
+                              ? participantName(participant.snapshot)
+                              : "Persona no encontrada"}
+                          </strong>
+                          <span>
+                            {booking.booking_number} ·{" "}
+                            {profileName(booking.profile)}
+                          </span>
+                          {dogNames.length > 0 && (
+                            <small>Perritos: {dogNames.join(", ")}</small>
+                          )}
+                        </div>
+                        <Link href={`/admin/reservaciones/${booking.id}`}>
+                          VER RESERVACIÓN
+                        </Link>
+                      </article>
+                    ),
+                  )}
+                  {!transportPassengers.length && (
+                    <p>No hay pasajeros registrados en transporte.</p>
+                  )}
+                </div>
+              )}
             </div>
           </section>
         )}

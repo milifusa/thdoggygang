@@ -3,6 +3,10 @@ import { AlertTriangle, Bolt, CircleCheck, Mountain, Plus } from "lucide-react";
 import { requireStaffSession } from "../lib/auth/guards";
 import { createSupabaseServerClient } from "../lib/supabase/server";
 import { hikeCoverUrl } from "../lib/data";
+import {
+  dateInMexico,
+  snapshotIsFreeChildForDate,
+} from "../lib/person-age";
 import { ApprovePaymentButton } from "./approve-payment-button";
 import { AdminMobileNav, AdminNav } from "./admin-nav";
 import { adminDate, money, profileName } from "./admin-utils";
@@ -47,7 +51,7 @@ export default async function AdminDashboard() {
       .is("cancelled_at", null),
     supabase
       .from("bookings")
-      .select("id,status,hike_id,booking_participants(id)")
+      .select("id,status,hike_id,booking_participants(id,snapshot)")
       .in("status", ["CONFIRMED", "PENDING_PAYMENT"])
       .is("cancelled_at", null),
     supabase.from("photos").select("id", { count: "exact", head: true }),
@@ -57,8 +61,17 @@ export default async function AdminDashboard() {
   const nextBookings = (nextHikeBookings ?? []).filter(
     (booking) => booking.hike_id === nextHike?.id,
   );
+  const nextHikeDate = nextHike ? dateInMexico(nextHike.starts_at) : "";
   const nextPeople = nextBookings.reduce(
-    (sum, booking) => sum + booking.booking_participants.length,
+    (sum, booking) =>
+      sum +
+      booking.booking_participants.filter((participant) => {
+        const snapshot = (participant.snapshot ?? {}) as Record<
+          string,
+          unknown
+        >;
+        return !snapshotIsFreeChildForDate(snapshot, nextHikeDate);
+      }).length,
     0,
   );
   const nextAvailable = Math.max(
