@@ -7,6 +7,7 @@ import {
   Dog,
   Download,
   Hourglass,
+  PackageCheck,
   Settings,
   Star,
 } from "lucide-react";
@@ -34,6 +35,7 @@ const tabs = [
   "transporte",
   "responsivas",
   "pagos",
+  "productos",
   "fotos",
   "check-in",
   "lista-espera",
@@ -119,11 +121,24 @@ type Payment = {
             }>
           | null;
         order_items: Array<{
+          id: string;
           item_type: string;
           reference_id: string | null;
           description: string;
           quantity: number;
           unit_price_cents: number;
+          order_item_fulfillments:
+            | {
+                status: string;
+                delivery_location: string | null;
+                delivered_at: string | null;
+              }
+            | Array<{
+                status: string;
+                delivery_location: string | null;
+                delivered_at: string | null;
+              }>
+            | null;
         }>;
       }
     | Array<{
@@ -144,11 +159,24 @@ type Payment = {
             }>
           | null;
         order_items: Array<{
+          id: string;
           item_type: string;
           reference_id: string | null;
           description: string;
           quantity: number;
           unit_price_cents: number;
+          order_item_fulfillments:
+            | {
+                status: string;
+                delivery_location: string | null;
+                delivered_at: string | null;
+              }
+            | Array<{
+                status: string;
+                delivery_location: string | null;
+                delivered_at: string | null;
+              }>
+            | null;
         }>;
       }>;
 };
@@ -208,7 +236,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("payments")
       .select(
-        "id,status,method,amount_cents,created_at,order:orders(booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(item_type,reference_id,description,quantity,unit_price_cents))",
+        "id,status,method,amount_cents,created_at,order:orders(booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(id,item_type,reference_id,description,quantity,unit_price_cents,order_item_fulfillments(status,delivery_location,delivered_at)))",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -304,6 +332,24 @@ export default async function HikeAdminDetail({
         .reduce((count, item) => count + item.quantity, 0)
     );
   }, 0);
+  const productPurchases = payments.flatMap((payment) => {
+    if (payment.status !== "PAID") return [];
+    const order = Array.isArray(payment.order)
+      ? payment.order[0]
+      : payment.order;
+    if (!order) return [];
+    const purchaser = Array.isArray(order.profile)
+      ? order.profile[0]
+      : order.profile;
+    return order.order_items
+      .filter((item) => item.item_type === "PRODUCT")
+      .map((item) => {
+        const fulfillment = Array.isArray(item.order_item_fulfillments)
+          ? item.order_item_fulfillments[0]
+          : item.order_item_fulfillments;
+        return { payment, order, purchaser, item, fulfillment };
+      });
+  });
   const available = Math.max(0, hike.capacity - occupiedSpots);
   const trans = Array.isArray(hike.transport_configurations)
     ? hike.transport_configurations[0]
@@ -387,6 +433,11 @@ export default async function HikeAdminDetail({
           <>
             <section className="kpi-grid admin-kpi-first hike-detail-kpis">
               <article>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${id}?tab=inscripciones`}
+                  aria-label="Ver detalle de personas"
+                />
                 <span>PERSONAS</span>
                 <strong>{people}</strong>
                 <small>
@@ -395,18 +446,36 @@ export default async function HikeAdminDetail({
                     ? ` · ${freeChildren} menores de 5 sin ocupar lugar`
                     : ""}
                 </small>
+                <span className="kpi-card-action">VER DETALLE →</span>
               </article>
               <article>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${id}?tab=perritos`}
+                  aria-label="Ver detalle de perritos"
+                />
                 <span>PERRITOS</span>
                 <strong>{dogs}</strong>
                 <small>de {hike.max_dogs ?? "—"}</small>
+                <span className="kpi-card-action">VER DETALLE →</span>
               </article>
               <article>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${id}?tab=transporte`}
+                  aria-label="Ver detalle de transporte"
+                />
                 <span>TRANSPORTE</span>
                 <strong>{transport}</strong>
                 <small>de {trans?.capacity ?? "—"}</small>
+                <span className="kpi-card-action">VER DETALLE →</span>
               </article>
               <article>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${id}?tab=pagos`}
+                  aria-label="Ver detalle de pagos"
+                />
                 <span>RECAUDADO</span>
                 <strong>
                   {money(
@@ -417,11 +486,18 @@ export default async function HikeAdminDetail({
                   )}
                 </strong>
                 <small>{money(pending)} pendiente</small>
+                <span className="kpi-card-action">VER DETALLE →</span>
               </article>
               <article>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${id}?tab=productos`}
+                  aria-label="Ver productos comprados"
+                />
                 <span>PRODUCTOS</span>
                 <strong>{productsSold}</strong>
                 <small>{money(productRevenue)} vendidos</small>
+                <span className="kpi-card-action">VER DETALLE →</span>
               </article>
             </section>
             <section className="hike-summary-grid">
@@ -680,6 +756,78 @@ export default async function HikeAdminDetail({
                 </article>
               );
             })}
+          </section>
+        )}
+        {tab === "productos" && (
+          <section className="admin-panel hike-product-purchases">
+            <div className="admin-section-head">
+              <div>
+                <p>ENTREGA DURANTE EL HIKE</p>
+                <h2>Productos comprados</h2>
+              </div>
+              <strong>
+                {productsSold} artículos · {money(productRevenue)}
+              </strong>
+            </div>
+            <div className="hike-product-purchase-list">
+              {productPurchases.map(
+                ({ order, purchaser, item, fulfillment }) => {
+                  const fulfillmentStatus =
+                    fulfillment?.status === "DELIVERED"
+                      ? "ENTREGADO"
+                      : fulfillment?.status === "PREPARED"
+                        ? "PREPARADO"
+                        : fulfillment?.status === "CANCELLED"
+                          ? "CANCELADO"
+                          : "PENDIENTE DE ENTREGA";
+                  return (
+                    <article key={item.id}>
+                      <PackageCheck />
+                      <div>
+                        <span>
+                          {order.order_number} · {profileName(purchaser)}
+                        </span>
+                        <strong>{item.description}</strong>
+                        <small>
+                          {item.quantity} × {money(item.unit_price_cents)} · Total{" "}
+                          {money(item.quantity * item.unit_price_cents)}
+                        </small>
+                        {fulfillment?.delivery_location && (
+                          <small>{fulfillment.delivery_location}</small>
+                        )}
+                      </div>
+                      <em
+                        className={
+                          fulfillment?.status === "DELIVERED"
+                            ? "delivered"
+                            : fulfillment?.status === "PREPARED"
+                              ? "prepared"
+                              : ""
+                        }
+                      >
+                        {fulfillmentStatus}
+                      </em>
+                      {order.booking_id ? (
+                        <Link href={`/admin/reservaciones/${order.booking_id}`}>
+                          VER RESERVACIÓN
+                        </Link>
+                      ) : (
+                        <span className="product-pickup-label">
+                          COMPRA DE TIENDA
+                        </span>
+                      )}
+                    </article>
+                  );
+                },
+              )}
+              {!productPurchases.length && (
+                <div className="hike-product-empty">
+                  <PackageCheck />
+                  <strong>Aún no hay productos pagados para este hike.</strong>
+                  <p>Cuando alguien compre un artículo, aparecerá aquí.</p>
+                </div>
+              )}
+            </div>
           </section>
         )}
         {tab === "fotos" && (
