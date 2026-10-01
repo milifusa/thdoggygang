@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   const { data: rows } = await supabase
     .from("payments")
     .select(
-      "provider,provider_payment_id,method,status,amount_cents,paid_at,created_at,order:orders(order_number,booking:bookings!inner(hike_id,booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email)))",
+      "provider,provider_payment_id,method,status,amount_cents,received_amount_cents,paid_at,created_at,order:orders(order_number,booking:bookings!inner(hike_id,booking_number,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone)))",
     )
     .eq("order.booking.hike_id", hikeId!)
     .order("created_at");
@@ -30,10 +30,12 @@ export async function GET(request: Request) {
       "Reservación",
       "Cliente",
       "Email",
+      "Teléfono",
       "Método",
       "Proveedor",
       "Estatus",
       "Monto MXN",
+      "Recibido realmente MXN",
       "Fecha",
       "Referencia",
     ],
@@ -53,10 +55,14 @@ export async function GET(request: Request) {
       booking?.booking_number,
       `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim(),
       p?.email,
+      p?.phone,
       payment.method,
       payment.provider,
       payment.status,
       (payment.amount_cents / 100).toFixed(2),
+      payment.received_amount_cents === null
+        ? ""
+        : (payment.received_amount_cents / 100).toFixed(2),
       payment.paid_at ?? payment.created_at,
       payment.provider_payment_id,
     ]);

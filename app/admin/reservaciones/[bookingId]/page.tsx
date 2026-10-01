@@ -230,10 +230,16 @@ export default async function ReservationDetail({
                       <strong>
                         {snapshot.first_name} {snapshot.last_name}
                       </strong>
-                      <small>
-                        {snapshot.is_minor ? "Menor" : "Adulto"} ·{" "}
-                        {snapshot.email ?? snapshot.phone ?? "Sin contacto"}
-                      </small>
+                      <small>{snapshot.is_minor ? "Menor" : "Adulto"}</small>
+                      <small>{snapshot.email ?? "Sin correo"}</small>
+                      <span>
+                        Teléfono:{" "}
+                        {snapshot.phone ? (
+                          <a href={`tel:${snapshot.phone}`}>{snapshot.phone}</a>
+                        ) : (
+                          "Sin teléfono registrado"
+                        )}
+                      </span>
                       {snapshot.emergency_contact_phone && (
                         <span>
                           Emergencia: {snapshot.emergency_contact_name} ·{" "}

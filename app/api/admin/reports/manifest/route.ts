@@ -40,8 +40,9 @@ export async function GET(request: Request) {
       "Estatus",
       "Cliente",
       "Email",
-      "Teléfono",
+      "Teléfono de cuenta",
       "Personas",
+      "Teléfonos de inscritos",
       "Perritos",
       "Transporte",
       "Responsivas",
@@ -59,6 +60,17 @@ export async function GET(request: Request) {
         return `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim();
       })
       .join(" | ");
+    const participantPhones = booking.booking_participants
+      .map((item) => {
+        const s = item.snapshot as {
+          first_name?: string;
+          last_name?: string;
+          phone?: string;
+        };
+        const name = `${s.first_name ?? ""} ${s.last_name ?? ""}`.trim();
+        return `${name || "Persona"}: ${s.phone?.trim() || "Sin teléfono"}`;
+      })
+      .join(" | ");
     const dogs = booking.booking_dogs
       .map((item) => {
         const s = item.snapshot as { name?: string };
@@ -72,6 +84,7 @@ export async function GET(request: Request) {
       p?.email,
       p?.phone,
       people,
+      participantPhones,
       dogs,
       booking.transport_reservations.length,
       booking.signed_waivers.length,

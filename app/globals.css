@@ -1625,6 +1625,8 @@ footer small {
 .hike-detail-list article>div { display:flex; flex-direction:column; gap:4px; }
 .hike-detail-list span,.hike-detail-list small { color:#777; font-size:7px; }
 .hike-detail-list strong,.hike-detail-list b,.hike-detail-list em { font-size:9px; font-style:normal; }
+.hike-registration-contacts{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px 12px!important;margin-top:8px;padding:9px 10px;background:#f7f4ef}.hike-registration-contacts>span{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#312823!important;font-size:9px!important}.hike-registration-contacts b{overflow-wrap:anywhere}.hike-registration-contacts small{flex:none;color:#665d57!important;font-size:8px!important}
+@media(max-width:700px){.hike-registration-contacts{grid-template-columns:1fr}.hike-registration-contacts>span{align-items:flex-start;flex-direction:column;gap:2px}}
 .hike-dog-list>article { min-height:68px; display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:10px; border-top:1px solid #eee; }
 .hike-dog-list>article>svg { width:22px; }
 .hike-dog-list>article>div { display:flex; flex-direction:column; gap:3px; }

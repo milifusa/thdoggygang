@@ -19,6 +19,7 @@ import { AdminMobileNav, AdminNav } from "../admin-nav";
 import { adminDate, money, profileName } from "../admin-utils";
 import {
   ApprovePaymentButton,
+  RejectTransferPaymentButton,
   RefundPaymentButton,
 } from "../approve-payment-button";
 import styles from "./payments.module.css";
@@ -31,7 +32,11 @@ function one<T>(value: T | T[] | null | undefined): T | undefined {
   return Array.isArray(value) ? value[0] : (value ?? undefined);
 }
 
-function paymentState(status: string, rawStatus: string | null) {
+function paymentState(
+  status: string,
+  rawStatus: string | null,
+  receivedAmountCents?: number | null,
+) {
   if (status === "PAID") {
     return { label: "PAGADO", tone: "paid" as Tone, detail: "Cobro confirmado y conciliado." };
   }
@@ -53,6 +58,13 @@ function paymentState(status: string, rawStatus: string | null) {
   if (rawStatus === "booking.cancelled") {
     return { label: "CANCELADO", tone: "closed" as Tone, detail: "La reservación asociada fue cancelada." };
   }
+  if (rawStatus === "TRANSFER_REJECTED_PARTIAL") {
+    return {
+      label: "TRANSFERENCIA INCOMPLETA",
+      tone: "closed" as Tone,
+      detail: `Se recibió ${money(receivedAmountCents ?? 0)} y ese importe se convirtió en crédito.`,
+    };
+  }
   return { label: "RECHAZADO", tone: "closed" as Tone, detail: "El pago no se completó." };
 }
 
@@ -72,7 +84,7 @@ export default async function PaymentsAdminPage({
     supabase
       .from("payments")
       .select(
-        "id,provider,method,status,raw_status,amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(id,order_number,status,profile:profiles(first_name,last_name),order_items(item_type,description,quantity),booking:bookings(id,booking_number,status,credit_applied_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
+        "id,provider,method,status,raw_status,amount_cents,received_amount_cents,paid_at,created_at,payment_receipts(id,created_at),order:orders(id,order_number,status,profile:profiles(first_name,last_name),order_items(item_type,description,quantity),booking:bookings(id,booking_number,status,credit_applied_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name),hike:hikes(name)))",
       )
       .order("created_at", { ascending: false })
       .limit(300),
@@ -122,7 +134,11 @@ export default async function PaymentsAdminPage({
     const order = one(payment.order);
     const booking = one(order?.booking);
     const hike = one(booking?.hike);
-    const state = paymentState(payment.status, payment.raw_status);
+    const state = paymentState(
+      payment.status,
+      payment.raw_status,
+      payment.received_amount_cents,
+    );
     const searchable = [profileName(booking?.profile ?? order?.profile), order?.order_number, booking?.booking_number, hike?.name, state.label]
       .filter(Boolean)
       .join(" ")
@@ -235,7 +251,11 @@ export default async function PaymentsAdminPage({
               const hike = one(booking?.hike);
               const items = order?.order_items ?? [];
               const receipt = payment.payment_receipts?.[0];
-              const state = paymentState(payment.status, payment.raw_status);
+              const state = paymentState(
+                payment.status,
+                payment.raw_status,
+                payment.received_amount_cents,
+              );
               const customer = profileName(booking?.profile ?? order?.profile);
               const initials = customer.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
               const itemSummary = items.length
@@ -257,6 +277,11 @@ export default async function PaymentsAdminPage({
                   <div className={styles.amountBlock}>
                     <strong>{money(payment.amount_cents)}</strong>
                     <span><MethodIcon aria-hidden="true" />{payment.method === "CARD" ? "Tarjeta" : "Transferencia"}</span>
+                    {payment.received_amount_cents !== null && (
+                      <small>
+                        Recibido realmente: {money(payment.received_amount_cents)}
+                      </small>
+                    )}
                     {booking?.credit_applied_cents > 0 && <small>+ {money(booking.credit_applied_cents)} de crédito</small>}
                   </div>
                   <dl className={styles.details}>
@@ -269,7 +294,15 @@ export default async function PaymentsAdminPage({
                     {bookingHref && <Link href={bookingHref}>VER RESERVACIÓN <ExternalLink aria-hidden="true" /></Link>}
                     {receipt && <a target="_blank" rel="noreferrer" href={`/api/admin/payment-receipts/${receipt.id}/download`}><FileDown aria-hidden="true" /> COMPROBANTE</a>}
                     {payment.status === "UNDER_REVIEW" ? (
-                      <ApprovePaymentButton paymentId={payment.id} />
+                      <>
+                        <ApprovePaymentButton paymentId={payment.id} />
+                        {payment.method === "TRANSFER" && (
+                          <RejectTransferPaymentButton
+                            paymentId={payment.id}
+                            expectedAmountCents={payment.amount_cents}
+                          />
+                        )}
+                      </>
                     ) : payment.status === "PAID" ? (
                       <RefundPaymentButton paymentId={payment.id} />
                     ) : isWaiting ? (

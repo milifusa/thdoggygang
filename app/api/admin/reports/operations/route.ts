@@ -45,6 +45,7 @@ export async function GET(request: Request) {
         "Email",
         "Teléfono",
         "Pasajero",
+        "Teléfono del pasajero",
         "Costo MXN",
       ],
     ];
@@ -53,7 +54,7 @@ export async function GET(request: Request) {
       for (const transport of booking.transport_reservations ?? []) {
         const participant = one(transport.booking_participant);
         const snapshot = participant?.snapshot as
-          | { first_name?: string; last_name?: string }
+          | { first_name?: string; last_name?: string; phone?: string }
           | undefined;
         rows.push([
           booking.booking_number,
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
           profile?.email,
           profile?.phone,
           `${snapshot?.first_name ?? ""} ${snapshot?.last_name ?? ""}`.trim(),
+          snapshot?.phone,
           (transport.price_cents / 100).toFixed(2),
         ]);
       }
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
     const { data } = await supabase
       .from("booking_cancellation_requests")
       .select(
-        "status,reason,credit_amount_cents,created_at,resolved_at,resolution_note,booking:bookings!inner(booking_number,hike_id,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email))",
+        "status,reason,credit_amount_cents,created_at,resolved_at,resolution_note,booking:bookings!inner(booking_number,hike_id,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone))",
       )
       .eq("booking.hike_id", hikeId!);
     const rows: unknown[][] = [
@@ -80,6 +82,7 @@ export async function GET(request: Request) {
         "Reservación",
         "Cliente",
         "Email",
+        "Teléfono",
         "Estatus",
         "Motivo",
         "Crédito otorgado MXN",
@@ -95,6 +98,7 @@ export async function GET(request: Request) {
         booking?.booking_number,
         `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim(),
         profile?.email,
+        profile?.phone,
         item.status,
         item.reason,
         (item.credit_amount_cents / 100).toFixed(2),
@@ -109,7 +113,7 @@ export async function GET(request: Request) {
   const { data } = await supabase
     .from("order_items")
     .select(
-      "description,quantity,unit_price_cents,created_at,order:orders(order_number,status,fulfillment_mode,pickup_hike_id,booking:bookings(hike_id,booking_number),profile:profiles(first_name,last_name,email))",
+      "description,quantity,unit_price_cents,created_at,order:orders(order_number,status,fulfillment_mode,pickup_hike_id,booking:bookings(hike_id,booking_number),profile:profiles(first_name,last_name,email,phone))",
     )
     .eq("item_type", itemType)
     .order("created_at");
@@ -119,6 +123,7 @@ export async function GET(request: Request) {
       "Reservación",
       "Cliente",
       "Email",
+      "Teléfono",
       "Artículo",
       "Cantidad",
       "Precio unitario MXN",
@@ -138,6 +143,7 @@ export async function GET(request: Request) {
       booking?.booking_number,
       `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim(),
       profile?.email,
+      profile?.phone,
       item.description,
       item.quantity,
       (item.unit_price_cents / 100).toFixed(2),

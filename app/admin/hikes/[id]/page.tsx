@@ -90,6 +90,12 @@ function participantName(snapshot: Record<string, unknown>) {
   );
 }
 
+function participantPhone(snapshot: Record<string, unknown>) {
+  return typeof snapshot.phone === "string" && snapshot.phone.trim()
+    ? snapshot.phone.trim()
+    : "Sin teléfono";
+}
+
 function participantIsFreeChild(
   snapshot: Record<string, unknown>,
   hikeDate: string,
@@ -101,6 +107,7 @@ type Payment = {
   status: string;
   method: string;
   amount_cents: number;
+  received_amount_cents: number | null;
   created_at: string;
   order:
     | {
@@ -236,7 +243,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("payments")
       .select(
-        "id,status,method,amount_cents,created_at,order:orders(booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(id,item_type,reference_id,description,quantity,unit_price_cents,order_item_fulfillments(status,delivery_location,delivered_at)))",
+        "id,status,method,amount_cents,received_amount_cents,created_at,order:orders(booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(id,item_type,reference_id,description,quantity,unit_price_cents,order_item_fulfillments(status,delivery_location,delivered_at)))",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -612,6 +619,14 @@ export default async function HikeAdminDetail({
                         ? ` · ${bookingFreeChildren} menores de 5 sin ocupar lugar`
                         : ""}
                     </small>
+                    <div className="hike-registration-contacts">
+                      {b.booking_participants.map((participant) => (
+                        <span key={participant.id}>
+                          <b>{participantName(participant.snapshot)}</b>
+                          <small>{participantPhone(participant.snapshot)}</small>
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <b>{money(b.total_cents)}</b>
                   <em>{bookingStatus(b.status)}</em>
@@ -751,7 +766,12 @@ export default async function HikeAdminDetail({
                       {profileName(purchaser)} · {p.method}
                     </small>
                   </div>
-                  <b>{money(p.amount_cents)}</b>
+                  <b>
+                    {money(p.amount_cents)}
+                    {p.received_amount_cents !== null
+                      ? ` · recibido ${money(p.received_amount_cents)}`
+                      : ""}
+                  </b>
                   <em>{p.status}</em>
                 </article>
               );
