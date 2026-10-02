@@ -8,7 +8,11 @@ const personSchema = z
     firstName: z.string().trim().min(2).max(80),
     lastName: z.string().trim().min(2).max(100),
     email: z.string().trim().email().or(z.literal("")).optional(),
-    phone: z.string().trim().max(20).or(z.literal("")).optional(),
+    phone: z
+      .string()
+      .trim()
+      .min(1, "Agrega un teléfono de contacto para esta persona.")
+      .max(20),
     whatsapp: z.string().trim().max(20).or(z.literal("")).optional(),
     birthDate: z.string().date().or(z.literal("")).optional(),
     emergencyContactName: z.string().trim().max(120).or(z.literal("")).optional(),
@@ -55,16 +59,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
 
-  const phone = parsed.data.phone
-    ? normalizeMexicoPhone(parsed.data.phone)
-    : null;
+  const phone = normalizeMexicoPhone(parsed.data.phone);
   const emergencyPhone = parsed.data.emergencyContactPhone
     ? normalizeMexicoPhone(parsed.data.emergencyContactPhone)
     : null;
   const whatsapp = parsed.data.whatsapp
     ? normalizeMexicoPhone(parsed.data.whatsapp)
     : null;
-  if (parsed.data.phone && !phone)
+  if (!phone)
     return Response.json(
       { error: "El teléfono debe tener 10 dígitos de México." },
       { status: 400 },

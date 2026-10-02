@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeMexicoPhone } from "../../../lib/mexico-phone";
 import { recalculateBookingTotal } from "../../../lib/server/booking-pricing";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 
@@ -45,6 +46,8 @@ function friendlyDraftError(message?: string) {
     return "Selecciona también a la persona adulta responsable del menor.";
   if (/minor birth date required/i.test(message))
     return "Agrega la fecha de nacimiento del menor antes de continuar.";
+  if (/participant phone required/i.test(message))
+    return "Agrega un teléfono de contacto para cada persona antes de continuar.";
   if (/draft not found/i.test(message))
     return "No encontramos el borrador. Actualiza la página para continuar.";
   return "No pudimos guardar tu avance. Intenta nuevamente; tu selección sigue en pantalla.";
@@ -79,6 +82,34 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "No encontramos tu perfil o el hike." },
       { status: 404 },
+    );
+  const { data: selectedPeople, error: selectedPeopleError } = await supabase
+    .from("person_profiles")
+    .select("id,first_name,last_name,phone")
+    .eq("owner_profile_id", profile.id)
+    .in("id", parsed.data.personIds)
+    .is("deleted_at", null);
+  if (
+    selectedPeopleError ||
+    !selectedPeople ||
+    selectedPeople.length !== new Set(parsed.data.personIds).size
+  )
+    return Response.json(
+      { error: "Una de las personas seleccionadas ya no está disponible." },
+      { status: 400 },
+    );
+  const peopleMissingPhone = selectedPeople.filter(
+    (person) => !normalizeMexicoPhone(person.phone ?? ""),
+  );
+  if (peopleMissingPhone.length)
+    return Response.json(
+      {
+        error: `Agrega un teléfono de contacto para ${peopleMissingPhone
+          .map((person) => `${person.first_name} ${person.last_name}`.trim())
+          .join(", ")} antes de continuar.`,
+        code: "PARTICIPANT_PHONE_REQUIRED",
+      },
+      { status: 400 },
     );
   let effectiveBookingId = parsed.data.bookingId;
   if (!effectiveBookingId) {

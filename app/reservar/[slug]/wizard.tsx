@@ -130,6 +130,13 @@ export function BookingWizard({
   const [bookingId, setBookingId] = useState<string | null>(resume?.bookingId ?? null);
   const [syncMessage, setSyncMessage] = useState("");
   const [dogNeedsUpdate,setDogNeedsUpdate]=useState(false);
+  const selectedPeopleMissingPhone = useMemo(
+    () =>
+      selectedPeople
+        .map((id) => people.find((person) => person.id === id))
+        .filter((person) => person && !person.phone),
+    [people, selectedPeople],
+  );
   const hikeDate = useMemo(() => dateInMexico(adventure.startsAt), [adventure.startsAt]);
   const freeChildCount = useMemo(
     () =>
@@ -295,7 +302,9 @@ export function BookingWizard({
   };
   const canContinue =
     step === 0
-      ? selectedPeople.length > 0 && selectedPeople.every((id)=>{const person=people.find((item)=>item.id===id);return !person?.isMinor||Boolean(person.guardianPersonId&&selectedPeople.includes(person.guardianPersonId));})
+      ? selectedPeople.length > 0 &&
+        selectedPeopleMissingPhone.length === 0 &&
+        selectedPeople.every((id)=>{const person=people.find((item)=>item.id===id);return !person?.isMinor||Boolean(person.guardianPersonId&&selectedPeople.includes(person.guardianPersonId));})
       : step === 1
         ? dogChoiceMade
         : step === 4
@@ -308,7 +317,9 @@ export function BookingWizard({
   const continueLabel = processing
     ? "GUARDANDO…"
     : step === 0 && !canContinue
-      ? people.length
+      ? selectedPeopleMissingPhone.length
+        ? "REGISTRA LOS TELÉFONOS"
+        : people.length
         ? "SELECCIONA UNA PERSONA"
         : "AGREGA UNA PERSONA"
       : step === 1 && !canContinue
@@ -428,6 +439,7 @@ export function BookingWizard({
                             {isFreeChildForDate(person, hikeDate)
                               ? " · Menor de 5 años · Sin costo"
                               : ""}
+                            {!person.phone ? " · Falta teléfono" : ""}
                           </small>
                         </span>
                         <i aria-hidden="true">
@@ -440,6 +452,35 @@ export function BookingWizard({
                   <p className="wizard-empty">
                     Primero agrega a una persona a tu manada.
                   </p>
+                )}
+                {selectedPeopleMissingPhone.length > 0 && (
+                  <div className="wizard-phone-required" role="alert">
+                    <strong>NECESITAMOS UN TELÉFONO DE CONTACTO</strong>
+                    <p>
+                      Antes de reservar, completa el teléfono de cada persona
+                      que viene. Para menores puedes usar el número de su
+                      responsable.
+                    </p>
+                    <div>
+                      {selectedPeopleMissingPhone.map((person) => {
+                        if (!person) return null;
+                        const returnTo = `/reservar/${adventure.slug}${
+                          bookingId
+                            ? `?booking=${encodeURIComponent(bookingId)}&step=personas`
+                            : ""
+                        }`;
+                        return (
+                          <Link
+                            key={person.id}
+                            href={`/mi-manada?editPerson=${encodeURIComponent(person.id)}&returnTo=${encodeURIComponent(returnTo)}`}
+                          >
+                            AGREGAR TELÉFONO DE {person.name.toUpperCase()}
+                            <ArrowRight aria-hidden="true" />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
                 )}
                 <button
                   className="add-row"

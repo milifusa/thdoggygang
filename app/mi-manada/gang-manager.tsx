@@ -75,6 +75,7 @@ export function GangManager({
   people,
   dogs,
   initialDialog,
+  initialPersonId,
   initialDogId,
   returnTo,
 }: {
@@ -82,6 +83,7 @@ export function GangManager({
   people: PersonRecord[];
   dogs: DogRecord[];
   initialDialog?: "person" | "dog";
+  initialPersonId?: string;
   initialDogId?: string;
   returnTo?: string;
 }) {
@@ -89,8 +91,13 @@ export function GangManager({
   const initialDog = initialDogId
     ? dogs.find((dog) => dog.id === initialDogId)
     : undefined;
+  const initialPerson = initialPersonId
+    ? people.find((person) => person.id === initialPersonId)
+    : undefined;
   const [dialog, setDialog] = useState<DialogState>(
-    initialDog
+    initialPerson
+      ? { kind: "person", record: initialPerson }
+      : initialDog
       ? { kind: "dog", record: initialDog }
       : initialDialog
         ? { kind: initialDialog }
@@ -138,6 +145,7 @@ export function GangManager({
                 {person.isMinor
                   ? `Menor · Responsable: ${people.find((item) => item.id === person.guardianPersonId)?.firstName ?? "pendiente"}`
                   : "Adulto"}
+                {!person.phone ? " · Falta teléfono" : ""}
               </p>
               <button
                 type="button"
@@ -281,11 +289,13 @@ function MexicoPhoneField({
   name,
   defaultValue = "",
   required = false,
+  hint = "10 dígitos · sólo números de México",
 }: {
   label: string;
   name: string;
   defaultValue?: string;
   required?: boolean;
+  hint?: string;
 }) {
   const [digits, setDigits] = useState(mexicoNationalDigits(defaultValue));
   return (
@@ -308,7 +318,7 @@ function MexicoPhoneField({
           placeholder="2220000000"
         />
       </span>
-      <small>10 dígitos · sólo números de México</small>
+      <small>{hint}</small>
     </label>
   );
 }
@@ -438,9 +448,15 @@ function PersonDialog({
             />
           </label>
           <MexicoPhoneField
-            label="TELÉFONO"
+            label="TELÉFONO · OBLIGATORIO"
             name="phone"
             defaultValue={record?.phone}
+            required
+            hint={
+              minor
+                ? "10 dígitos de México · puede ser el teléfono de su responsable"
+                : "10 dígitos · sólo números de México"
+            }
           />
           <MexicoPhoneField
             label="WHATSAPP"

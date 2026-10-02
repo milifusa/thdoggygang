@@ -87,7 +87,12 @@ const date = (value: string) =>
 export default async function MyGangPage({
   searchParams,
 }: {
-  searchParams: Promise<{ new?: string; editDog?: string; returnTo?: string }>;
+  searchParams: Promise<{
+    new?: string;
+    editPerson?: string;
+    editDog?: string;
+    returnTo?: string;
+  }>;
 }) {
   const session = await requireClientSession("/mi-manada");
   const query = await searchParams;
@@ -514,6 +519,7 @@ export default async function MyGangPage({
                 ? "dog"
                 : undefined
           }
+          initialPersonId={query.editPerson}
           returnTo={
             query.returnTo?.startsWith("/") ? query.returnTo : undefined
           }

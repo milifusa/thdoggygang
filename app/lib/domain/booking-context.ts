@@ -1,4 +1,5 @@
 import { isSupabaseConfigured } from "../config";
+import { normalizeMexicoPhone } from "../mexico-phone";
 import { createSupabaseServerClient } from "../supabase/server";
 
 export type PersonOption = {
@@ -9,6 +10,7 @@ export type PersonOption = {
   isMinor: boolean;
   birthDate: string | null;
   guardianPersonId: string | null;
+  phone: string | null;
 };
 export type DogOption = {
   id: string;
@@ -37,6 +39,7 @@ const demoContext: BookingContext = {
       isMinor: false,
       birthDate: null,
       guardianPersonId: null,
+      phone: "+522220000001",
     },
     {
       id: "eduardo",
@@ -46,6 +49,7 @@ const demoContext: BookingContext = {
       isMinor: false,
       birthDate: null,
       guardianPersonId: null,
+      phone: "+522220000002",
     },
     {
       id: "maximo",
@@ -55,6 +59,7 @@ const demoContext: BookingContext = {
       isMinor: true,
       birthDate: "2022-10-01",
       guardianPersonId: "eduardo",
+      phone: "+522220000002",
     },
   ],
   dogs: [
@@ -92,7 +97,7 @@ export async function loadBookingContext(): Promise<BookingContext> {
     supabase
       .from("person_profiles")
       .select(
-        "id, first_name, last_name, birth_date, is_minor, guardian_person_id",
+        "id, first_name, last_name, birth_date, is_minor, guardian_person_id, phone",
       )
       .eq("owner_profile_id", profile.id)
       .is("deleted_at", null)
@@ -141,6 +146,7 @@ export async function loadBookingContext(): Promise<BookingContext> {
       isMinor: person.is_minor,
       birthDate: person.birth_date,
       guardianPersonId: person.guardian_person_id,
+      phone: normalizeMexicoPhone(person.phone ?? ""),
     })),
     dogs: dogOptions,
   };
