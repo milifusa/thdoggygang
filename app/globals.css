@@ -1266,6 +1266,70 @@ footer small {
   width: 19px;
   flex: 0 0 auto;
 }
+.field-camera {
+  overflow: hidden;
+}
+.field-camera-status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  background: #171310e8;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+.field-camera-status svg {
+  width: 16px;
+  height: 16px;
+}
+.camera-ready .field-camera-status {
+  background: #176535e8;
+}
+.camera-error .field-camera-status {
+  background: #9e3d1ce8;
+}
+.field-scan-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 20px 14px;
+}
+.field-scan-actions .field-scan-file {
+  margin: 0;
+}
+.field-scan-actions > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  border: 1px solid var(--field-ink);
+  background: #fff;
+  color: var(--field-ink);
+  padding: 8px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.field-scan-actions > button:disabled {
+  opacity: 0.5;
+}
+.field-scan-actions > button svg {
+  width: 18px;
+  flex: 0 0 auto;
+}
+@media (max-width: 620px) {
+  .field-scan-actions {
+    grid-template-columns: 1fr;
+    margin-inline: 14px;
+  }
+}
 
 /* Stripe configuration diagnostics. */
 .stripe-diagnostics {

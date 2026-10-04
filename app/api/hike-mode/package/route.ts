@@ -150,7 +150,25 @@ export async function GET(request: Request) {
   );
   await Promise.all(
     bookings.map(async (booking) => {
-      booking.qrToken = await ensureBookingQrToken(booking.id);
+      const checkedParticipantIds = new Set(
+        booking.check_ins.map((checkIn) => checkIn.booking_participant_id),
+      );
+      const checkInComplete = booking.booking_participants.every(
+        (participant) => checkedParticipantIds.has(participant.id),
+      );
+      if (checkInComplete) return;
+      try {
+        booking.qrToken = await ensureBookingQrToken(booking.id);
+      } catch (error) {
+        // A check-in can finish between loading the package and creating its
+        // token. It must not break the operational package for everyone else.
+        if (
+          error instanceof Error &&
+          error.message === "Check-in is already complete."
+        )
+          return;
+        throw error;
+      }
     }),
   );
   const deliveries: HikeDelivery[] = [];

@@ -42,6 +42,7 @@ import { verifySignedPayload } from "../../lib/security/signed-token";
 
 type Filter =
   "ALL" | "PENDING" | "CHECKED" | "ALERTS" | "TRANSPORT" | "DELIVERIES";
+type ScannerState = "idle" | "starting" | "ready" | "recovering" | "error";
 
 function personName(person?: HikeBooking["booking_participants"][number]) {
   return (
@@ -171,10 +172,14 @@ export function HikeMode({
   const [pending, setPending] = useState<OfflineOperation[]>([]);
   const [queueOpen, setQueueOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
+  const [scannerState, setScannerState] = useState<ScannerState>("idle");
   const [deviceId, setDeviceId] = useState("");
   const video = useRef<HTMLVideoElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const qrScanner = useRef<import("qr-scanner").default | null>(null);
   const scanLocked = useRef(false);
+  const scannerStarting = useRef(false);
+  const scannerGeneration = useRef(0);
 
   const hydrateQueue = useCallback(
     async (hikeId: string) => setPending(await listOperations(hikeId)),
@@ -567,12 +572,22 @@ export function HikeMode({
     setLastSync(null);
     setMessage("Los datos offline de este hike se eliminaron del dispositivo.");
   };
-  const stopScanner = () => {
+  const stopScanner = useCallback((state: ScannerState = "idle") => {
+    scannerGeneration.current += 1;
     qrScanner.current?.destroy();
     qrScanner.current = null;
+    const currentVideo = video.current;
+    const stream = currentVideo?.srcObject;
+    if (stream instanceof MediaStream)
+      stream.getTracks().forEach((track) => track.stop());
+    if (currentVideo) {
+      currentVideo.pause();
+      currentVideo.srcObject = null;
+    }
     scanLocked.current = false;
-  };
-  const handleQr = async (token: string) => {
+    setScannerState(state);
+  }, []);
+  const handleQr = useCallback(async (token: string) => {
     if (!data) return;
     const payload = await verifySignedPayload(token, data.publicKey);
     if (!payload || payload.purpose !== "checkin") {
@@ -593,18 +608,20 @@ export function HikeMode({
     stopScanner();
     setScannerOpen(false);
     setSelected(booking);
-  };
-  const openScanner = async () => {
+  }, [data, stopScanner]);
+  const startScanner = useCallback(async (recovering = false) => {
     if (!data?.authorization) {
       setMessage(
         "Primero prepara el hike para activar el escáner y la autorización operativa.",
       );
       return;
     }
-    setMessage("");
-    setScannerOpen(true);
+    if (scannerStarting.current) return;
+    scannerStarting.current = true;
+    if (recovering) stopScanner("recovering");
+    else setScannerState("starting");
+    const generation = ++scannerGeneration.current;
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 50));
       if (!video.current) throw new Error("La cámara no está disponible.");
       const { default: QrScanner } = await import("qr-scanner");
       const scanner = new QrScanner(
@@ -630,19 +647,57 @@ export function HikeMode({
           onDecodeError: () => undefined,
         },
       );
+      if (generation !== scannerGeneration.current) {
+        scanner.destroy();
+        return;
+      }
       qrScanner.current = scanner;
       await scanner.start();
+      if (generation !== scannerGeneration.current) {
+        scanner.destroy();
+        return;
+      }
+      const stream = video.current.srcObject;
+      const hasLiveTrack =
+        stream instanceof MediaStream &&
+        stream
+          .getVideoTracks()
+          .some((track) => track.readyState === "live" && track.enabled);
+      if (!hasLiveTrack) throw new Error("La cámara dejó de transmitir.");
+      await video.current.play();
+      setScannerState("ready");
       setMessage(
         "Cámara lista. Acerca el QR hasta verlo completo dentro del marco.",
       );
     } catch (error) {
-      stopScanner();
+      if (generation !== scannerGeneration.current) return;
+      stopScanner("error");
+      const errorName = error instanceof Error ? error.name : "";
       setMessage(
-        error instanceof Error && error.name === "NotAllowedError"
+        errorName === "NotAllowedError"
           ? "La cámara no tiene permiso. Autorízala o selecciona una foto del QR."
-          : "No pudimos abrir la cámara. Selecciona una foto del QR o usa la búsqueda.",
+          : "La cámara se detuvo. Pulsa REACTIVAR CÁMARA, selecciona una foto del QR o usa la búsqueda.",
       );
+    } finally {
+      scannerStarting.current = false;
     }
+  }, [data?.authorization, handleQr, stopScanner]);
+  const openScanner = async () => {
+    if (!data?.authorization) {
+      setMessage(
+        "Primero prepara el hike para activar el escáner y la autorización operativa.",
+      );
+      return;
+    }
+    setMessage("");
+    setScannerOpen(true);
+    setScannerState("starting");
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(() => resolve()),
+      ),
+    );
+    await startScanner();
   };
   const scanImage = async (file?: File) => {
     if (!file) return;
@@ -658,6 +713,54 @@ export function HikeMode({
       );
     }
   };
+
+  useEffect(() => {
+    if (!scannerOpen) return;
+    let recoveryTimer: number | undefined;
+    const recoverIfNeeded = () => {
+      if (
+        document.visibilityState !== "visible" ||
+        scannerStarting.current
+      )
+        return;
+      const currentVideo = video.current;
+      const stream = currentVideo?.srcObject;
+      const hasLiveTrack =
+        stream instanceof MediaStream &&
+        stream
+          .getVideoTracks()
+          .some((track) => track.readyState === "live" && track.enabled);
+      const isPlaying = Boolean(
+        currentVideo &&
+          !currentVideo.paused &&
+          !currentVideo.ended &&
+          currentVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
+      );
+      if (hasLiveTrack && isPlaying) return;
+      setMessage("La cámara se pausó. La estamos reactivando…");
+      void startScanner(true);
+    };
+    const scheduleRecovery = () => {
+      if (recoveryTimer) window.clearTimeout(recoveryTimer);
+      recoveryTimer = window.setTimeout(recoverIfNeeded, 900);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") scheduleRecovery();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", scheduleRecovery);
+    window.addEventListener("pageshow", scheduleRecovery);
+    window.addEventListener("orientationchange", scheduleRecovery);
+    const healthCheck = window.setInterval(recoverIfNeeded, 4000);
+    return () => {
+      if (recoveryTimer) window.clearTimeout(recoveryTimer);
+      window.clearInterval(healthCheck);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", scheduleRecovery);
+      window.removeEventListener("pageshow", scheduleRecovery);
+      window.removeEventListener("orientationchange", scheduleRecovery);
+    };
+  }, [scannerOpen, startScanner]);
 
   if (!data)
     return (
@@ -794,6 +897,7 @@ export function HikeMode({
         <label>
           <Search />
           <input
+            ref={searchInput}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Nombre, reservación, correo, teléfono o perrito"
@@ -961,23 +1065,69 @@ export function HikeMode({
                 <h2>Escanear QR</h2>
               </div>
             </header>
-            <div className="field-camera">
-              <video ref={video} muted playsInline />
-              <i />
-            </div>
-            <label className="field-scan-file">
-              <ImageUp />
-              <span>LEER QR DESDE UNA FOTO</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  const file = event.currentTarget.files?.[0];
-                  event.currentTarget.value = "";
-                  void scanImage(file);
+            <div className={`field-camera camera-${scannerState}`}>
+              <video
+                ref={video}
+                muted
+                playsInline
+                autoPlay
+                onPlaying={() => setScannerState("ready")}
+                onStalled={() => {
+                  setMessage("La cámara se pausó. La estamos reactivando…");
+                  void startScanner(true);
                 }}
               />
-            </label>
+              <i />
+              <span className="field-camera-status">
+                {scannerState === "ready" ? (
+                  <>
+                    <CircleCheck /> CÁMARA ACTIVA
+                  </>
+                ) : scannerState === "error" ? (
+                  <>
+                    <CircleAlert /> CÁMARA DETENIDA
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="spin" /> REACTIVANDO
+                  </>
+                )}
+              </span>
+            </div>
+            <div className="field-scan-actions">
+              <button
+                type="button"
+                disabled={
+                  scannerState === "starting" || scannerState === "recovering"
+                }
+                onClick={() => void startScanner(true)}
+              >
+                <RefreshCw /> REACTIVAR CÁMARA
+              </button>
+              <label className="field-scan-file">
+                <ImageUp />
+                <span>USAR FOTO DEL QR</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    void scanImage(file);
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  stopScanner();
+                  setScannerOpen(false);
+                  window.setTimeout(() => searchInput.current?.focus(), 0);
+                }}
+              >
+                <Search /> BUSCAR RESERVACIÓN
+              </button>
+            </div>
             {message && (
               <p className="field-scanner-feedback" role="status">
                 <CircleAlert />
