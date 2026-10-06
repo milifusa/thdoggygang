@@ -7,6 +7,7 @@ import {
   Dog,
   Download,
   Hourglass,
+  ImageIcon,
   PackageCheck,
   Settings,
   Star,
@@ -102,6 +103,18 @@ function participantIsFreeChild(
 ) {
   return snapshotIsFreeChildForDate(snapshot, hikeDate);
 }
+
+function paymentStatusLabel(status: string) {
+  if (status === "PAID") return "PAGADO";
+  if (status === "PENDING") return "PENDIENTE";
+  if (status === "UNDER_REVIEW") return "EN REVISIÓN";
+  if (status === "REFUNDED") return "REEMBOLSADO";
+  if (status === "FAILED") return "PAGO FALLIDO";
+  if (status === "REJECTED") return "RECHAZADO";
+  if (status === "CANCELLED") return "CANCELADO";
+  return status.replaceAll("_", " ");
+}
+
 type Payment = {
   id: string;
   status: string;
@@ -248,12 +261,16 @@ export default async function HikeAdminDetail({
       .order("created_at", { ascending: false }),
     supabase
       .from("waitlist_entries")
-      .select("id,status,people_count,dog_count,created_at,offer_expires_at,profile:profiles(first_name,last_name,email,phone)")
+      .select(
+        "id,status,people_count,dog_count,created_at,offer_expires_at,profile:profiles(first_name,last_name,email,phone)",
+      )
       .eq("hike_id", id)
       .order("created_at"),
     supabase
       .from("hike_reviews")
-      .select("id,route_rating,guide_rating,transport_rating,body,published,created_at,profile:profiles(first_name,last_name,email)")
+      .select(
+        "id,route_rating,guide_rating,transport_rating,body,published,created_at,profile:profiles(first_name,last_name,email)",
+      )
       .eq("hike_id", id)
       .order("created_at", { ascending: false }),
   ]);
@@ -292,11 +309,11 @@ export default async function HikeAdminDetail({
         : payment.order;
       return Boolean(
         order &&
-          ((order.booking_id && bookingIds.has(order.booking_id)) ||
-            order.pickup_hike_id === id ||
-            order.order_items.some(
-              (i) => i.reference_id && photoIds.has(i.reference_id),
-            )),
+        ((order.booking_id && bookingIds.has(order.booking_id)) ||
+          order.pickup_hike_id === id ||
+          order.order_items.some(
+            (i) => i.reference_id && photoIds.has(i.reference_id),
+          )),
       );
     },
   );
@@ -367,9 +384,7 @@ export default async function HikeAdminDetail({
         (candidate) => candidate.id === reservation.booking_participant_id,
       );
       const dogNames = booking.booking_dogs
-        .filter(
-          (dog) => dog.dog_id && reservation.dog_ids.includes(dog.dog_id),
-        )
+        .filter((dog) => dog.dog_id && reservation.dog_ids.includes(dog.dog_id))
         .map((dog) => String(dog.snapshot.name ?? "Perrito"));
       return { booking, reservation, participant, dogNames };
     }),
@@ -393,6 +408,59 @@ export default async function HikeAdminDetail({
       };
     }),
   );
+  const photoById = new Map(photos.map((photo) => [photo.id, photo]));
+  const photoPositionById = new Map(
+    photos.map((photo, index) => [photo.id, index + 1]),
+  );
+  const photoPurchases = payments.flatMap((payment) => {
+    const order = Array.isArray(payment.order)
+      ? payment.order[0]
+      : payment.order;
+    if (!order) return [];
+    const items = order.order_items.filter(
+      (item) =>
+        item.item_type.startsWith("PHOTO") &&
+        item.reference_id &&
+        photoIds.has(item.reference_id),
+    );
+    if (!items.length) return [];
+    const purchaser = Array.isArray(order.profile)
+      ? order.profile[0]
+      : order.profile;
+    return [{ payment, order, purchaser, items }];
+  });
+  const paidPhotoCount = photoPurchases
+    .filter(({ payment }) => payment.status === "PAID")
+    .reduce(
+      (total, purchase) =>
+        total + purchase.items.reduce((sum, item) => sum + item.quantity, 0),
+      0,
+    );
+  const pendingPhotoPurchases = photoPurchases.filter(({ payment }) =>
+    ["PENDING", "UNDER_REVIEW"].includes(payment.status),
+  );
+  const pendingPhotoCount = pendingPhotoPurchases.reduce(
+    (total, purchase) =>
+      total + purchase.items.reduce((sum, item) => sum + item.quantity, 0),
+    0,
+  );
+  const pendingPhotoAmount = pendingPhotoPurchases.reduce(
+    (total, purchase) =>
+      total +
+      purchase.items.reduce(
+        (sum, item) => sum + item.quantity * item.unit_price_cents,
+        0,
+      ),
+    0,
+  );
+  const photoBuyerCount = new Set(
+    photoPurchases
+      .filter(({ payment }) => payment.status === "PAID")
+      .map(
+        ({ purchaser, order }) =>
+          purchaser?.email?.trim().toLowerCase() || order.order_number,
+      ),
+  ).size;
   const visibleTabs = isAdmin
     ? tabs
     : tabs.filter(
@@ -506,6 +574,19 @@ export default async function HikeAdminDetail({
                 <small>{money(productRevenue)} vendidos</small>
                 <span className="kpi-card-action">VER DETALLE →</span>
               </article>
+              <article>
+                <Link
+                  className="admin-card-hit"
+                  href={`/admin/hikes/${id}?tab=fotos#compras-fotos`}
+                  aria-label="Ver fotografías compradas"
+                />
+                <span>FOTOGRAFÍAS</span>
+                <strong>{paidPhotoCount}</strong>
+                <small>
+                  {photoBuyerCount} compradores · {pendingPhotoCount} pendientes
+                </small>
+                <span className="kpi-card-action">VER COMPRAS →</span>
+              </article>
             </section>
             <section className="hike-summary-grid">
               <div className="admin-panel">
@@ -531,7 +612,7 @@ export default async function HikeAdminDetail({
                       .filter((d) =>
                         Boolean(
                           d.snapshot.reactivity ||
-                            d.snapshot.medical_conditions,
+                          d.snapshot.medical_conditions,
                         ),
                       ).length
                   }{" "}
@@ -539,7 +620,11 @@ export default async function HikeAdminDetail({
                 </p>
                 <p>
                   <Hourglass />{" "}
-                  {(waitlist ?? []).filter((entry) => entry.status === "WAITING").length}{" "}
+                  {
+                    (waitlist ?? []).filter(
+                      (entry) => entry.status === "WAITING",
+                    ).length
+                  }{" "}
                   registros en lista de espera
                 </p>
               </div>
@@ -623,7 +708,9 @@ export default async function HikeAdminDetail({
                       {b.booking_participants.map((participant) => (
                         <span key={participant.id}>
                           <b>{participantName(participant.snapshot)}</b>
-                          <small>{participantPhone(participant.snapshot)}</small>
+                          <small>
+                            {participantPhone(participant.snapshot)}
+                          </small>
                         </span>
                       ))}
                     </div>
@@ -755,7 +842,8 @@ export default async function HikeAdminDetail({
                 <article key={p.id}>
                   <div>
                     <span>
-                      {order?.order_number ?? "ORDEN"} · {adminDate(p.created_at)}
+                      {order?.order_number ?? "ORDEN"} ·{" "}
+                      {adminDate(p.created_at)}
                     </span>
                     <strong>
                       {order?.order_items
@@ -809,8 +897,8 @@ export default async function HikeAdminDetail({
                         </span>
                         <strong>{item.description}</strong>
                         <small>
-                          {item.quantity} × {money(item.unit_price_cents)} · Total{" "}
-                          {money(item.quantity * item.unit_price_cents)}
+                          {item.quantity} × {money(item.unit_price_cents)} ·
+                          Total {money(item.quantity * item.unit_price_cents)}
                         </small>
                         {fulfillment?.delivery_location && (
                           <small>{fulfillment.delivery_location}</small>
@@ -861,6 +949,131 @@ export default async function HikeAdminDetail({
               </div>
               <Link href={`/galeria/${hike.slug}`}>VER GALERÍA</Link>
             </div>
+            <div className="hike-photo-purchases" id="compras-fotos">
+              <div className="hike-photo-purchase-head">
+                <div>
+                  <p>VENTAS DE ESTA GALERÍA</p>
+                  <h2>Compras de fotografías</h2>
+                  <span>
+                    Consulta quién compró, cuáles fotos eligió y el estado de
+                    cada pago.
+                  </span>
+                </div>
+                <strong>{money(photoRevenue)} recaudados</strong>
+              </div>
+              <div className="hike-photo-purchase-kpis">
+                <article>
+                  <span>FOTOS PAGADAS</span>
+                  <strong>{paidPhotoCount}</strong>
+                </article>
+                <article>
+                  <span>COMPRADORES</span>
+                  <strong>{photoBuyerCount}</strong>
+                </article>
+                <article>
+                  <span>FOTOS PENDIENTES</span>
+                  <strong>{pendingPhotoCount}</strong>
+                </article>
+                <article>
+                  <span>IMPORTE PENDIENTE</span>
+                  <strong>{money(pendingPhotoAmount)}</strong>
+                </article>
+              </div>
+              <div className="hike-photo-purchase-list">
+                {photoPurchases.map(({ payment, order, purchaser, items }) => {
+                  const itemCount = items.reduce(
+                    (sum, item) => sum + item.quantity,
+                    0,
+                  );
+                  const total = items.reduce(
+                    (sum, item) => sum + item.quantity * item.unit_price_cents,
+                    0,
+                  );
+                  const statusClass = payment.status
+                    .toLowerCase()
+                    .replaceAll("_", "-");
+                  return (
+                    <details key={payment.id}>
+                      <summary>
+                        <span className="hike-photo-order-icon">
+                          <ImageIcon />
+                        </span>
+                        <span className="hike-photo-order-buyer">
+                          <small>
+                            {order.order_number} ·{" "}
+                            {adminDate(payment.created_at)}
+                          </small>
+                          <strong>{profileName(purchaser)}</strong>
+                          <small>{purchaser?.email ?? "Sin correo"}</small>
+                        </span>
+                        <span className="hike-photo-order-count">
+                          <strong>{itemCount}</strong>
+                          <small>{itemCount === 1 ? "FOTO" : "FOTOS"}</small>
+                        </span>
+                        <span className="hike-photo-order-total">
+                          <strong>{money(total)}</strong>
+                          <small>{payment.method}</small>
+                        </span>
+                        <em className={statusClass}>
+                          {paymentStatusLabel(payment.status)}
+                        </em>
+                        <span className="hike-photo-order-toggle">
+                          VER FOTOS
+                        </span>
+                      </summary>
+                      <div className="hike-photo-order-detail">
+                        {items.map((item) => {
+                          const photo = item.reference_id
+                            ? photoById.get(item.reference_id)
+                            : undefined;
+                          const position = item.reference_id
+                            ? photoPositionById.get(item.reference_id)
+                            : undefined;
+                          return (
+                            <article key={item.id}>
+                              {photo?.url ? (
+                                <img
+                                  src={photo.url}
+                                  alt={
+                                    photo.title ??
+                                    `Fotografía ${position ?? ""}`.trim()
+                                  }
+                                />
+                              ) : (
+                                <span className="hike-photo-missing-preview">
+                                  <ImageIcon />
+                                </span>
+                              )}
+                              <div>
+                                <strong>
+                                  {photo?.title ??
+                                    item.description ??
+                                    `Foto ${position ?? ""}`.trim()}
+                                </strong>
+                                <small>
+                                  {position ? `Foto ${position} · ` : ""}
+                                  {money(item.unit_price_cents)}
+                                </small>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  );
+                })}
+                {!photoPurchases.length && (
+                  <div className="hike-photo-purchase-empty">
+                    <ImageIcon />
+                    <strong>Aún no hay compras de fotografías.</strong>
+                    <p>
+                      En cuanto alguien inicie una compra, aquí aparecerán sus
+                      fotos y el estado del pago.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
             {isAdmin ? (
               <PhotoManager
                 hikeId={id}
@@ -909,10 +1122,18 @@ export default async function HikeAdminDetail({
                 <div>
                   <span>{adminDate(entry.created_at)}</span>
                   <strong>{profileName(entry.profile)}</strong>
-                  <small>{entry.people_count} personas · {entry.dog_count} perritos</small>
+                  <small>
+                    {entry.people_count} personas · {entry.dog_count} perritos
+                  </small>
                 </div>
-                <b>{entry.status === "OFFERED" ? "OFERTA 24 H" : entry.status}</b>
-                <em>{entry.offer_expires_at ? `Vence ${adminDate(entry.offer_expires_at)}` : "ORDEN DE LLEGADA"}</em>
+                <b>
+                  {entry.status === "OFFERED" ? "OFERTA 24 H" : entry.status}
+                </b>
+                <em>
+                  {entry.offer_expires_at
+                    ? `Vence ${adminDate(entry.offer_expires_at)}`
+                    : "ORDEN DE LLEGADA"}
+                </em>
               </article>
             ))}
             {!waitlist?.length && <p>No hay personas en lista de espera.</p>}
@@ -929,11 +1150,15 @@ export default async function HikeAdminDetail({
                   <strong>{profileName(review.profile)}</strong>
                   <small>{review.body || "Sin comentario escrito"}</small>
                 </div>
-                <b>RUTA {review.route_rating}/5 · GUÍAS {review.guide_rating}/5</b>
+                <b>
+                  RUTA {review.route_rating}/5 · GUÍAS {review.guide_rating}/5
+                </b>
                 <em>{review.published ? "PUBLICADA" : "OCULTA"}</em>
               </article>
             ))}
-            {!reviews?.length && <p>Las reseñas aparecerán después de la aventura.</p>}
+            {!reviews?.length && (
+              <p>Las reseñas aparecerán después de la aventura.</p>
+            )}
           </section>
         )}
         {tab === "configuracion" && isAdmin && (
