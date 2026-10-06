@@ -297,6 +297,13 @@ check(
   "Los intentos abandonados pueden seguir sumándose después de cancelar o pagar otra reservación.",
 );
 check(
+  stripeCleanup.includes("closeSupersededPhotoPayments") &&
+    stripeCleanup.includes("SUPERSEDED_BY_PAID_PURCHASE") &&
+    stripeCleanup.includes('item.item_type === "PHOTO"') &&
+    paymentsAdmin.includes("supersededPendingIds"),
+  "Una compra pagada de fotos puede dejar otro checkout idéntico sumándose como pendiente.",
+);
+check(
   bookingCron.includes("staleStripePayments") &&
     bookingCron.includes("expireStripeCheckout") &&
     bookingCron.includes("confirmStripeCheckout") &&

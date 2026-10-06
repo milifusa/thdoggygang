@@ -124,6 +124,7 @@ type Payment = {
   created_at: string;
   order:
     | {
+        profile_id: string;
         booking_id: string | null;
         pickup_hike_id: string | null;
         order_number: string;
@@ -162,6 +163,7 @@ type Payment = {
         }>;
       }
     | Array<{
+        profile_id: string;
         booking_id: string | null;
         pickup_hike_id: string | null;
         order_number: string;
@@ -256,7 +258,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("payments")
       .select(
-        "id,status,method,amount_cents,received_amount_cents,created_at,order:orders(booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(id,item_type,reference_id,description,quantity,unit_price_cents,order_item_fulfillments(status,delivery_location,delivered_at)))",
+        "id,status,method,amount_cents,received_amount_cents,created_at,order:orders(profile_id,booking_id,pickup_hike_id,order_number,fulfillment_mode,profile:profiles(first_name,last_name,email),order_items(id,item_type,reference_id,description,quantity,unit_price_cents,order_item_fulfillments(status,delivery_location,delivered_at)))",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -429,14 +431,29 @@ export default async function HikeAdminDetail({
       : order.profile;
     return [{ payment, order, purchaser, items }];
   });
-  const paidPhotoCount = photoPurchases
+  const photoPurchaseKey = (purchase: (typeof photoPurchases)[number]) =>
+    `${purchase.order.profile_id}:${purchase.items
+      .map((item) => `${item.reference_id}:${item.quantity}`)
+      .sort()
+      .join("|")}`;
+  const paidPhotoPurchaseKeys = new Set(
+    photoPurchases
+      .filter(({ payment }) => payment.status === "PAID")
+      .map(photoPurchaseKey),
+  );
+  const visiblePhotoPurchases = photoPurchases.filter(
+    (purchase) =>
+      purchase.payment.status !== "PENDING" ||
+      !paidPhotoPurchaseKeys.has(photoPurchaseKey(purchase)),
+  );
+  const paidPhotoCount = visiblePhotoPurchases
     .filter(({ payment }) => payment.status === "PAID")
     .reduce(
       (total, purchase) =>
         total + purchase.items.reduce((sum, item) => sum + item.quantity, 0),
       0,
     );
-  const pendingPhotoPurchases = photoPurchases.filter(({ payment }) =>
+  const pendingPhotoPurchases = visiblePhotoPurchases.filter(({ payment }) =>
     ["PENDING", "UNDER_REVIEW"].includes(payment.status),
   );
   const pendingPhotoCount = pendingPhotoPurchases.reduce(
@@ -454,7 +471,7 @@ export default async function HikeAdminDetail({
     0,
   );
   const photoBuyerCount = new Set(
-    photoPurchases
+    visiblePhotoPurchases
       .filter(({ payment }) => payment.status === "PAID")
       .map(
         ({ purchaser, order }) =>
@@ -980,89 +997,92 @@ export default async function HikeAdminDetail({
                 </article>
               </div>
               <div className="hike-photo-purchase-list">
-                {photoPurchases.map(({ payment, order, purchaser, items }) => {
-                  const itemCount = items.reduce(
-                    (sum, item) => sum + item.quantity,
-                    0,
-                  );
-                  const total = items.reduce(
-                    (sum, item) => sum + item.quantity * item.unit_price_cents,
-                    0,
-                  );
-                  const statusClass = payment.status
-                    .toLowerCase()
-                    .replaceAll("_", "-");
-                  return (
-                    <details key={payment.id}>
-                      <summary>
-                        <span className="hike-photo-order-icon">
-                          <ImageIcon />
-                        </span>
-                        <span className="hike-photo-order-buyer">
-                          <small>
-                            {order.order_number} ·{" "}
-                            {adminDate(payment.created_at)}
-                          </small>
-                          <strong>{profileName(purchaser)}</strong>
-                          <small>{purchaser?.email ?? "Sin correo"}</small>
-                        </span>
-                        <span className="hike-photo-order-count">
-                          <strong>{itemCount}</strong>
-                          <small>{itemCount === 1 ? "FOTO" : "FOTOS"}</small>
-                        </span>
-                        <span className="hike-photo-order-total">
-                          <strong>{money(total)}</strong>
-                          <small>{payment.method}</small>
-                        </span>
-                        <em className={statusClass}>
-                          {paymentStatusLabel(payment.status)}
-                        </em>
-                        <span className="hike-photo-order-toggle">
-                          VER FOTOS
-                        </span>
-                      </summary>
-                      <div className="hike-photo-order-detail">
-                        {items.map((item) => {
-                          const photo = item.reference_id
-                            ? photoById.get(item.reference_id)
-                            : undefined;
-                          const position = item.reference_id
-                            ? photoPositionById.get(item.reference_id)
-                            : undefined;
-                          return (
-                            <article key={item.id}>
-                              {photo?.url ? (
-                                <img
-                                  src={photo.url}
-                                  alt={
-                                    photo.title ??
-                                    `Fotografía ${position ?? ""}`.trim()
-                                  }
-                                />
-                              ) : (
-                                <span className="hike-photo-missing-preview">
-                                  <ImageIcon />
-                                </span>
-                              )}
-                              <div>
-                                <strong>
-                                  {photo?.title ??
-                                    item.description ??
-                                    `Foto ${position ?? ""}`.trim()}
-                                </strong>
-                                <small>
-                                  {position ? `Foto ${position} · ` : ""}
-                                  {money(item.unit_price_cents)}
-                                </small>
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    </details>
-                  );
-                })}
-                {!photoPurchases.length && (
+                {visiblePhotoPurchases.map(
+                  ({ payment, order, purchaser, items }) => {
+                    const itemCount = items.reduce(
+                      (sum, item) => sum + item.quantity,
+                      0,
+                    );
+                    const total = items.reduce(
+                      (sum, item) =>
+                        sum + item.quantity * item.unit_price_cents,
+                      0,
+                    );
+                    const statusClass = payment.status
+                      .toLowerCase()
+                      .replaceAll("_", "-");
+                    return (
+                      <details key={payment.id}>
+                        <summary>
+                          <span className="hike-photo-order-icon">
+                            <ImageIcon />
+                          </span>
+                          <span className="hike-photo-order-buyer">
+                            <small>
+                              {order.order_number} ·{" "}
+                              {adminDate(payment.created_at)}
+                            </small>
+                            <strong>{profileName(purchaser)}</strong>
+                            <small>{purchaser?.email ?? "Sin correo"}</small>
+                          </span>
+                          <span className="hike-photo-order-count">
+                            <strong>{itemCount}</strong>
+                            <small>{itemCount === 1 ? "FOTO" : "FOTOS"}</small>
+                          </span>
+                          <span className="hike-photo-order-total">
+                            <strong>{money(total)}</strong>
+                            <small>{payment.method}</small>
+                          </span>
+                          <em className={statusClass}>
+                            {paymentStatusLabel(payment.status)}
+                          </em>
+                          <span className="hike-photo-order-toggle">
+                            VER FOTOS
+                          </span>
+                        </summary>
+                        <div className="hike-photo-order-detail">
+                          {items.map((item) => {
+                            const photo = item.reference_id
+                              ? photoById.get(item.reference_id)
+                              : undefined;
+                            const position = item.reference_id
+                              ? photoPositionById.get(item.reference_id)
+                              : undefined;
+                            return (
+                              <article key={item.id}>
+                                {photo?.url ? (
+                                  <img
+                                    src={photo.url}
+                                    alt={
+                                      photo.title ??
+                                      `Fotografía ${position ?? ""}`.trim()
+                                    }
+                                  />
+                                ) : (
+                                  <span className="hike-photo-missing-preview">
+                                    <ImageIcon />
+                                  </span>
+                                )}
+                                <div>
+                                  <strong>
+                                    {photo?.title ??
+                                      item.description ??
+                                      `Foto ${position ?? ""}`.trim()}
+                                  </strong>
+                                  <small>
+                                    {position ? `Foto ${position} · ` : ""}
+                                    {money(item.unit_price_cents)}
+                                  </small>
+                                </div>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    );
+                  },
+                )}
+                {!visiblePhotoPurchases.length && (
                   <div className="hike-photo-purchase-empty">
                     <ImageIcon />
                     <strong>Aún no hay compras de fotografías.</strong>
