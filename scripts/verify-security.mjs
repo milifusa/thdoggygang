@@ -320,8 +320,12 @@ check(
   "El respaldo no verifica en Stripe los pagos cuyo webhook no llegó.",
 );
 check(
-  stripeCheckout.includes('status: "PENDING"'),
-  "Un reintento de Stripe no reactiva la orden pendiente.",
+  stripeCheckout.includes('status: "PENDING"') &&
+    stripeCheckout.includes("createdCapacityHold") &&
+    stripeCheckout.includes("holdError") &&
+    stripeCheckout.includes("paymentError") &&
+    stripeCheckout.includes("/expire"),
+  "Stripe puede cobrar sin haber apartado el cupo o sin registrar el intento.",
 );
 for (const path of [
   "app/admin/page.tsx",
