@@ -35,14 +35,11 @@ async function verifyStripeSignature(
     false,
     ["verify"],
   );
-  const signedPayload = new TextEncoder().encode(
-    `${parsed.timestamp}.${body}`,
-  );
+  const signedPayload = new TextEncoder().encode(`${parsed.timestamp}.${body}`);
   for (const candidate of parsed.signatures) {
     if (!/^[a-f\d]{64}$/i.test(candidate)) continue;
-    const signature = Uint8Array.from(
-      candidate.match(/.{2}/g) ?? [],
-      (pair) => Number.parseInt(pair, 16),
+    const signature = Uint8Array.from(candidate.match(/.{2}/g) ?? [], (pair) =>
+      Number.parseInt(pair, 16),
     );
     if (await crypto.subtle.verify("HMAC", key, signature, signedPayload))
       return true;
@@ -107,7 +104,14 @@ export async function POST(request: Request) {
           bookingId,
           rawStatus: event.type,
         });
-      } catch {
+      } catch (error) {
+        console.error("stripe_checkout_reconciliation_failed", {
+          eventId: event.id,
+          sessionId: event.data.object.id,
+          orderId,
+          bookingId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
         return Response.json(
           { error: "No pudimos conciliar el pago." },
           { status: 500 },
@@ -124,8 +128,7 @@ export async function POST(request: Request) {
         sessionId: event.data.object.id,
         orderId: event.data.object.metadata?.order_id,
         rawStatus: event.type,
-        minimumAgeHours:
-          event.type === "checkout.session.expired" ? 48 : 0,
+        minimumAgeHours: event.type === "checkout.session.expired" ? 48 : 0,
       });
     } catch {
       return Response.json(

@@ -41,8 +41,7 @@ const authConfirmRoute = read("app/auth/confirm/verify/route.ts");
 const emailLinkRoute = read("app/api/auth/email-link/route.ts");
 const loginForm = read("app/ingresar/login-form.tsx");
 check(
-  authConfirmPage.includes('"signup"') &&
-    authConfirmRoute.includes('"signup"'),
+  authConfirmPage.includes('"signup"') && authConfirmRoute.includes('"signup"'),
   "El primer enlace de acceso de una cuenta nueva no acepta el tipo signup.",
 );
 check(
@@ -243,7 +242,7 @@ check(
   rewardsAdmin.includes('from("reward_ledger")') &&
     rewardsAdmin.includes('status === "COMPLETED"') &&
     rewardsAdmin.includes("referralsByClient") &&
-    read("app/admin/admin-nav.tsx").includes('/admin/recompensas'),
+    read("app/admin/admin-nav.tsx").includes("/admin/recompensas"),
   "El administrador no reúne de forma verificable puntos, sellos y referidos.",
 );
 const bookingAdminActions = read(
@@ -271,9 +270,7 @@ check(
 );
 const stripeWebhook = read("app/api/webhooks/stripe/route.ts");
 const stripeCheckout = read("app/api/checkout/stripe/route.ts");
-const stripeCleanup = read(
-  "app/lib/server/stripe-payment-reconciliation.ts",
-);
+const stripeCleanup = read("app/lib/server/stripe-payment-reconciliation.ts");
 const bookingCron = read("app/api/cron/booking-reminders/route.ts");
 check(
   stripeWebhook.includes('event.type === "checkout.session.expired"') &&
@@ -302,6 +299,15 @@ check(
     stripeCleanup.includes('item.item_type === "PHOTO"') &&
     paymentsAdmin.includes("supersededPendingIds"),
   "Una compra pagada de fotos puede dejar otro checkout idéntico sumándose como pendiente.",
+);
+check(
+  stripeCleanup.includes("resolvedBookingId") &&
+    stripeCleanup.includes('status: "CONFIRMED"') &&
+    stripeCleanup.includes("Promise.allSettled") &&
+    stripeWebhook.includes("stripe_checkout_reconciliation_failed") &&
+    bookingCron.includes("orphanedPaidBookings") &&
+    bookingCron.includes("recoveredPaidBookings"),
+  "Un pago confirmado puede dejar la reservación en borrador si falla una tarea secundaria.",
 );
 check(
   bookingCron.includes("staleStripePayments") &&

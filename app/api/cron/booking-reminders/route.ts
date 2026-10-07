@@ -1,15 +1,16 @@
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 import { getStripeSecretKey } from "../../../lib/payment-config";
-import { sendBookingReminder, sendUpcomingHikeReminder, sendWaitlistOfferForHike } from "../../../lib/server/booking-reminder";
+import {
+  sendBookingReminder,
+  sendUpcomingHikeReminder,
+  sendWaitlistOfferForHike,
+} from "../../../lib/server/booking-reminder";
 import {
   confirmStripeCheckout,
   expireStripeCheckout,
 } from "../../../lib/server/stripe-payment-reconciliation";
 
-async function hasNewerPaymentForSameHike(
-  bookingId: string,
-  after: string,
-) {
+async function hasNewerPaymentForSameHike(bookingId: string, after: string) {
   const service = createSupabaseServiceClient();
   const { data: booking, error: bookingError } = await service
     .from("bookings")
@@ -41,8 +42,7 @@ async function hasNewerPaymentForSameHike(
     .in("order_id", orderIds)
     .in("status", ["PENDING", "UNDER_REVIEW", "PAID"])
     .gt("created_at", after);
-  if (paymentError)
-    throw new Error("No pudimos verificar pagos posteriores.");
+  if (paymentError) throw new Error("No pudimos verificar pagos posteriores.");
   return (count ?? 0) > 0;
 }
 
@@ -65,12 +65,63 @@ export async function GET(request: Request) {
       { error: "No existe un administrador activo." },
       { status: 503 },
     );
+  const { data: orphanedPaidBookings, error: orphanedPaidError } = await service
+    .from("bookings")
+    .select(
+      "id,status,orders!inner(id,status,payments!inner(id,status,provider,provider_payment_id,raw_status))",
+    )
+    .in("status", ["DRAFT", "PENDING_PAYMENT"])
+    .eq("orders.status", "PAID")
+    .eq("orders.payments.status", "PAID")
+    .eq("orders.payments.provider", "stripe")
+    .limit(50);
+  if (orphanedPaidError)
+    return Response.json(
+      { error: "No pudimos consultar reservaciones pagadas sin confirmar." },
+      { status: 500 },
+    );
+  const recoveredPaidBookings: Array<Record<string, unknown>> = [];
+  for (const booking of orphanedPaidBookings ?? []) {
+    const orders = Array.isArray(booking.orders)
+      ? booking.orders
+      : [booking.orders];
+    const order = orders.find((candidate) => candidate?.status === "PAID");
+    const payments = order
+      ? Array.isArray(order.payments)
+        ? order.payments
+        : [order.payments]
+      : [];
+    const payment = payments.find(
+      (candidate) =>
+        candidate?.status === "PAID" &&
+        candidate.provider === "stripe" &&
+        candidate.provider_payment_id,
+    );
+    if (!order || !payment?.provider_payment_id) continue;
+    try {
+      recoveredPaidBookings.push({
+        ...(await confirmStripeCheckout({
+          sessionId: payment.provider_payment_id,
+          orderId: order.id,
+          bookingId: booking.id,
+          rawStatus:
+            payment.raw_status || "checkout.session.completed:recovery",
+        })),
+        recovered: true,
+      });
+    } catch (error) {
+      recoveredPaidBookings.push({
+        bookingId: booking.id,
+        orderId: order.id,
+        recovered: false,
+        error: error instanceof Error ? error.message : "No conciliado",
+      });
+    }
+  }
   const staleCardPayment = new Date(
     Date.now() - 48 * 60 * 60 * 1000,
   ).toISOString();
-  const staleDraft = new Date(
-    Date.now() - 24 * 60 * 60 * 1000,
-  ).toISOString();
+  const staleDraft = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const { data: staleStripePayments, error: staleStripeError } = await service
     .from("payments")
     .select("provider_payment_id,order_id,created_at")
@@ -202,24 +253,62 @@ export async function GET(request: Request) {
   }
   const now = new Date();
   const upper = new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: upcoming } = await service.from("bookings").select("id,hike:hikes!inner(starts_at)").eq("status", "CONFIRMED").gt("hike.starts_at", now.toISOString()).lte("hike.starts_at", upper).limit(200);
+  const { data: upcoming } = await service
+    .from("bookings")
+    .select("id,hike:hikes!inner(starts_at)")
+    .eq("status", "CONFIRMED")
+    .gt("hike.starts_at", now.toISOString())
+    .lte("hike.starts_at", upper)
+    .limit(200);
   const upcomingResults = [];
   for (const booking of upcoming ?? []) {
     const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
     if (!hike) continue;
-    const hours = (new Date(hike.starts_at).getTime() - now.getTime()) / 3_600_000;
-    const kind = hours >= 144 && hours <= 192 ? "HIKE_REMINDER_7D" : hours >= 18 && hours <= 42 ? "HIKE_REMINDER_1D" : null;
+    const hours =
+      (new Date(hike.starts_at).getTime() - now.getTime()) / 3_600_000;
+    const kind =
+      hours >= 144 && hours <= 192
+        ? "HIKE_REMINDER_7D"
+        : hours >= 18 && hours <= 42
+          ? "HIKE_REMINDER_1D"
+          : null;
     if (!kind) continue;
-    try { const sent = await sendUpcomingHikeReminder(booking.id, kind, admin.id); upcomingResults.push({ bookingId: booking.id, kind, ...sent }); }
-    catch (error) { upcomingResults.push({ bookingId: booking.id, kind, ok: false, error: error instanceof Error ? error.message : "No enviado" }); }
+    try {
+      const sent = await sendUpcomingHikeReminder(booking.id, kind, admin.id);
+      upcomingResults.push({ bookingId: booking.id, kind, ...sent });
+    } catch (error) {
+      upcomingResults.push({
+        bookingId: booking.id,
+        kind,
+        ok: false,
+        error: error instanceof Error ? error.message : "No enviado",
+      });
+    }
   }
-  const { data: waitlistOffers } = await service.from("waitlist_entries").select("hike_id").eq("status", "OFFERED").is("notified_at", null).gt("offer_expires_at", now.toISOString()).limit(50);
+  const { data: waitlistOffers } = await service
+    .from("waitlist_entries")
+    .select("hike_id")
+    .eq("status", "OFFERED")
+    .is("notified_at", null)
+    .gt("offer_expires_at", now.toISOString())
+    .limit(50);
   const waitlistResults = [];
   for (const offer of waitlistOffers ?? []) {
-    try { waitlistResults.push({ hikeId: offer.hike_id, ...(await sendWaitlistOfferForHike(offer.hike_id)) }); }
-    catch (error) { waitlistResults.push({ hikeId: offer.hike_id, ok: false, error: error instanceof Error ? error.message : "No enviado" }); }
+    try {
+      waitlistResults.push({
+        hikeId: offer.hike_id,
+        ...(await sendWaitlistOfferForHike(offer.hike_id)),
+      });
+    } catch (error) {
+      waitlistResults.push({
+        hikeId: offer.hike_id,
+        ok: false,
+        error: error instanceof Error ? error.message : "No enviado",
+      });
+    }
   }
   return Response.json({
+    recoveredPaidBookings,
     ok: true,
     processed: results.length,
     sent: results.filter((item) => item.ok).length,

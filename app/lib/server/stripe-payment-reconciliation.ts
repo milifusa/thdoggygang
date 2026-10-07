@@ -217,22 +217,37 @@ export async function confirmStripeCheckout({
 }) {
   const service = createSupabaseServiceClient();
   const now = new Date().toISOString();
-  const { data: payment, error: paymentError } = await service
+  const { data: existingPayment, error: existingPaymentError } = await service
     .from("payments")
-    .update({ status: "PAID", paid_at: now, raw_status: rawStatus })
+    .select("id,paid_at")
     .eq("provider", "stripe")
     .eq("provider_payment_id", sessionId)
     .eq("order_id", orderId)
+    .maybeSingle();
+  if (existingPaymentError || !existingPayment)
+    throw new Error("No pudimos localizar el pago de Stripe.");
+
+  const { data: payment, error: paymentError } = await service
+    .from("payments")
+    .update({
+      status: "PAID",
+      paid_at: existingPayment.paid_at ?? now,
+      raw_status: rawStatus,
+    })
+    .eq("id", existingPayment.id)
     .select("id")
     .maybeSingle();
   if (paymentError || !payment)
     throw new Error("No pudimos conciliar el pago.");
 
-  const { error: orderError } = await service
+  const { data: order, error: orderError } = await service
     .from("orders")
     .update({ status: "PAID" })
-    .eq("id", orderId);
-  if (orderError) throw new Error("No pudimos confirmar la orden.");
+    .eq("id", orderId)
+    .select("id,booking_id")
+    .maybeSingle();
+  if (orderError || !order) throw new Error("No pudimos confirmar la orden.");
+  const resolvedBookingId = bookingId ?? order.booking_id;
 
   const { error: inventoryError } = await service.rpc(
     "commit_product_inventory",
@@ -240,19 +255,58 @@ export async function confirmStripeCheckout({
   );
   if (inventoryError) throw new Error("No pudimos confirmar el inventario.");
 
-  await closeSupersededPhotoPayments(orderId);
-
-  if (bookingId) {
-    await commitMemberCredit(bookingId);
-    await closeSupersededPayments(bookingId, orderId);
+  const warnings: string[] = [];
+  if (resolvedBookingId) {
     const { error: bookingError } = await service
       .from("bookings")
       .update({ status: "CONFIRMED", confirmed_at: now, expires_at: null })
-      .eq("id", bookingId);
+      .eq("id", resolvedBookingId);
     if (bookingError) throw new Error("No pudimos confirmar la reservación.");
-    await ensureBookingQrToken(bookingId);
+
+    const secondaryTasks = [
+      {
+        name: "member_credit",
+        promise: commitMemberCredit(resolvedBookingId),
+      },
+      {
+        name: "superseded_payments",
+        promise: closeSupersededPayments(resolvedBookingId, orderId),
+      },
+      {
+        name: "superseded_photo_payments",
+        promise: closeSupersededPhotoPayments(orderId),
+      },
+      {
+        name: "booking_qr",
+        promise: ensureBookingQrToken(resolvedBookingId),
+      },
+    ];
+    const secondaryResults = await Promise.allSettled([
+      ...secondaryTasks.map((task) => task.promise),
+    ]);
+    secondaryResults.forEach((result, index) => {
+      if (result.status === "fulfilled") return;
+      const task = secondaryTasks[index]?.name ?? "unknown";
+      warnings.push(task);
+      console.error("stripe_reconciliation_secondary_task_failed", {
+        task,
+        orderId,
+        bookingId: resolvedBookingId,
+        error:
+          result.reason instanceof Error
+            ? result.reason.message
+            : "Unknown error",
+      });
+    });
+  } else {
+    await closeSupersededPhotoPayments(orderId);
   }
-  return { paymentId: payment.id, orderId, bookingId: bookingId ?? null };
+  return {
+    paymentId: payment.id,
+    orderId,
+    bookingId: resolvedBookingId ?? null,
+    warnings,
+  };
 }
 
 /**
