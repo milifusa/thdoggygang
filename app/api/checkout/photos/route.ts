@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 import { getStripeSecretKey } from "../../../lib/payment-config";
+import { executeIdempotentJson } from "../../../lib/server/idempotency";
 
 const schema = z.object({
   photoIds: z.array(z.string().uuid()).min(1).max(500),
@@ -166,120 +167,134 @@ export async function POST(request: Request) {
       { error: "La compra no tiene un monto válido." },
       { status: 400 },
     );
-  const orderNumber = `FOTO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
-  const { data: order, error: orderError } = await service
-    .from("orders")
-    .insert({
-      order_number: orderNumber,
-      profile_id: profile.id,
-      status: "PENDING",
-      total_cents: total,
-      currency: "MXN",
-    })
-    .select("id")
-    .single();
-  if (orderError || !order)
-    return Response.json(
-      { error: "No pudimos crear la orden." },
-      { status: 500 },
-    );
-  const baseUnit = Math.floor(total / valid.length);
-  const remainder = total - baseUnit * valid.length;
-  const items = valid.map((photo, index) => ({
-    order_id: order.id,
-    item_type: "PHOTO",
-    reference_id: photo.id,
-    description: photo.title ?? "Fotografía The Doggy Gang",
-    quantity: 1,
-    unit_price_cents:
-      configuredTotal === null || configuredTotal === undefined
-        ? (photo.price_cents ?? 0)
-        : baseUnit + (index < remainder ? 1 : 0),
-  }));
-  const { data: orderItems, error: itemError } = await service
-    .from("order_items")
-    .insert(items)
-    .select("id,reference_id");
-  if (itemError || !orderItems)
-    return Response.json(
-      { error: "No pudimos preparar las fotografías." },
-      { status: 500 },
-    );
-  await service.from("photo_purchases").insert(
-    orderItems.map((item) => ({
-      order_item_id: item.id,
-      profile_id: profile.id,
-      photo_id: item.reference_id,
-      download_expires_at: new Date(
-        Date.now() + 30 * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-    })),
-  );
-  const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
-  const form = new URLSearchParams({
-    mode: "payment",
-    "payment_method_types[0]": "card",
-    success_url: `${origin}/galeria/${parsed.data.hikeSlug}?pago=exitoso`,
-    cancel_url: `${origin}/galeria/${parsed.data.hikeSlug}?pago=cancelado`,
-    client_reference_id: order.id,
-    "metadata[order_id]": order.id,
-    "metadata[purchase_type]": "photos",
-  });
-  if (profile.email) form.set("customer_email", profile.email);
-  const checkoutLines =
-    configuredTotal === null || configuredTotal === undefined
-      ? valid.map((photo) => ({
-          name: photo.title ?? "Fotografía The Doggy Gang",
-          amount: photo.price_cents ?? 0,
-          quantity: 1,
-        }))
-      : [
-          {
-            name:
-              mode === "FULL"
-                ? "Galería completa"
-                : `Paquete de ${valid.length} fotografías`,
-            amount: total,
-            quantity: 1,
+  return executeIdempotentJson({
+    request,
+    operation: "photo.checkout.card",
+    actorProfileId: profile.id,
+    payload: { ...parsed.data, photoIds: ids },
+    handler: async () => {
+      const orderNumber = `FOTO-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const { data: order, error: orderError } = await service
+        .from("orders")
+        .insert({
+          order_number: orderNumber,
+          profile_id: profile.id,
+          status: "PENDING",
+          total_cents: total,
+          currency: "MXN",
+        })
+        .select("id")
+        .single();
+      if (orderError || !order)
+        return Response.json(
+          { error: "No pudimos crear la orden." },
+          { status: 500 },
+        );
+      const baseUnit = Math.floor(total / valid.length);
+      const remainder = total - baseUnit * valid.length;
+      const items = valid.map((photo, index) => ({
+        order_id: order.id,
+        item_type: "PHOTO",
+        reference_id: photo.id,
+        description: photo.title ?? "Fotografía The Doggy Gang",
+        quantity: 1,
+        unit_price_cents:
+          configuredTotal === null || configuredTotal === undefined
+            ? (photo.price_cents ?? 0)
+            : baseUnit + (index < remainder ? 1 : 0),
+      }));
+      const { data: orderItems, error: itemError } = await service
+        .from("order_items")
+        .insert(items)
+        .select("id,reference_id");
+      if (itemError || !orderItems)
+        return Response.json(
+          { error: "No pudimos preparar las fotografías." },
+          { status: 500 },
+        );
+      await service.from("photo_purchases").insert(
+        orderItems.map((item) => ({
+          order_item_id: item.id,
+          profile_id: profile.id,
+          photo_id: item.reference_id,
+          download_expires_at: new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000,
+          ).toISOString(),
+        })),
+      );
+      const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
+      const form = new URLSearchParams({
+        mode: "payment",
+        "payment_method_types[0]": "card",
+        success_url: `${origin}/galeria/${parsed.data.hikeSlug}?pago=exitoso`,
+        cancel_url: `${origin}/galeria/${parsed.data.hikeSlug}?pago=cancelado`,
+        client_reference_id: order.id,
+        "metadata[order_id]": order.id,
+        "metadata[purchase_type]": "photos",
+      });
+      if (profile.email) form.set("customer_email", profile.email);
+      const checkoutLines =
+        configuredTotal === null || configuredTotal === undefined
+          ? valid.map((photo) => ({
+              name: photo.title ?? "Fotografía The Doggy Gang",
+              amount: photo.price_cents ?? 0,
+              quantity: 1,
+            }))
+          : [
+              {
+                name:
+                  mode === "FULL"
+                    ? "Galería completa"
+                    : `Paquete de ${valid.length} fotografías`,
+                amount: total,
+                quantity: 1,
+              },
+            ];
+      checkoutLines.forEach((line, index) => {
+        form.set(`line_items[${index}][price_data][currency]`, "mxn");
+        form.set(
+          `line_items[${index}][price_data][unit_amount]`,
+          String(line.amount),
+        );
+        form.set(
+          `line_items[${index}][price_data][product_data][name]`,
+          line.name,
+        );
+        form.set(`line_items[${index}][quantity]`, String(line.quantity));
+      });
+      const stripeResponse = await fetch(
+        "https://api.stripe.com/v1/checkout/sessions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${stripeKey}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Idempotency-Key": `photo-checkout/${order.id}`,
           },
-        ];
-  checkoutLines.forEach((line, index) => {
-    form.set(`line_items[${index}][price_data][currency]`, "mxn");
-    form.set(
-      `line_items[${index}][price_data][unit_amount]`,
-      String(line.amount),
-    );
-    form.set(`line_items[${index}][price_data][product_data][name]`, line.name);
-    form.set(`line_items[${index}][quantity]`, String(line.quantity));
-  });
-  const stripeResponse = await fetch(
-    "https://api.stripe.com/v1/checkout/sessions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${stripeKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form,
+          body: form,
+        },
+      );
+      const checkout = (await stripeResponse.json()) as {
+        id?: string;
+        url?: string;
+        error?: { message?: string };
+      };
+      if (!stripeResponse.ok || !checkout.id || !checkout.url)
+        return Response.json(
+          {
+            error: checkout.error?.message ?? "Stripe no pudo iniciar el pago.",
+          },
+          { status: 502 },
+        );
+      await service.from("payments").insert({
+        order_id: order.id,
+        provider: "stripe",
+        provider_payment_id: checkout.id,
+        method: "CARD",
+        status: "PENDING",
+        amount_cents: total,
+      });
+      return Response.json({ url: checkout.url });
     },
-  );
-  const checkout = (await stripeResponse.json()) as {
-    id?: string;
-    url?: string;
-    error?: { message?: string };
-  };
-  if (!stripeResponse.ok || !checkout.id || !checkout.url)
-    return Response.json(
-      { error: checkout.error?.message ?? "Stripe no pudo iniciar el pago." },
-      { status: 502 },
-    );
-  await service.from("payments").insert({
-    order_id: order.id,
-    provider: "stripe",
-    provider_payment_id: checkout.id,
-    method: "CARD",
-    status: "PENDING",
-    amount_cents: total,
   });
-  return Response.json({ url: checkout.url });
 }

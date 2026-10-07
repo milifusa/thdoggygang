@@ -8,6 +8,7 @@ import {
   reserveMemberCredit,
 } from "../../../lib/server/member-credit";
 import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
+import { executeIdempotentJson } from "../../../lib/server/idempotency";
 
 const schema = z.object({
   bookingId: z.string().uuid(),
@@ -92,305 +93,325 @@ export async function POST(request: Request) {
       { error: "La reservación no tiene un total pagable." },
       { status: 409 },
     );
-  let creditApplied = 0;
-  try {
-    creditApplied = await reserveMemberCredit({
-      bookingId: booking.id,
-      profileId,
-      maximumCents: hikeSubtotal,
-      enabled: parsed.data.useCredit,
-    });
-  } catch (creditError) {
-    return Response.json(
-      {
-        error:
-          creditError instanceof Error
-            ? creditError.message
-            : "No pudimos aplicar tu crédito.",
-      },
-      { status: 409 },
-    );
-  }
-  const amountDue = Math.max(0, booking.total_cents - creditApplied);
-  const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
-  const stripeKey = amountDue > 0 ? await getStripeSecretKey() : null;
-  if (amountDue > 0 && !stripeKey) {
-    await service.rpc("release_booking_credit", { p_booking_id: booking.id });
-    return Response.json(
-      { error: "El pago con tarjeta aún no está configurado." },
-      { status: 503 },
-    );
-  }
+  return executeIdempotentJson({
+    request,
+    operation: "booking.checkout.card",
+    actorProfileId: profileId,
+    payload: parsed.data,
+    handler: async () => {
+      let creditApplied = 0;
+      try {
+        creditApplied = await reserveMemberCredit({
+          bookingId: booking.id,
+          profileId,
+          maximumCents: hikeSubtotal,
+          enabled: parsed.data.useCredit,
+        });
+      } catch (creditError) {
+        return Response.json(
+          {
+            error:
+              creditError instanceof Error
+                ? creditError.message
+                : "No pudimos aplicar tu crédito.",
+          },
+          { status: 409 },
+        );
+      }
+      const amountDue = Math.max(0, booking.total_cents - creditApplied);
+      const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
+      const stripeKey = amountDue > 0 ? await getStripeSecretKey() : null;
+      if (amountDue > 0 && !stripeKey) {
+        await service.rpc("release_booking_credit", {
+          p_booking_id: booking.id,
+        });
+        return Response.json(
+          { error: "El pago con tarjeta aún no está configurado." },
+          { status: 503 },
+        );
+      }
 
-  let createdCapacityHold = false;
-  if (booking.status === "DRAFT") {
-    const { data: heldBooking, error: holdError } = await service
-      .from("bookings")
-      .update({ status: "PENDING_PAYMENT" })
-      .eq("id", booking.id)
-      .eq("status", "DRAFT")
-      .select("id")
-      .maybeSingle();
-    if (holdError || !heldBooking) {
-      await service.rpc("release_booking_credit", { p_booking_id: booking.id });
-      const capacityError = holdError?.message?.includes("cupo")
-        ? holdError.message
-        : "No pudimos apartar tu lugar. Revisa el cupo e intenta de nuevo.";
-      return Response.json({ error: capacityError }, { status: 409 });
-    }
-    createdCapacityHold = true;
-  }
-  const releaseNewAttempt = async () => {
-    if (!createdCapacityHold) return;
-    await Promise.allSettled([
-      service
-        .from("bookings")
-        .update({ status: "DRAFT", expires_at: null })
-        .eq("id", booking.id)
-        .eq("status", "PENDING_PAYMENT"),
-      service.rpc("release_booking_credit", { p_booking_id: booking.id }),
-    ]);
-  };
+      let createdCapacityHold = false;
+      if (booking.status === "DRAFT") {
+        const { data: heldBooking, error: holdError } = await service
+          .from("bookings")
+          .update({ status: "PENDING_PAYMENT" })
+          .eq("id", booking.id)
+          .eq("status", "DRAFT")
+          .select("id")
+          .maybeSingle();
+        if (holdError || !heldBooking) {
+          await service.rpc("release_booking_credit", {
+            p_booking_id: booking.id,
+          });
+          const capacityError = holdError?.message?.includes("cupo")
+            ? holdError.message
+            : "No pudimos apartar tu lugar. Revisa el cupo e intenta de nuevo.";
+          return Response.json({ error: capacityError }, { status: 409 });
+        }
+        createdCapacityHold = true;
+      }
+      const releaseNewAttempt = async () => {
+        if (!createdCapacityHold) return;
+        await Promise.allSettled([
+          service
+            .from("bookings")
+            .update({ status: "DRAFT", expires_at: null })
+            .eq("id", booking.id)
+            .eq("status", "PENDING_PAYMENT"),
+          service.rpc("release_booking_credit", { p_booking_id: booking.id }),
+        ]);
+      };
 
-  const { data: existingOrder } = await service
-    .from("orders")
-    .select("id, order_number")
-    .eq("booking_id", booking.id)
-    .is("fulfillment_mode", null)
-    .limit(1)
-    .maybeSingle();
-  let order = existingOrder;
-  if (!order) {
-    const { data, error } = await service
-      .from("orders")
-      .insert({
-        order_number: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
-        profile_id: profileId,
-        booking_id: booking.id,
-        status: "PENDING",
-        total_cents: booking.total_cents,
-        currency: booking.currency,
-      })
-      .select("id, order_number")
-      .single();
-    if (error || !data) {
-      await releaseNewAttempt();
-      return Response.json(
-        { error: "No pudimos crear la orden." },
-        { status: 500 },
+      const { data: existingOrder } = await service
+        .from("orders")
+        .select("id, order_number")
+        .eq("booking_id", booking.id)
+        .is("fulfillment_mode", null)
+        .limit(1)
+        .maybeSingle();
+      let order = existingOrder;
+      if (!order) {
+        const { data, error } = await service
+          .from("orders")
+          .insert({
+            order_number: `ORD-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+            profile_id: profileId,
+            booking_id: booking.id,
+            status: "PENDING",
+            total_cents: booking.total_cents,
+            currency: booking.currency,
+          })
+          .select("id, order_number")
+          .single();
+        if (error || !data) {
+          await releaseNewAttempt();
+          return Response.json(
+            { error: "No pudimos crear la orden." },
+            { status: 500 },
+          );
+        }
+        order = data;
+      }
+      const productSubtotal = booking.booking_product_selections.reduce(
+        (sum, item) => sum + item.quantity * item.unit_price_cents,
+        0,
       );
-    }
-    order = data;
-  }
-  const productSubtotal = booking.booking_product_selections.reduce(
-    (sum, item) => sum + item.quantity * item.unit_price_cents,
-    0,
-  );
-  const items = [
-    {
-      order_id: order.id,
-      item_type: "HIKE",
-      reference_id: booking.id,
-      description: hike?.name ?? "Aventura The Doggy Gang",
-      quantity: 1,
-      unit_price_cents: booking.total_cents - productSubtotal,
-    },
-    ...booking.booking_product_selections.map((item) => {
-      const product = Array.isArray(item.product)
-        ? item.product[0]
-        : item.product;
-      return {
-        order_id: order.id,
-        item_type: "PRODUCT",
-        reference_id: item.product_id,
-        description: `${product?.name ?? "Producto"}${item.variant ? ` · ${item.variant}` : ""}`,
-        quantity: item.quantity,
-        unit_price_cents: item.unit_price_cents,
-      };
-    }),
-  ];
-  await service
-    .from("orders")
-    .update({ total_cents: booking.total_cents, status: "PENDING" })
-    .eq("id", order.id);
-  await service.from("order_items").delete().eq("order_id", order.id);
-  const { error: itemError } = await service.from("order_items").insert(items);
-  if (itemError) {
-    await releaseNewAttempt();
-    return Response.json(
-      { error: "No pudimos actualizar el detalle de la orden." },
-      { status: 500 },
-    );
-  }
-  const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
-  if (amountDue === 0) {
-    const now = new Date().toISOString();
-    const { error: inventoryError } = await service.rpc(
-      "commit_product_inventory",
-      { p_order_id: order.id },
-    );
-    if (inventoryError) {
-      await releaseNewAttempt();
-      return Response.json(
-        { error: "No pudimos confirmar los productos de la orden." },
-        { status: 500 },
-      );
-    }
-    await commitMemberCredit(booking.id);
-    await service.from("orders").update({ status: "PAID" }).eq("id", order.id);
-    await service
-      .from("bookings")
-      .update({ status: "CONFIRMED", confirmed_at: now, expires_at: null })
-      .eq("id", booking.id);
-    await ensureBookingQrToken(booking.id);
-    return Response.json({
-      url: `${origin}/reservar/confirmacion?booking=${booking.id}`,
-      creditAppliedCents: creditApplied,
-    });
-  }
-  if (!stripeKey)
-    return Response.json(
-      { error: "El pago con tarjeta aún no está configurado." },
-      { status: 503 },
-    );
-  const form = new URLSearchParams({
-    mode: "payment",
-    "payment_method_types[0]": "card",
-    success_url: `${origin}/reservar/confirmacion?booking=${booking.id}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/reservar/${hike?.slug ?? "sendero-del-duende"}?booking=${booking.id}&step=pago&pago=cancelado`,
-    client_reference_id: booking.id,
-    "metadata[booking_id]": booking.id,
-    "metadata[order_id]": order.id,
-  });
-  const checkoutLines = [
-    {
-      name: hike?.name ?? "Aventura The Doggy Gang",
-      amount:
-        booking.total_cents -
-        booking.booking_product_selections.reduce(
-          (sum, item) => sum + item.quantity * item.unit_price_cents,
-          0,
-        ) -
-        creditApplied,
-      quantity: 1,
-    },
-    ...booking.booking_product_selections.map((item) => {
-      const product = Array.isArray(item.product)
-        ? item.product[0]
-        : item.product;
-      return {
-        name: `${product?.name ?? "Producto"}${item.variant ? ` · ${item.variant}` : ""}`,
-        amount: item.unit_price_cents,
-        quantity: item.quantity,
-      };
-    }),
-  ];
-  checkoutLines
-    .filter((line) => line.amount > 0)
-    .forEach((line, index) => {
-      form.set(
-        `line_items[${index}][price_data][currency]`,
-        booking.currency.toLowerCase(),
-      );
-      form.set(
-        `line_items[${index}][price_data][unit_amount]`,
-        String(line.amount),
-      );
-      form.set(
-        `line_items[${index}][price_data][product_data][name]`,
-        line.name,
-      );
-      form.set(`line_items[${index}][quantity]`, String(line.quantity));
-    });
-  const { data: previousPending } = await service
-    .from("payments")
-    .select("id,provider_payment_id,amount_cents")
-    .eq("order_id", order.id)
-    .eq("provider", "stripe")
-    .eq("status", "PENDING")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (
-    previousPending?.provider_payment_id &&
-    previousPending.amount_cents === amountDue
-  ) {
-    const previousResponse = await fetch(
-      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(previousPending.provider_payment_id)}`,
-      {
-        headers: { Authorization: `Bearer ${stripeKey}` },
-        cache: "no-store",
-        signal: AbortSignal.timeout(12_000),
-      },
-    ).catch(() => null);
-    if (previousResponse?.ok) {
-      const previousCheckout = (await previousResponse.json()) as {
-        status?: "open" | "complete" | "expired";
-        url?: string | null;
-      };
-      if (previousCheckout.status === "open" && previousCheckout.url)
-        return Response.json({ url: previousCheckout.url, resumed: true });
+      const items = [
+        {
+          order_id: order.id,
+          item_type: "HIKE",
+          reference_id: booking.id,
+          description: hike?.name ?? "Aventura The Doggy Gang",
+          quantity: 1,
+          unit_price_cents: booking.total_cents - productSubtotal,
+        },
+        ...booking.booking_product_selections.map((item) => {
+          const product = Array.isArray(item.product)
+            ? item.product[0]
+            : item.product;
+          return {
+            order_id: order.id,
+            item_type: "PRODUCT",
+            reference_id: item.product_id,
+            description: `${product?.name ?? "Producto"}${item.variant ? ` · ${item.variant}` : ""}`,
+            quantity: item.quantity,
+            unit_price_cents: item.unit_price_cents,
+          };
+        }),
+      ];
       await service
+        .from("orders")
+        .update({ total_cents: booking.total_cents, status: "PENDING" })
+        .eq("id", order.id);
+      await service.from("order_items").delete().eq("order_id", order.id);
+      const { error: itemError } = await service
+        .from("order_items")
+        .insert(items);
+      if (itemError) {
+        await releaseNewAttempt();
+        return Response.json(
+          { error: "No pudimos actualizar el detalle de la orden." },
+          { status: 500 },
+        );
+      }
+      const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
+      if (amountDue === 0) {
+        const now = new Date().toISOString();
+        const { error: inventoryError } = await service.rpc(
+          "commit_product_inventory",
+          { p_order_id: order.id },
+        );
+        if (inventoryError) {
+          await releaseNewAttempt();
+          return Response.json(
+            { error: "No pudimos confirmar los productos de la orden." },
+            { status: 500 },
+          );
+        }
+        await commitMemberCredit(booking.id);
+        await service
+          .from("orders")
+          .update({ status: "PAID" })
+          .eq("id", order.id);
+        await service
+          .from("bookings")
+          .update({ status: "CONFIRMED", confirmed_at: now, expires_at: null })
+          .eq("id", booking.id);
+        await ensureBookingQrToken(booking.id);
+        return Response.json({
+          url: `${origin}/reservar/confirmacion?booking=${booking.id}`,
+          creditAppliedCents: creditApplied,
+        });
+      }
+      if (!stripeKey)
+        return Response.json(
+          { error: "El pago con tarjeta aún no está configurado." },
+          { status: 503 },
+        );
+      const form = new URLSearchParams({
+        mode: "payment",
+        "payment_method_types[0]": "card",
+        success_url: `${origin}/reservar/confirmacion?booking=${booking.id}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/reservar/${hike?.slug ?? "sendero-del-duende"}?booking=${booking.id}&step=pago&pago=cancelado`,
+        client_reference_id: booking.id,
+        "metadata[booking_id]": booking.id,
+        "metadata[order_id]": order.id,
+      });
+      const checkoutLines = [
+        {
+          name: hike?.name ?? "Aventura The Doggy Gang",
+          amount:
+            booking.total_cents -
+            booking.booking_product_selections.reduce(
+              (sum, item) => sum + item.quantity * item.unit_price_cents,
+              0,
+            ) -
+            creditApplied,
+          quantity: 1,
+        },
+        ...booking.booking_product_selections.map((item) => {
+          const product = Array.isArray(item.product)
+            ? item.product[0]
+            : item.product;
+          return {
+            name: `${product?.name ?? "Producto"}${item.variant ? ` · ${item.variant}` : ""}`,
+            amount: item.unit_price_cents,
+            quantity: item.quantity,
+          };
+        }),
+      ];
+      checkoutLines
+        .filter((line) => line.amount > 0)
+        .forEach((line, index) => {
+          form.set(
+            `line_items[${index}][price_data][currency]`,
+            booking.currency.toLowerCase(),
+          );
+          form.set(
+            `line_items[${index}][price_data][unit_amount]`,
+            String(line.amount),
+          );
+          form.set(
+            `line_items[${index}][price_data][product_data][name]`,
+            line.name,
+          );
+          form.set(`line_items[${index}][quantity]`, String(line.quantity));
+        });
+      const { data: previousPending } = await service
         .from("payments")
-        .update({
-          status: "FAILED",
-          raw_status: `checkout.session.${previousCheckout.status ?? "unavailable"}:resume`,
-        })
-        .eq("id", previousPending.id)
-        .eq("status", "PENDING");
-    }
-  }
-  const stripeResponse = await fetch(
-    "https://api.stripe.com/v1/checkout/sessions",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${stripeKey}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: form,
-    },
-  );
-  const checkout = (await stripeResponse.json()) as {
-    id?: string;
-    url?: string;
-    error?: { message?: string };
-  };
-  if (!stripeResponse.ok || !checkout.id || !checkout.url) {
-    await releaseNewAttempt();
-    return Response.json(
-      { error: checkout.error?.message ?? "Stripe no pudo iniciar el pago." },
-      { status: 502 },
-    );
-  }
-  const { error: paymentError } = await service.from("payments").upsert(
-    {
-      order_id: order.id,
-      provider: "stripe",
-      provider_payment_id: checkout.id,
-      method: "CARD",
-      status: "PENDING",
-      amount_cents: amountDue,
-    },
-    { onConflict: "provider,provider_payment_id" },
-  );
-  if (paymentError) {
-    await Promise.allSettled([
-      fetch(
-        `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(checkout.id)}/expire`,
+        .select("id,provider_payment_id,amount_cents")
+        .eq("order_id", order.id)
+        .eq("provider", "stripe")
+        .eq("status", "PENDING")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (
+        previousPending?.provider_payment_id &&
+        previousPending.amount_cents === amountDue
+      ) {
+        const previousResponse = await fetch(
+          `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(previousPending.provider_payment_id)}`,
+          {
+            headers: { Authorization: `Bearer ${stripeKey}` },
+            cache: "no-store",
+            signal: AbortSignal.timeout(12_000),
+          },
+        ).catch(() => null);
+        if (previousResponse?.ok) {
+          const previousCheckout = (await previousResponse.json()) as {
+            status?: "open" | "complete" | "expired";
+            url?: string | null;
+          };
+          if (previousCheckout.status === "open" && previousCheckout.url)
+            return Response.json({ url: previousCheckout.url, resumed: true });
+          await service
+            .from("payments")
+            .update({
+              status: "FAILED",
+              raw_status: `checkout.session.${previousCheckout.status ?? "unavailable"}:resume`,
+            })
+            .eq("id", previousPending.id)
+            .eq("status", "PENDING");
+        }
+      }
+      const stripeResponse = await fetch(
+        "https://api.stripe.com/v1/checkout/sessions",
         {
           method: "POST",
-          headers: { Authorization: `Bearer ${stripeKey}` },
-          cache: "no-store",
-          signal: AbortSignal.timeout(12_000),
+          headers: {
+            Authorization: `Bearer ${stripeKey}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Idempotency-Key": `booking-checkout/${booking.id}/${amountDue}/${Math.floor(Date.now() / 1_800_000)}`,
+          },
+          body: form,
         },
-      ),
-      releaseNewAttempt(),
-    ]);
-    return Response.json(
-      { error: "No pudimos registrar el intento de pago." },
-      { status: 500 },
-    );
-  }
-  return Response.json({ url: checkout.url });
+      );
+      const checkout = (await stripeResponse.json()) as {
+        id?: string;
+        url?: string;
+        error?: { message?: string };
+      };
+      if (!stripeResponse.ok || !checkout.id || !checkout.url) {
+        await releaseNewAttempt();
+        return Response.json(
+          {
+            error: checkout.error?.message ?? "Stripe no pudo iniciar el pago.",
+          },
+          { status: 502 },
+        );
+      }
+      const { error: paymentError } = await service.from("payments").upsert(
+        {
+          order_id: order.id,
+          provider: "stripe",
+          provider_payment_id: checkout.id,
+          method: "CARD",
+          status: "PENDING",
+          amount_cents: amountDue,
+        },
+        { onConflict: "provider,provider_payment_id" },
+      );
+      if (paymentError) {
+        await Promise.allSettled([
+          fetch(
+            `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(checkout.id)}/expire`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${stripeKey}` },
+              cache: "no-store",
+              signal: AbortSignal.timeout(12_000),
+            },
+          ),
+          releaseNewAttempt(),
+        ]);
+        return Response.json(
+          { error: "No pudimos registrar el intento de pago." },
+          { status: 500 },
+        );
+      }
+      return Response.json({ url: checkout.url });
+    },
+  });
 }

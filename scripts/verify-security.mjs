@@ -56,6 +56,60 @@ check(
   "El login todavía muestra o ejecuta el acceso por SMS.",
 );
 
+const emailSafetyMigration = read(
+  "supabase/migrations/202610070001_email_delivery_and_idempotency.sql",
+);
+const emailRenderer = read("app/lib/server/email-renderer.ts");
+const resendWebhook = read("app/api/webhooks/resend/route.ts");
+const emailResend = read("app/api/admin/email-deliveries/[id]/resend/route.ts");
+check(
+  emailSafetyMigration.includes("create table if not exists public.email_deliveries") &&
+    emailSafetyMigration.includes("create table if not exists public.email_delivery_events") &&
+    emailSafetyMigration.includes("alter table public.email_deliveries enable row level security"),
+  "El historial de correos no tiene persistencia y RLS verificables.",
+);
+check(
+  emailRenderer.includes('"idempotency-key": idempotencyKey') &&
+    emailRenderer.includes('.from("email_deliveries")'),
+  "Los correos no se registran o no usan la idempotencia de Resend.",
+);
+check(
+  resendWebhook.includes("request.text()") &&
+    resendWebhook.includes("timingSafeEqual") &&
+    resendWebhook.includes('request.headers.get("svix-signature")'),
+  "El webhook de Resend no verifica la firma sobre el cuerpo original.",
+);
+check(
+  emailResend.includes("auth.getUser()") &&
+    emailResend.includes("executeIdempotentJson") &&
+    emailResend.includes("resendTrackedEmail"),
+  "El reenvío administrativo no exige sesión o puede duplicarse.",
+);
+check(
+  emailSafetyMigration.includes("create table if not exists public.idempotent_operations") &&
+    emailSafetyMigration.includes("claim_idempotent_operation") &&
+    emailSafetyMigration.includes("revoke all on table public.idempotent_operations from anon,authenticated"),
+  "La protección contra operaciones duplicadas no está aislada correctamente.",
+);
+for (const route of [
+  "app/api/checkout/stripe/route.ts",
+  "app/api/checkout/products/route.ts",
+  "app/api/checkout/photos/route.ts",
+  "app/api/payments/transfer/route.ts",
+  "app/api/products/transfer/route.ts",
+  "app/api/photos/transfer/route.ts",
+  "app/api/bookings/[id]/cancel/route.ts",
+  "app/api/admin/bookings/[id]/actions/route.ts",
+  "app/api/admin/payments/[id]/approve/route.ts",
+  "app/api/admin/payments/[id]/reject/route.ts",
+  "app/api/admin/payments/[id]/refund/route.ts",
+]) {
+  check(
+    read(route).includes("executeIdempotentJson"),
+    `${route} no evita ejecuciones duplicadas en el servidor.`,
+  );
+}
+
 const photoUpload = read("app/api/admin/photos/upload-url/route.ts");
 const photoManager = read("app/admin/fotos/photo-manager.tsx");
 const photoDownload = read("app/api/photos/[id]/download/route.ts");

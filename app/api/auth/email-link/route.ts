@@ -21,10 +21,16 @@ async function hash(value: string) {
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
-    return Response.json({ error: "Escribe un correo válido." }, { status: 400 });
+    return Response.json(
+      { error: "Escribe un correo válido." },
+      { status: 400 },
+    );
   const service = createSupabaseServiceClient();
   const emailHash = await hash(parsed.data.email);
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const forwarded = request.headers
+    .get("x-forwarded-for")
+    ?.split(",")[0]
+    ?.trim();
   const ipHash = forwarded ? await hash(forwarded) : null;
   const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
   const [{ data: recent }, { count: recentFromIp }] = await Promise.all([
@@ -48,7 +54,9 @@ export async function POST(request: Request) {
       { error: "Espera 60 segundos antes de pedir otro acceso." },
       { status: 429 },
     );
-  await service.from("email_access_requests").insert({ email_hash: emailHash, ip_hash: ipHash });
+  await service
+    .from("email_access_requests")
+    .insert({ email_hash: emailHash, ip_hash: ipHash });
 
   const origin = (
     process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin
@@ -57,7 +65,9 @@ export async function POST(request: Request) {
   const { data, error } = await service.auth.admin.generateLink({
     type: "magiclink",
     email: parsed.data.email,
-    options: { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` },
+    options: {
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
+    },
   });
   if (error || !data.properties.hashed_token)
     return Response.json(
@@ -76,9 +86,17 @@ export async function POST(request: Request) {
     await sendBrandedEmail({
       key: "AUTH_ACCESS",
       to: parsed.data.email,
-      variables: { nombre_cliente: firstName || "amigo", url_acceso: accessUrl.toString() },
+      variables: {
+        nombre_cliente: firstName || "amigo",
+        url_acceso: accessUrl.toString(),
+      },
       actionUrl: accessUrl.toString(),
       note: "El enlace vence pronto y sólo puede utilizarse una vez. Si tú no lo pediste, ignora este mensaje.",
+      tracking: {
+        idempotencyKey: `auth-access/${emailHash}/${Math.floor(Date.now() / 60_000)}`,
+        source: "AUTH",
+        metadata: { next },
+      },
     });
   } catch (sendError) {
     console.error("Could not send access email", sendError);

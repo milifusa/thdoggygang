@@ -7,6 +7,7 @@ import {
 } from "../../lib/email-template-config";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { AdminMobileNav, AdminNav } from "../admin-nav";
+import { EmailDeliveryHistory } from "./email-delivery-history";
 import { EmailTemplateManager } from "./email-template-manager";
 
 export const dynamic = "force-dynamic";
@@ -14,20 +15,30 @@ export const dynamic = "force-dynamic";
 export default async function EmailsAdminPage() {
   await requireStaffSession("/admin/emails");
   const supabase = await createSupabaseServerClient();
-  const [{ data: rows }, { data: next }] = await Promise.all([
-    supabase
-      .from("email_templates")
-      .select("key,subject,eyebrow,heading,body,button_label,image_path,active")
-      .in("key", [...EMAIL_TEMPLATE_KEYS]),
-    supabase
-      .from("hikes")
-      .select("id")
-      .gte("starts_at", new Date().toISOString())
-      .is("deleted_at", null)
-      .order("starts_at")
-      .limit(1)
-      .maybeSingle(),
-  ]);
+  const [{ data: rows }, { data: next }, { data: deliveries }] =
+    await Promise.all([
+      supabase
+        .from("email_templates")
+        .select(
+          "key,subject,eyebrow,heading,body,button_label,image_path,active",
+        )
+        .in("key", [...EMAIL_TEMPLATE_KEYS]),
+      supabase
+        .from("hikes")
+        .select("id")
+        .gte("starts_at", new Date().toISOString())
+        .is("deleted_at", null)
+        .order("starts_at")
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("email_deliveries")
+        .select(
+          "id,template_key,recipient,subject,status,source,error_message,sent_at,delivered_at,opened_at,clicked_at,bounced_at,created_at,booking:bookings(booking_number)",
+        )
+        .order("created_at", { ascending: false })
+        .limit(250),
+    ]);
   const byKey = new Map((rows ?? []).map((row) => [row.key, row]));
   const templates: EmailTemplateValue[] = EMAIL_TEMPLATE_KEYS.map((key) => {
     const row = byKey.get(key);
@@ -57,6 +68,14 @@ export default async function EmailsAdminPage() {
           </div>
         </header>
         <EmailTemplateManager initialTemplates={templates} />
+        <EmailDeliveryHistory
+          initialDeliveries={(deliveries ?? []).map((delivery) => ({
+            ...delivery,
+            booking: Array.isArray(delivery.booking)
+              ? (delivery.booking[0] ?? null)
+              : delivery.booking,
+          }))}
+        />
       </section>
     </main>
   );

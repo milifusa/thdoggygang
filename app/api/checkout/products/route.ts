@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createProductOrder } from "../../../lib/server/product-order";
 import { getStripeSecretKey } from "../../../lib/payment-config";
+import { executeIdempotentJson } from "../../../lib/server/idempotency";
 
 const address = z.object({
   recipient: z.string().min(2),
@@ -65,89 +66,102 @@ export async function POST(request: Request) {
       { error: "No encontramos tu perfil." },
       { status: 404 },
     );
-  try {
-    const prepared = await createProductOrder({
-      profileId: profile.id,
-      ...parsed.data,
-    });
-    const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
-    const form = new URLSearchParams({
-      mode: "payment",
-      "payment_method_types[0]": "card",
-      success_url: `${origin}/tienda?pedido=confirmado`,
-      cancel_url: `${origin}/tienda?pedido=cancelado`,
-      client_reference_id: prepared.order.id,
-      "metadata[order_id]": prepared.order.id,
-      "metadata[purchase_type]": "products",
-    });
-    if (profile.email) form.set("customer_email", profile.email);
-    prepared.lines.forEach(({ product, selection }, index) => {
-      form.set(`line_items[${index}][price_data][currency]`, "mxn");
-      form.set(
-        `line_items[${index}][price_data][unit_amount]`,
-        String(product.price_cents),
-      );
-      form.set(
-        `line_items[${index}][price_data][product_data][name]`,
-        product.name,
-      );
-      form.set(`line_items[${index}][quantity]`, String(selection.quantity));
-    });
-    if (prepared.shipping > 0) {
-      const i = prepared.lines.length;
-      form.set(`line_items[${i}][price_data][currency]`, "mxn");
-      form.set(
-        `line_items[${i}][price_data][unit_amount]`,
-        String(prepared.shipping),
-      );
-      form.set(
-        `line_items[${i}][price_data][product_data][name]`,
-        "Envío a domicilio",
-      );
-      form.set(`line_items[${i}][quantity]`, "1");
-    }
-    const stripeResponse = await fetch(
-      "https://api.stripe.com/v1/checkout/sessions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${stripeKey}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: form,
-      },
-    );
-    const checkout = (await stripeResponse.json()) as {
-      id?: string;
-      url?: string;
-      error?: { message?: string };
-    };
-    if (!stripeResponse.ok || !checkout.id || !checkout.url)
-      return Response.json(
-        { error: checkout.error?.message ?? "Stripe no pudo iniciar el pago." },
-        { status: 502 },
-      );
-    await prepared.service
-      .from("payments")
-      .insert({
-        order_id: prepared.order.id,
-        provider: "stripe",
-        provider_payment_id: checkout.id,
-        method: "CARD",
-        status: "PENDING",
-        amount_cents: prepared.total,
-      });
-    return Response.json({ url: checkout.url });
-  } catch (error) {
-    return Response.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No pudimos crear tu pedido.",
-      },
-      { status: 400 },
-    );
-  }
+  return executeIdempotentJson({
+    request,
+    operation: "product.checkout.card",
+    actorProfileId: profile.id,
+    payload: parsed.data,
+    handler: async () => {
+      try {
+        const prepared = await createProductOrder({
+          profileId: profile.id,
+          ...parsed.data,
+        });
+        const origin = process.env.APP_ORIGIN ?? new URL(request.url).origin;
+        const form = new URLSearchParams({
+          mode: "payment",
+          "payment_method_types[0]": "card",
+          success_url: `${origin}/tienda?pedido=confirmado`,
+          cancel_url: `${origin}/tienda?pedido=cancelado`,
+          client_reference_id: prepared.order.id,
+          "metadata[order_id]": prepared.order.id,
+          "metadata[purchase_type]": "products",
+        });
+        if (profile.email) form.set("customer_email", profile.email);
+        prepared.lines.forEach(({ product, selection }, index) => {
+          form.set(`line_items[${index}][price_data][currency]`, "mxn");
+          form.set(
+            `line_items[${index}][price_data][unit_amount]`,
+            String(product.price_cents),
+          );
+          form.set(
+            `line_items[${index}][price_data][product_data][name]`,
+            product.name,
+          );
+          form.set(
+            `line_items[${index}][quantity]`,
+            String(selection.quantity),
+          );
+        });
+        if (prepared.shipping > 0) {
+          const i = prepared.lines.length;
+          form.set(`line_items[${i}][price_data][currency]`, "mxn");
+          form.set(
+            `line_items[${i}][price_data][unit_amount]`,
+            String(prepared.shipping),
+          );
+          form.set(
+            `line_items[${i}][price_data][product_data][name]`,
+            "Envío a domicilio",
+          );
+          form.set(`line_items[${i}][quantity]`, "1");
+        }
+        const stripeResponse = await fetch(
+          "https://api.stripe.com/v1/checkout/sessions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${stripeKey}`,
+              "Content-Type": "application/x-www-form-urlencoded",
+              "Idempotency-Key": `product-checkout/${prepared.order.id}`,
+            },
+            body: form,
+          },
+        );
+        const checkout = (await stripeResponse.json()) as {
+          id?: string;
+          url?: string;
+          error?: { message?: string };
+        };
+        if (!stripeResponse.ok || !checkout.id || !checkout.url)
+          return Response.json(
+            {
+              error:
+                checkout.error?.message ?? "Stripe no pudo iniciar el pago.",
+            },
+            { status: 502 },
+          );
+        await prepared.service.from("payments").insert({
+          order_id: prepared.order.id,
+          provider: "stripe",
+          provider_payment_id: checkout.id,
+          method: "CARD",
+          status: "PENDING",
+          amount_cents: prepared.total,
+        });
+        return Response.json({ url: checkout.url });
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "No pudimos crear tu pedido.",
+          },
+          { status: 400 },
+        );
+      }
+    },
+  });
 }
 export { schema as productCheckoutSchema };

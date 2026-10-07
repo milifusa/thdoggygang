@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createProductOrder } from "../../../lib/server/product-order";
 import { productCheckoutSchema } from "../../checkout/products/route";
 import { getBankTransferConfig } from "../../../lib/payment-config";
+import { executeIdempotentJson } from "../../../lib/server/idempotency";
 
 const allowedTypes = new Set(["image/jpeg", "image/png", "application/pdf"]);
 export async function POST(request: Request) {
@@ -49,59 +50,71 @@ export async function POST(request: Request) {
       { error: "No encontramos tu perfil." },
       { status: 404 },
     );
-  try {
-    const prepared = await createProductOrder({
-      profileId: profile.id,
+  return executeIdempotentJson({
+    request,
+    operation: "product.checkout.transfer",
+    actorProfileId: profile.id,
+    payload: {
       ...parsed.data,
-    });
-    const ext =
-      receipt.type === "application/pdf"
-        ? "pdf"
-        : receipt.type === "image/png"
-          ? "png"
-          : "jpg";
-    const path = `${profile.id}/products/${prepared.order.id}/${crypto.randomUUID()}.${ext}`;
-    const upload = await prepared.service.storage
-      .from("payment-receipts")
-      .upload(path, await receipt.arrayBuffer(), { contentType: receipt.type });
-    if (upload.error) throw new Error("No pudimos guardar tu comprobante.");
-    const { data: payment, error } = await prepared.service
-      .from("payments")
-      .insert({
-        order_id: prepared.order.id,
-        provider: "bank_transfer",
-        provider_payment_id: `transfer:${crypto.randomUUID()}`,
-        method: "TRANSFER",
-        status: "UNDER_REVIEW",
-        amount_cents: prepared.total,
-      })
-      .select("id")
-      .single();
-    if (error || !payment) throw new Error("No pudimos registrar el pago.");
-    await prepared.service
-      .from("payment_receipts")
-      .insert({
-        payment_id: payment.id,
-        uploaded_by: profile.id,
-        storage_path: path,
-      });
-    await prepared.service
-      .from("orders")
-      .update({ status: "UNDER_REVIEW" })
-      .eq("id", prepared.order.id);
-    return Response.json({
-      ok: true,
-      orderNumber: prepared.order.order_number,
-    });
-  } catch (error) {
-    return Response.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No pudimos crear tu pedido.",
-      },
-      { status: 400 },
-    );
-  }
+      receiptName: receipt.name,
+      receiptSize: receipt.size,
+    },
+    handler: async () => {
+      try {
+        const prepared = await createProductOrder({
+          profileId: profile.id,
+          ...parsed.data,
+        });
+        const ext =
+          receipt.type === "application/pdf"
+            ? "pdf"
+            : receipt.type === "image/png"
+              ? "png"
+              : "jpg";
+        const path = `${profile.id}/products/${prepared.order.id}/${crypto.randomUUID()}.${ext}`;
+        const upload = await prepared.service.storage
+          .from("payment-receipts")
+          .upload(path, await receipt.arrayBuffer(), {
+            contentType: receipt.type,
+          });
+        if (upload.error) throw new Error("No pudimos guardar tu comprobante.");
+        const { data: payment, error } = await prepared.service
+          .from("payments")
+          .insert({
+            order_id: prepared.order.id,
+            provider: "bank_transfer",
+            provider_payment_id: `transfer:${crypto.randomUUID()}`,
+            method: "TRANSFER",
+            status: "UNDER_REVIEW",
+            amount_cents: prepared.total,
+          })
+          .select("id")
+          .single();
+        if (error || !payment) throw new Error("No pudimos registrar el pago.");
+        await prepared.service.from("payment_receipts").insert({
+          payment_id: payment.id,
+          uploaded_by: profile.id,
+          storage_path: path,
+        });
+        await prepared.service
+          .from("orders")
+          .update({ status: "UNDER_REVIEW" })
+          .eq("id", prepared.order.id);
+        return Response.json({
+          ok: true,
+          orderNumber: prepared.order.order_number,
+        });
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "No pudimos crear tu pedido.",
+          },
+          { status: 400 },
+        );
+      }
+    },
+  });
 }

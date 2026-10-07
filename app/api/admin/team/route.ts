@@ -83,6 +83,14 @@ export async function POST(request: Request) {
       },
       actionUrl: accessUrl.toString(),
       note: "La invitación vence pronto y sólo puede utilizarse una vez.",
+      tracking: {
+        idempotencyKey: `team-invite/${data.user.id}/${parsed.data.role}`,
+        source: "ADMIN",
+        metadata: {
+          role: parsed.data.role,
+          authUserId: data.user.id,
+        },
+      },
     });
   } catch (sendError) {
     return Response.json(

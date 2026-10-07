@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sendBookingReminder } from "../../../../lib/server/booking-reminder";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { executeIdempotentJson } from "../../../../lib/server/idempotency";
 
 const schema = z.object({
   bookingIds: z.array(z.string().uuid()).min(1).max(100),
@@ -21,20 +22,28 @@ export async function POST(request: Request) {
     .single();
   if (!profile?.active || profile.role !== "ADMIN")
     return Response.json({ error: "No autorizado." }, { status: 403 });
-  const results = [];
-  for (const bookingId of parsed.data.bookingIds) {
-    try {
-      results.push({
-        bookingId,
-        ...(await sendBookingReminder(bookingId, profile.id)),
-      });
-    } catch (error) {
-      results.push({
-        bookingId,
-        ok: false,
-        error: error instanceof Error ? error.message : "No enviado",
-      });
-    }
-  }
-  return Response.json({ ok: results.every((item) => item.ok), results });
+  return executeIdempotentJson({
+    request,
+    operation: "admin.booking.reminder.bulk",
+    actorProfileId: profile.id,
+    payload: parsed.data,
+    handler: async () => {
+      const results = [];
+      for (const bookingId of parsed.data.bookingIds) {
+        try {
+          results.push({
+            bookingId,
+            ...(await sendBookingReminder(bookingId, profile.id)),
+          });
+        } catch (error) {
+          results.push({
+            bookingId,
+            ok: false,
+            error: error instanceof Error ? error.message : "No enviado",
+          });
+        }
+      }
+      return Response.json({ ok: results.every((item) => item.ok), results });
+    },
+  });
 }

@@ -1,8 +1,9 @@
 import { sendBookingReminder } from "../../../../../lib/server/booking-reminder";
 import { createSupabaseServerClient } from "../../../../../lib/supabase/server";
+import { executeIdempotentJson } from "../../../../../lib/server/idempotency";
 
 export async function POST(
-  _: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -18,17 +19,25 @@ export async function POST(
     .single();
   if (!profile?.active || profile.role !== "ADMIN")
     return Response.json({ error: "No autorizado." }, { status: 403 });
-  try {
-    return Response.json(await sendBookingReminder(id, profile.id));
-  } catch (error) {
-    return Response.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "No pudimos enviar el recordatorio.",
-      },
-      { status: 409 },
-    );
-  }
+  return executeIdempotentJson({
+    request,
+    operation: "admin.booking.reminder",
+    actorProfileId: profile.id,
+    payload: { bookingId: id },
+    handler: async () => {
+      try {
+        return Response.json(await sendBookingReminder(id, profile.id));
+      } catch (error) {
+        return Response.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "No pudimos enviar el recordatorio.",
+          },
+          { status: 409 },
+        );
+      }
+    },
+  });
 }

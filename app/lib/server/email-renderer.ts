@@ -6,6 +6,16 @@ import {
 } from "../email-template-config";
 import { createSupabaseServiceClient } from "../supabase/service";
 
+export type EmailTracking = {
+  idempotencyKey: string;
+  bookingId?: string | null;
+  profileId?: string | null;
+  actorProfileId?: string | null;
+  source?: "AUTH" | "ADMIN" | "CRON" | "SYSTEM";
+  parentDeliveryId?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
 export function escapeEmailHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -82,6 +92,7 @@ export async function sendBrandedEmail({
   actionUrl,
   detailLines,
   note,
+  tracking,
 }: {
   key: EmailTemplateKey;
   to: string;
@@ -89,11 +100,13 @@ export async function sendBrandedEmail({
   actionUrl: string;
   detailLines?: string[];
   note?: string;
+  tracking?: EmailTracking;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("Resend no está configurado.");
   const template = await getEmailTemplate(key);
-  if (!template.active) throw new Error("La plantilla de correo está desactivada.");
+  if (!template.active)
+    throw new Error("La plantilla de correo está desactivada.");
   const rendered = renderBrandedEmail({
     template,
     variables,
@@ -101,11 +114,64 @@ export async function sendBrandedEmail({
     detailLines,
     note,
   });
+  const service = createSupabaseServiceClient();
+  const idempotencyKey = (
+    tracking?.idempotencyKey ?? `email/${key}/${crypto.randomUUID()}`
+  ).slice(0, 240);
+  const deliveryPayload = {
+    template_key: key,
+    recipient: to.trim().toLowerCase(),
+    subject: rendered.subject,
+    status: "QUEUED",
+    idempotency_key: idempotencyKey,
+    booking_id: tracking?.bookingId ?? null,
+    profile_id: tracking?.profileId ?? null,
+    sent_by: tracking?.actorProfileId ?? null,
+    source: tracking?.source ?? "SYSTEM",
+    parent_delivery_id: tracking?.parentDeliveryId ?? null,
+    metadata: tracking?.metadata ?? {},
+    error_message: null,
+    updated_at: new Date().toISOString(),
+  };
+  let { data: delivery, error: deliveryError } = await service
+    .from("email_deliveries")
+    .insert(deliveryPayload)
+    .select("id,status,provider_id,created_at")
+    .maybeSingle();
+  if (deliveryError?.code === "23505") {
+    const existing = await service
+      .from("email_deliveries")
+      .select("id,status,provider_id,created_at")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+    delivery = existing.data;
+    deliveryError = existing.error;
+    if (
+      delivery &&
+      (delivery.provider_id || delivery.status !== "QUEUED") &&
+      !["FAILED", "BOUNCED", "COMPLAINED", "SUPPRESSED"].includes(
+        delivery.status,
+      )
+    )
+      return {
+        id: delivery.provider_id,
+        deliveryId: delivery.id,
+        duplicate: true,
+      };
+    if (delivery)
+      await service
+        .from("email_deliveries")
+        .update(deliveryPayload)
+        .eq("id", delivery.id);
+  }
+  if (deliveryError || !delivery)
+    throw new Error("No pudimos registrar el envío del correo.");
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json",
+      "idempotency-key": idempotencyKey,
     },
     body: JSON.stringify({
       from:
@@ -120,7 +186,32 @@ export async function sendBrandedEmail({
     id?: string;
     message?: string;
   };
-  if (!response.ok)
+  if (!response.ok) {
+    await service
+      .from("email_deliveries")
+      .update({
+        status: "FAILED",
+        error_message: result.message ?? "Resend rejected the request",
+        failed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", delivery.id);
     throw new Error(result.message ?? "Resend no pudo enviar el correo.");
-  return { id: result.id ?? null };
+  }
+  const sentAt = new Date().toISOString();
+  await service
+    .from("email_deliveries")
+    .update({
+      status: "SENT",
+      provider_id: result.id ?? null,
+      sent_at: sentAt,
+      last_event_at: sentAt,
+      updated_at: sentAt,
+    })
+    .eq("id", delivery.id);
+  return {
+    id: result.id ?? null,
+    deliveryId: delivery.id,
+    duplicate: false,
+  };
 }
