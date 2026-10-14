@@ -244,7 +244,6 @@ export function BookingWizard({
         ),
       );
       setPhoneDrafts((current) => ({ ...current, [personId]: "" }));
-      setSyncMessage("Teléfono guardado. Puedes continuar con tu reservación.");
     } catch (error) {
       setPhoneErrors((current) => ({
         ...current,
