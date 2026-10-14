@@ -93,7 +93,7 @@ export function BookingWizard({
   creditBalanceCents: number;
   resume?: BookingResume;
 }) {
-  const people = context.people;
+  const [people, setPeople] = useState(context.people);
   const dogs = context.dogs;
   const hasCamping = adventure.campingOptions.length > 0;
   const steps = useMemo(
@@ -136,6 +136,9 @@ export function BookingWizard({
   const [bookingId, setBookingId] = useState<string | null>(resume?.bookingId ?? null);
   const [syncMessage, setSyncMessage] = useState("");
   const [dogNeedsUpdate,setDogNeedsUpdate]=useState(false);
+  const [phoneDrafts, setPhoneDrafts] = useState<Record<string, string>>({});
+  const [phoneErrors, setPhoneErrors] = useState<Record<string, string>>({});
+  const [phoneSavingId, setPhoneSavingId] = useState<string | null>(null);
   const selectedPeopleMissingPhone = useMemo(
     () =>
       selectedPeople
@@ -209,6 +212,50 @@ export function BookingWizard({
     setSelectedDogs([]);
     setDogChoiceMade(true);
     setDogNeedsUpdate(false);
+  };
+  const savePersonPhone = async (personId: string) => {
+    const digits = (phoneDrafts[personId] ?? "").replace(/\D/g, "").slice(0, 10);
+    if (digits.length !== 10) {
+      setPhoneErrors((current) => ({
+        ...current,
+        [personId]: "Escribe los 10 dígitos del teléfono de México.",
+      }));
+      return;
+    }
+
+    setPhoneSavingId(personId);
+    setPhoneErrors((current) => ({ ...current, [personId]: "" }));
+    try {
+      const response = await fetch(`/api/people/${personId}/phone`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ phone: digits }),
+      });
+      const payload = (await response.json()) as {
+        phone?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.phone)
+        throw new Error(payload.error ?? "No pudimos guardar el teléfono.");
+
+      setPeople((current) =>
+        current.map((person) =>
+          person.id === personId ? { ...person, phone: payload.phone! } : person,
+        ),
+      );
+      setPhoneDrafts((current) => ({ ...current, [personId]: "" }));
+      setSyncMessage("Teléfono guardado. Puedes continuar con tu reservación.");
+    } catch (error) {
+      setPhoneErrors((current) => ({
+        ...current,
+        [personId]:
+          error instanceof Error
+            ? error.message
+            : "No pudimos guardar el teléfono.",
+      }));
+    } finally {
+      setPhoneSavingId(null);
+    }
   };
   const persistDraft = async () => {
     if (context.mode === "demo") return bookingId;
@@ -479,26 +526,60 @@ export function BookingWizard({
                   <div className="wizard-phone-required" role="alert">
                     <strong>NECESITAMOS UN TELÉFONO DE CONTACTO</strong>
                     <p>
-                      Antes de reservar, completa el teléfono de cada persona
-                      que viene. Para menores puedes usar el número de su
-                      responsable.
+                      Agrégalo aquí sin salir de tu compra. Para menores puedes
+                      usar el número de su responsable.
                     </p>
                     <div>
                       {selectedPeopleMissingPhone.map((person) => {
                         if (!person) return null;
-                        const returnTo = `/reservar/${adventure.slug}${
-                          bookingId
-                            ? `?booking=${encodeURIComponent(bookingId)}&step=personas`
-                            : ""
-                        }`;
                         return (
-                          <Link
+                          <div
+                            className="wizard-phone-person"
                             key={person.id}
-                            href={`/mi-manada?editPerson=${encodeURIComponent(person.id)}&returnTo=${encodeURIComponent(returnTo)}`}
                           >
-                            AGREGAR TELÉFONO DE {person.name.toUpperCase()}
-                            <ArrowRight aria-hidden="true" />
-                          </Link>
+                            <label htmlFor={`phone-${person.id}`}>
+                              TELÉFONO DE {person.name.toUpperCase()}
+                            </label>
+                            <div>
+                              <span aria-hidden="true">MX +52</span>
+                              <input
+                                id={`phone-${person.id}`}
+                                type="tel"
+                                inputMode="numeric"
+                                autoComplete="tel-national"
+                                placeholder="2220000000"
+                                maxLength={10}
+                                value={phoneDrafts[person.id] ?? ""}
+                                onChange={(event) => {
+                                  const value = event.target.value
+                                    .replace(/\D/g, "")
+                                    .slice(0, 10);
+                                  setPhoneDrafts((current) => ({
+                                    ...current,
+                                    [person.id]: value,
+                                  }));
+                                  setPhoneErrors((current) => ({
+                                    ...current,
+                                    [person.id]: "",
+                                  }));
+                                }}
+                              />
+                              <button
+                                type="button"
+                                disabled={phoneSavingId === person.id}
+                                onClick={() => savePersonPhone(person.id)}
+                              >
+                                {phoneSavingId === person.id
+                                  ? "GUARDANDO…"
+                                  : "GUARDAR"}
+                              </button>
+                            </div>
+                            {phoneErrors[person.id] && (
+                              <small role="status">
+                                {phoneErrors[person.id]}
+                              </small>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
