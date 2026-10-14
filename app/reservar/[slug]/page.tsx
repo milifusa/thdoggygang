@@ -53,7 +53,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
       const productSelections=relationArray(booking.booking_product_selections);
       const signedWaivers=relationArray(booking.signed_waivers);
       const stepNames=adventure.campingOptions.length
-        ? ['personas','perritos','transporte','camping','productos','responsiva','pago','confirmacion']
+        ? ['personas','perritos','camping','transporte','productos','responsiva','pago','confirmacion']
         : ['personas','perritos','transporte','productos','responsiva','pago','confirmacion'];
       const participantMap=new Map(bookingParticipants.map((participant)=>[participant.id,participant.person_profile_id]));
       resume={ bookingId:booking.id, step:Math.max(0,stepNames.indexOf(requested.step || booking.current_step)), personIds:bookingParticipants.map((participant)=>participant.person_profile_id).filter(Boolean) as string[], dogIds:bookingDogs.map((dog)=>dog.dog_id).filter(Boolean) as string[], transportPersonIds:transportReservations.map((reservation)=>participantMap.get(reservation.booking_participant_id)).filter(Boolean) as string[], campingOptionId:campingSelections[0]?.camping_option_id??null, productSelections:productSelections.map((item)=>({productId:item.product_id,variant:item.variant,quantity:item.quantity})), waiverSigned:signedWaivers.length>0, creditAppliedCents:booking.credit_applied_cents };

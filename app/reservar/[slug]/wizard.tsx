@@ -99,10 +99,12 @@ export function BookingWizard({
   const steps = useMemo(
     () =>
       hasCamping
-        ? ["Personas", "Perritos", "Transporte", "Camping", "Productos", "Responsivas", "Pago", "Listo"]
-        : ["Personas", "Perritos", "Transporte", "Productos", "Responsivas", "Pago", "Listo"],
+        ? ["Personas", "Perritos", "Camping", "Cómo llegamos", "Productos", "Responsivas", "Pago", "Listo"]
+        : ["Personas", "Perritos", "Cómo llegamos", "Productos", "Responsivas", "Pago", "Listo"],
     [hasCamping],
   );
+  const campingStep = hasCamping ? 2 : -1;
+  const transportStep = hasCamping ? 3 : 2;
   const productStep = hasCamping ? 4 : 3;
   const waiverStep = productStep + 1;
   const paymentStep = waiverStep + 1;
@@ -272,7 +274,7 @@ export function BookingWizard({
         campingOptionId,
         productSelections: products.filter((product)=>(productQuantities[product.id]??0)>0).map((product)=>({productId:product.id,variant:productVariants[product.id]??"",quantity:productQuantities[product.id]})),
         currentStep: (hasCamping
-          ? ['perritos','transporte','camping','productos','responsiva','pago','confirmacion','confirmacion']
+          ? ['perritos','camping','transporte','productos','responsiva','pago','confirmacion','confirmacion']
           : ['perritos','transporte','productos','responsiva','pago','confirmacion','confirmacion'])[step] ?? 'personas',
       }),
     });
@@ -371,7 +373,7 @@ export function BookingWizard({
         selectedPeople.every((id)=>{const person=people.find((item)=>item.id===id);return !person?.isMinor||Boolean(person.guardianPersonId&&selectedPeople.includes(person.guardianPersonId));})
       : step === 1
         ? dogChoiceMade
-        : hasCamping && step === 3
+        : hasCamping && step === campingStep
           ? campingChoiceMade
         : step === waiverStep
           ? Boolean(signatureData || waiverSaved) && accepted
@@ -392,7 +394,7 @@ export function BookingWizard({
         ? dogs.length
           ? "SELECCIONA UN PERRITO O ELIGE SIN PERRITO"
           : "AGREGA UN PERRITO O ELIGE SIN PERRITO"
-        : hasCamping && step === 3 && !canContinue
+        : hasCamping && step === campingStep && !canContinue
           ? "ELIGE CAMPING O SIN CAMPING"
         : step === waiverStep && !canContinue
           ? signatureData || waiverSaved
@@ -681,7 +683,7 @@ export function BookingWizard({
                 </button>
               </>
             )}
-            {step === 2 && (
+            {step === transportStep && (
               <>
                 <h1>
                   ¿Cómo llega
@@ -742,7 +744,7 @@ export function BookingWizard({
                 )}
               </>
             )}
-            {hasCamping && step === 3 && (
+            {hasCamping && step === campingStep && (
               <>
                 <h1>
                   ¿La aventura
