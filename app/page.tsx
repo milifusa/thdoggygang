@@ -3,6 +3,7 @@ import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { getAdventures } from './lib/data';
 import { getLandingSettings } from './lib/landing-content';
 import { SiteHeader } from './components/SiteHeader';
+import { AdventureCampingNote } from './components/AdventureCampingNote';
 import type { Metadata } from 'next';
 
 export const revalidate = 60;
@@ -56,6 +57,7 @@ export default async function Home() {
                 <div className="card-body">
                   <div className="location"><span className="location-dot" aria-hidden="true" />{adventure.location}</div>
                   <h3>{adventure.title}</h3><p className="card-meta">{adventure.distance.toUpperCase()} · {adventure.duration.toUpperCase()} · {adventure.difficulty.toUpperCase()}</p>
+                  <AdventureCampingNote options={adventure.campingOptions} />
                   <div className="card-footer">
                     <div><span>DESDE</span><strong>${adventure.price.toLocaleString("es-MX")} <small>MXN</small></strong></div>
                     <div className="spots"><i />Cupo {adventure.spots}</div><span className="round-arrow" aria-hidden="true"><ArrowUpRight /></span>

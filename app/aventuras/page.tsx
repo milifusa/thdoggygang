@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { SiteHeader } from "../components/SiteHeader";
+import { AdventureCampingNote } from "../components/AdventureCampingNote";
 import { getAdventures } from "../lib/data";
 
 export const metadata = {
@@ -41,6 +42,7 @@ export default async function AdventuresPage() {
                 <div className="location"><span className="location-dot" aria-hidden="true" />{adventure.location}</div>
                 <h2>{adventure.title}</h2>
                 <p className="card-meta">{adventure.distance.toUpperCase()} · {adventure.duration.toUpperCase()} · {adventure.difficulty.toUpperCase()}</p>
+                <AdventureCampingNote options={adventure.campingOptions} />
                 <div className="card-footer">
                   <div>
                     <span>{adventure.pricingMode === "PERSON_DOG_BUNDLE" ? "PERSONA + PERRITO" : "DESDE"}</span>
