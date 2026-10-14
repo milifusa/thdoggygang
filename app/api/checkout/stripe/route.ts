@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "id, booking_number, total_cents, currency, status, hike:hikes(name, slug), booking_participants(id), booking_camping_selections(camping_option_id,option_name,quantity,unit_price_cents), booking_product_selections(product_id,variant,quantity,unit_price_cents,product:products(name))",
+      "id, booking_number, total_cents, currency, status, hike:hikes(name, slug), booking_participants(id), booking_camping_selections(camping_option_id,option_name,pricing_mode,quantity,unit_price_cents), booking_product_selections(product_id,variant,quantity,unit_price_cents,product:products(name))",
     )
     .eq("id", parsed.data.bookingId)
     .single();
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
       { status: 404 },
     );
   let hikeSubtotal = 0;
+  let adultCampingCount = 0;
   try {
     const pricing = await recalculateBookingTotal({
       bookingId: booking.id,
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
     });
     booking.total_cents = pricing.totalCents;
     hikeSubtotal = pricing.hikeSubtotal;
+    adultCampingCount = pricing.adultCampingCount;
   } catch (pricingError) {
     return Response.json(
       {
@@ -104,6 +106,10 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
+  campingSelections.forEach((selection) => {
+    if (selection.pricing_mode === "PER_PERSON")
+      selection.quantity = adultCampingCount;
+  });
   if (booking.total_cents <= 0)
     return Response.json(
       { error: "La reservación no tiene un total pagable." },

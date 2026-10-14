@@ -88,7 +88,7 @@ export async function POST(request: Request) {
     );
   const { data: selectedPeople, error: selectedPeopleError } = await supabase
     .from("person_profiles")
-    .select("id,first_name,last_name,phone")
+    .select("id,first_name,last_name,phone,is_minor")
     .eq("owner_profile_id", profile.id)
     .in("id", parsed.data.personIds)
     .is("deleted_at", null);
@@ -189,7 +189,7 @@ export async function POST(request: Request) {
         pricing_mode: campingOption.pricing_mode,
         quantity:
           campingOption.pricing_mode === "PER_PERSON"
-            ? parsed.data.personIds.length
+            ? selectedPeople.filter((person) => !person.is_minor).length
             : 1,
         unit_price_cents: campingOption.price_cents,
       });

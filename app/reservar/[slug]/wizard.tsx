@@ -177,6 +177,10 @@ export function BookingWizard({
     [hikeDate, people, selectedPeople],
   );
   const billablePeopleCount = selectedPeople.length - freeChildCount;
+  const adultCampingCount = selectedPeople.filter((id) => {
+    const person = people.find((item) => item.id === id);
+    return Boolean(person && !person.isMinor);
+  }).length;
   const hikeSubtotal = useMemo(
     () => calculateHikeSubtotal(adventure, billablePeopleCount, selectedDogs.length),
     [adventure, billablePeopleCount, selectedDogs.length],
@@ -191,7 +195,7 @@ export function BookingWizard({
   const campingSubtotal = selectedCamping
     ? selectedCamping.price *
       (selectedCamping.pricingMode === "PER_PERSON"
-        ? selectedPeople.length
+        ? adultCampingCount
         : 1)
     : 0;
   const total = useMemo(
@@ -820,7 +824,7 @@ export function BookingWizard({
                       <b>
                         +${option.price.toLocaleString("es-MX")} MXN
                         {option.pricingMode === "PER_PERSON"
-                          ? " por persona"
+                          ? " por adulto · menores sin costo"
                           : " por reservación"}
                       </b>
                       <i aria-hidden="true">

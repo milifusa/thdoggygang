@@ -18,7 +18,7 @@ export async function recalculateBookingTotal({
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id,profile_id,hike:hikes(starts_at,price_cents,dog_price_cents,pricing_mode),booking_participants(snapshot),booking_dogs(id),transport_reservations(price_cents),booking_product_selections(quantity,unit_price_cents),booking_camping_selections(quantity,unit_price_cents)",
+      "id,profile_id,hike:hikes(starts_at,price_cents,dog_price_cents,pricing_mode),booking_participants(snapshot),booking_dogs(id),transport_reservations(price_cents),booking_product_selections(quantity,unit_price_cents),booking_camping_selections(id,pricing_mode,quantity,unit_price_cents)",
     )
     .eq("id", bookingId)
     .eq("profile_id", profileId)
@@ -30,6 +30,7 @@ export async function recalculateBookingTotal({
     throw new Error("El hike de la reservación ya no está disponible.");
   const hikeDate = dateInMexico(hike.starts_at);
   let freeChildren = 0;
+  let adultCampingCount = 0;
   const participants = relationArray(booking.booking_participants);
   const dogs = relationArray(booking.booking_dogs);
   const transportReservations = relationArray(booking.transport_reservations);
@@ -39,6 +40,7 @@ export async function recalculateBookingTotal({
   for (const participant of participants) {
     const snapshot = (participant.snapshot ?? {}) as ParticipantSnapshot;
     const isMinor = snapshot.is_minor === true;
+    if (!isMinor) adultCampingCount += 1;
     const birthDate =
       typeof snapshot.birth_date === "string" ? snapshot.birth_date : null;
     if (isMinor && !birthDate)
@@ -68,9 +70,31 @@ export async function recalculateBookingTotal({
     0,
   );
   const campingSubtotal = campingSelections.reduce(
-    (sum, selection) => sum + selection.quantity * selection.unit_price_cents,
+    (sum, selection) =>
+      sum +
+      (selection.pricing_mode === "PER_PERSON"
+        ? adultCampingCount
+        : selection.quantity) *
+        selection.unit_price_cents,
     0,
   );
+  const campingQuantityUpdates = campingSelections
+    .filter(
+      (selection) =>
+        selection.pricing_mode === "PER_PERSON" &&
+        selection.quantity !== adultCampingCount,
+    )
+    .map((selection) =>
+      service
+        .from("booking_camping_selections")
+        .update({ quantity: adultCampingCount })
+        .eq("id", selection.id),
+    );
+  if (campingQuantityUpdates.length) {
+    const results = await Promise.all(campingQuantityUpdates);
+    if (results.some((result) => result.error))
+      throw new Error("No pudimos actualizar el precio del camping.");
+  }
   const totalCents =
     hikeSubtotal + transportSubtotal + productSubtotal + campingSubtotal;
   const { error: updateError } = await service
@@ -91,6 +115,7 @@ export async function recalculateBookingTotal({
     transportSubtotal,
     productSubtotal,
     campingSubtotal,
+    adultCampingCount,
     freeChildren,
   };
 }

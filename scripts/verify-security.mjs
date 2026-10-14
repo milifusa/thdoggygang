@@ -287,6 +287,25 @@ for (const route of [
     `${route} no vuelve a calcular el precio protegido antes del cobro.`,
   );
 }
+const bookingPricing = read("app/lib/server/booking-pricing.ts");
+const bookingDraft = read("app/api/bookings/draft/route.ts");
+check(
+  bookingPricing.includes("adultCampingCount") &&
+    bookingPricing.includes('selection.pricing_mode === "PER_PERSON"') &&
+    bookingDraft.includes("selectedPeople.filter((person) => !person.is_minor).length"),
+  "El camping por persona puede cobrar a participantes menores.",
+);
+for (const route of [
+  "app/api/checkout/stripe/route.ts",
+  "app/api/payments/transfer/route.ts",
+]) {
+  const source = read(route);
+  check(
+    source.includes("pricing.adultCampingCount") &&
+      source.includes('selection.pricing_mode === "PER_PERSON"'),
+    `${route} puede enviar al cobro una cantidad de camping que incluye menores.`,
+  );
+}
 
 for (const path of [
   "app/admin/hikes/[id]/page.tsx",
