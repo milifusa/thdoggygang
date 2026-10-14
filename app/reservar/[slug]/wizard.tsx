@@ -952,8 +952,8 @@ export function BookingWizard({
                   Reserva tu lugar.
                 </h1>
                 <p className="wizard-lead">
-                  Elige cómo quieres pagar. Tu QR se genera cuando confirmemos
-                  el pago.
+                  Elige tu forma de pago. Cuando se confirme, tu lugar quedará
+                  reservado y recibirás tu pase de aventura.
                 </p>
                 {creditBalanceCents > 0 && (
                   <label className="booking-credit-option">
@@ -992,13 +992,15 @@ export function BookingWizard({
                 ) : payment === "card" ? (
                   <div className="stripe-checkout-box">
                     <div>TDG</div>
-                    <span>PAGO SEGURO</span>
-                    <strong>Continuarás al checkout protegido de Stripe</strong>
+                    <span>TARJETA · PAGO SEGURO</span>
+                    <strong>Paga de forma fácil y segura</strong>
                     <p>
-                      Ahí podrás capturar tu tarjeta. The Doggy Gang nunca
-                      recibe ni almacena el número, vencimiento o CVV.
+                      Te llevaremos a Stripe para completar el pago. Si tu
+                      dispositivo es compatible, también podrás usar Apple Pay
+                      o Google Pay. The Doggy Gang no recibe ni almacena los
+                      datos de tu tarjeta.
                     </p>
-                    <small>CONEXIÓN CIFRADA · CONFIRMACIÓN POR WEBHOOK</small>
+                    <small>PAGO CIFRADO · CONFIRMACIÓN AUTOMÁTICA</small>
                   </div>
                 ) : bankTransfer ? (
                   <div className="bank-box">
