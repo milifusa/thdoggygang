@@ -2,6 +2,7 @@ import { z } from "zod";
 import { normalizeMexicoPhone } from "../../../lib/mexico-phone";
 import { recalculateBookingTotal } from "../../../lib/server/booking-pricing";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 
 const schema = z.object({
   bookingId: z.string().uuid().nullable(),
@@ -9,6 +10,7 @@ const schema = z.object({
   personIds: z.array(z.string().uuid()).min(1),
   dogIds: z.array(z.string().uuid()),
   transportPersonIds: z.array(z.string().uuid()),
+  campingOptionId: z.string().uuid().nullable().default(null),
   productSelections: z
     .array(
       z.object({
@@ -25,6 +27,7 @@ const schema = z.object({
       "personas",
       "perritos",
       "transporte",
+      "camping",
       "productos",
       "responsiva",
       "pago",
@@ -158,6 +161,43 @@ export async function POST(request: Request) {
       { error: friendlyDraftError(error?.message) },
       { status: 400 },
     );
+  }
+  const service = createSupabaseServiceClient();
+  await service
+    .from("booking_camping_selections")
+    .delete()
+    .eq("booking_id", data);
+  if (parsed.data.campingOptionId) {
+    const { data: campingOption } = await service
+      .from("hike_camping_options")
+      .select("id,name,price_cents,pricing_mode")
+      .eq("id", parsed.data.campingOptionId)
+      .eq("hike_id", hike.id)
+      .eq("active", true)
+      .maybeSingle();
+    if (!campingOption)
+      return Response.json(
+        { error: "La opción de camping seleccionada ya no está disponible." },
+        { status: 409 },
+      );
+    const { error: campingError } = await service
+      .from("booking_camping_selections")
+      .insert({
+        booking_id: data,
+        camping_option_id: campingOption.id,
+        option_name: campingOption.name,
+        pricing_mode: campingOption.pricing_mode,
+        quantity:
+          campingOption.pricing_mode === "PER_PERSON"
+            ? parsed.data.personIds.length
+            : 1,
+        unit_price_cents: campingOption.price_cents,
+      });
+    if (campingError)
+      return Response.json(
+        { error: "No pudimos guardar tu opción de camping." },
+        { status: 400 },
+      );
   }
   const selections = parsed.data.productSelections;
   const productIds = [...new Set(selections.map((item) => item.productId))];

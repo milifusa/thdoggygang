@@ -20,7 +20,7 @@ export default async function EditHikePage({
     const { data: hike } = await supabase
       .from("hikes")
       .select(
-        "name, slug, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, hike_meeting_points(id,label,address,maps_url,sort_order), transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules)",
+        "name, slug, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, max_dogs, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, published, hike_meeting_points(id,label,address,maps_url,sort_order), transport_configurations(mode, capacity, price_cents, departure_place, departure_at, return_details, rules), hike_camping_options(id,name,description,price_cents,pricing_mode,active,sort_order)",
       )
       .eq("id", id)
       .is("deleted_at", null)
@@ -102,6 +102,19 @@ export default async function EditHikePage({
       transportDepartureAt: transportLocalDate,
       transportReturnDetails: transportValue?.return_details ?? "",
       transportRules: transportValue?.rules ?? "",
+      campingOptions: [...(hike.hike_camping_options ?? [])]
+        .filter((option) => option.active)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((option) => ({
+          id: option.id,
+          name: option.name,
+          description: option.description,
+          price: option.price_cents / 100,
+          pricingMode:
+            option.pricing_mode === "PER_PERSON"
+              ? "PER_PERSON"
+              : "PER_RESERVATION",
+        })),
     };
   }
   return (

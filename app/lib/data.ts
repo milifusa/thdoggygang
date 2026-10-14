@@ -3,6 +3,14 @@ import { isSupabaseConfigured } from "./config";
 
 export type PricingMode = "PER_PERSON" | "PERSON_DOG_BUNDLE";
 
+export type CampingOption = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  pricingMode: "PER_RESERVATION" | "PER_PERSON";
+};
+
 export type Adventure = {
   id: string;
   slug: string;
@@ -34,6 +42,7 @@ export type Adventure = {
   transportAvailable: boolean;
   transportPrice: number;
   transportDeparture: string | null;
+  campingOptions: CampingOption[];
 };
 
 const defaultDogSuitability =
@@ -86,6 +95,7 @@ const demoAdventures: Adventure[] = [
     transportAvailable: true,
     transportPrice: 200,
     transportDeparture: "Angelópolis",
+    campingOptions: [],
   },
 ];
 
@@ -114,6 +124,21 @@ function mapHike(row: Record<string, unknown>): Adventure {
           departure_place?: string | null;
         })
       : null;
+  const campingOptions = Array.isArray(row.hike_camping_options)
+    ? (row.hike_camping_options as Array<Record<string, unknown>>)
+        .filter((option) => option.active !== false)
+        .sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+        .map((option) => ({
+          id: String(option.id),
+          name: String(option.name),
+          description: String(option.description ?? ""),
+          price: Number(option.price_cents ?? 0) / 100,
+          pricingMode:
+            option.pricing_mode === "PER_PERSON"
+              ? ("PER_PERSON" as const)
+              : ("PER_RESERVATION" as const),
+        }))
+    : [];
   const formatDate = new Intl.DateTimeFormat("es-MX", {
     day: "numeric",
     month: "long",
@@ -181,6 +206,7 @@ function mapHike(row: Record<string, unknown>): Adventure {
     transportAvailable: Boolean(transport && transport.mode !== "NONE"),
     transportPrice: Number(transport?.price_cents ?? 0) / 100,
     transportDeparture: transport?.departure_place ?? null,
+    campingOptions,
   };
 }
 
@@ -194,7 +220,7 @@ export async function getAdventures(): Promise<Adventure[]> {
   const { data, error } = await supabase
     .from("hikes")
     .select(
-      "id, slug, name, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, transport_configurations(mode, price_cents, departure_place)",
+      "id, slug, name, description, story_title, starts_at, location_name, price_cents, dog_price_cents, pricing_mode, capacity, distance_km, elevation_m, duration_minutes, difficulty, terrain, includes, excludes, packing_list, dog_suitability, rules, cancellation_policy, cover_path, transport_configurations(mode, price_cents, departure_place), hike_camping_options(id,name,description,price_cents,pricing_mode,active,sort_order)",
     )
     .eq("published", true)
     .is("deleted_at", null)

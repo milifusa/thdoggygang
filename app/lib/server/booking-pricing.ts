@@ -17,7 +17,7 @@ export async function recalculateBookingTotal({
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id,profile_id,hike:hikes(starts_at,price_cents,dog_price_cents,pricing_mode),booking_participants(snapshot),booking_dogs(id),transport_reservations(price_cents),booking_product_selections(quantity,unit_price_cents)",
+      "id,profile_id,hike:hikes(starts_at,price_cents,dog_price_cents,pricing_mode),booking_participants(snapshot),booking_dogs(id),transport_reservations(price_cents),booking_product_selections(quantity,unit_price_cents),booking_camping_selections(quantity,unit_price_cents)",
     )
     .eq("id", bookingId)
     .eq("profile_id", profileId)
@@ -60,7 +60,12 @@ export async function recalculateBookingTotal({
       sum + selection.quantity * selection.unit_price_cents,
     0,
   );
-  const totalCents = hikeSubtotal + transportSubtotal + productSubtotal;
+  const campingSubtotal = booking.booking_camping_selections.reduce(
+    (sum, selection) => sum + selection.quantity * selection.unit_price_cents,
+    0,
+  );
+  const totalCents =
+    hikeSubtotal + transportSubtotal + productSubtotal + campingSubtotal;
   const { error: updateError } = await service
     .from("bookings")
     .update({
@@ -78,6 +83,7 @@ export async function recalculateBookingTotal({
     hikeSubtotal,
     transportSubtotal,
     productSubtotal,
+    campingSubtotal,
     freeChildren,
   };
 }

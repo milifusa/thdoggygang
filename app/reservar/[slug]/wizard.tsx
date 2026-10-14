@@ -3,23 +3,13 @@
 import Link from "next/link";
 import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, UserRound, WalletCards, X } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, TentTree, UserRound, WalletCards, X } from "lucide-react";
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
 import type { BookingContext } from "../../lib/domain/booking-context";
 import { dateInMexico, isFreeChildForDate } from "../../lib/person-age";
 import type { Product } from "../../lib/products";
 import type { BookingResume } from "./page";
 import { formatClabe, type BankTransferConfig } from "../../lib/payment-types";
-
-const steps = [
-  "Personas",
-  "Perritos",
-  "Transporte",
-  "Productos",
-  "Responsivas",
-  "Pago",
-  "Listo",
-];
 
 function SignaturePad({
   onSigned,
@@ -105,6 +95,18 @@ export function BookingWizard({
 }) {
   const people = context.people;
   const dogs = context.dogs;
+  const hasCamping = adventure.campingOptions.length > 0;
+  const steps = useMemo(
+    () =>
+      hasCamping
+        ? ["Personas", "Perritos", "Transporte", "Camping", "Productos", "Responsivas", "Pago", "Listo"]
+        : ["Personas", "Perritos", "Transporte", "Productos", "Responsivas", "Pago", "Listo"],
+    [hasCamping],
+  );
+  const productStep = hasCamping ? 4 : 3;
+  const waiverStep = productStep + 1;
+  const paymentStep = waiverStep + 1;
+  const finalStep = paymentStep + 1;
   const [step, setStep] = useState(resume?.step ?? 0);
   const [selectedPeople, setSelectedPeople] = useState(
     resume?.personIds.length ? resume.personIds : people[0] ? [people[0].id] : [],
@@ -115,6 +117,10 @@ export function BookingWizard({
   const [transportPeople, setTransportPeople] = useState(
     resume?.transportPersonIds.length ? resume.transportPersonIds : people[0] ? [people[0].id] : [],
   );
+  const [campingOptionId, setCampingOptionId] = useState<string | null>(
+    resume?.campingOptionId ?? null,
+  );
+  const [campingChoiceMade, setCampingChoiceMade] = useState(Boolean(resume));
   const [productQuantities, setProductQuantities] = useState<Record<string,number>>(Object.fromEntries(resume?.productSelections.map((item)=>[item.productId,item.quantity])??[]));
   const [productVariants, setProductVariants] = useState<Record<string,string>>(
     Object.fromEntries(products.map((product)=>[product.id,resume?.productSelections.find((item)=>item.productId===product.id)?.variant??product.variants[0]??""])),
@@ -155,9 +161,18 @@ export function BookingWizard({
     () => products.reduce((sum,product)=>sum+(productQuantities[product.id]??0)*(product.priceCents/100),0),
     [products,productQuantities],
   );
+  const selectedCamping = adventure.campingOptions.find(
+    (option) => option.id === campingOptionId,
+  );
+  const campingSubtotal = selectedCamping
+    ? selectedCamping.price *
+      (selectedCamping.pricingMode === "PER_PERSON"
+        ? selectedPeople.length
+        : 1)
+    : 0;
   const total = useMemo(
-    () => hikeSubtotal + (transport ? transportPeople.length * adventure.transportPrice : 0) + productsSubtotal,
-    [hikeSubtotal, transport, transportPeople.length, adventure.transportPrice,productsSubtotal],
+    () => hikeSubtotal + (transport ? transportPeople.length * adventure.transportPrice : 0) + campingSubtotal + productsSubtotal,
+    [hikeSubtotal, transport, transportPeople.length, adventure.transportPrice,campingSubtotal,productsSubtotal],
   );
   const availableCredit = creditBalanceCents / 100;
   const creditApplied = useCredit ? Math.min(availableCredit, hikeSubtotal) : 0;
@@ -208,8 +223,11 @@ export function BookingWizard({
         transportPersonIds: transport
           ? transportPeople.filter((id) => selectedPeople.includes(id))
           : [],
+        campingOptionId,
         productSelections: products.filter((product)=>(productQuantities[product.id]??0)>0).map((product)=>({productId:product.id,variant:productVariants[product.id]??"",quantity:productQuantities[product.id]})),
-        currentStep: ['perritos','transporte','productos','responsiva','pago','confirmacion','confirmacion'][step] ?? 'personas',
+        currentStep: (hasCamping
+          ? ['perritos','transporte','camping','productos','responsiva','pago','confirmacion','confirmacion']
+          : ['perritos','transporte','productos','responsiva','pago','confirmacion','confirmacion'])[step] ?? 'personas',
       }),
     });
     const payload = (await response.json()) as {
@@ -225,11 +243,11 @@ export function BookingWizard({
     setProcessing(true);
     setSyncMessage("");
     try {
-      const savedBookingId = step === 5 ? bookingId : await persistDraft();
-      if (step === 5 && context.mode === "live" && !savedBookingId)
+      const savedBookingId = step === paymentStep ? bookingId : await persistDraft();
+      if (step === paymentStep && context.mode === "live" && !savedBookingId)
         throw new Error("No encontramos tu borrador. Vuelve al paso anterior.");
       if (
-        step === 4 &&
+        step === waiverStep &&
         context.mode === "live" &&
         savedBookingId &&
         signatureData &&
@@ -248,7 +266,7 @@ export function BookingWizard({
           throw new Error(payload.error ?? "No pudimos guardar la responsiva.");
         setWaiverSaved(true);
       }
-      if (step === 5 && context.mode === "live") {
+      if (step === paymentStep && context.mode === "live") {
         if (payment === "card" || payableTotal === 0) {
           const response = await fetch("/api/checkout/stripe", {
             method: "POST",
@@ -283,12 +301,12 @@ export function BookingWizard({
             payload.error ?? "No pudimos recibir el comprobante.",
           );
         setTransferPending(true);
-        setStep(6);
+        setStep(finalStep);
         return;
       }
-      if (step === 5)
+      if (step === paymentStep)
         await new Promise((resolve) => window.setTimeout(resolve, 700));
-      setStep((current) => Math.min(6, current + 1));
+      setStep((current) => Math.min(finalStep, current + 1));
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setSyncMessage(
@@ -307,11 +325,13 @@ export function BookingWizard({
         selectedPeople.every((id)=>{const person=people.find((item)=>item.id===id);return !person?.isMinor||Boolean(person.guardianPersonId&&selectedPeople.includes(person.guardianPersonId));})
       : step === 1
         ? dogChoiceMade
-        : step === 4
+        : hasCamping && step === 3
+          ? campingChoiceMade
+        : step === waiverStep
           ? Boolean(signatureData || waiverSaved) && accepted
-          : step === 5 && context.mode === "live" && payment === "transfer"
+          : step === paymentStep && context.mode === "live" && payment === "transfer"
             ? payableTotal === 0 || Boolean(bankTransfer && receiptFile)
-            : step === 5 && context.mode === "live" && payment === "card"
+            : step === paymentStep && context.mode === "live" && payment === "card"
               ? payableTotal === 0 || cardPaymentsEnabled
             : true;
   const continueLabel = processing
@@ -326,11 +346,13 @@ export function BookingWizard({
         ? dogs.length
           ? "SELECCIONA UN PERRITO O ELIGE SIN PERRITO"
           : "AGREGA UN PERRITO O ELIGE SIN PERRITO"
-        : step === 4 && !canContinue
+        : hasCamping && step === 3 && !canContinue
+          ? "ELIGE CAMPING O SIN CAMPING"
+        : step === waiverStep && !canContinue
           ? signatureData || waiverSaved
             ? "ACTIVA HE LEÍDO Y ACEPTO"
             : "FIRMA PARA CONTINUAR"
-          : step === 5
+          : step === paymentStep
             ? payableTotal === 0
               ? `USAR $${creditApplied.toLocaleString("es-MX")} DE CRÉDITO`
               : payment === "transfer" && !receiptFile
@@ -339,7 +361,7 @@ export function BookingWizard({
             : "CONTINUAR";
   const progress = `${Math.round((step / (steps.length - 1)) * 100)}%`;
   const goBack = () => {
-    if (step <= 5) setWaiverSaved(false);
+    if (step <= paymentStep) setWaiverSaved(false);
     setStep((current) => Math.max(0, current - 1));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -368,7 +390,7 @@ export function BookingWizard({
           </div>
         ))}
       </div>
-      {step < 6 && (
+      {step < finalStep && (
         <div className="wizard-desktop-dog-strip" aria-hidden="true">
           <div
             className="wizard-dog-track"
@@ -379,7 +401,7 @@ export function BookingWizard({
           </div>
         </div>
       )}
-      {step < 6 && (
+      {step < finalStep && (
         <section
           className="wizard-mobile-status"
           aria-label={`Paso ${step + 1} de ${steps.length}: ${steps[step]}`}
@@ -403,7 +425,7 @@ export function BookingWizard({
         </section>
       )}
 
-      {step < 6 ? (
+      {step < finalStep ? (
         <div className="wizard-layout">
           <section className="wizard-main wizard-step-enter" key={step}>
             <p className="wizard-kicker">PASO {step + 1} DE {steps.length}</p>
@@ -640,7 +662,63 @@ export function BookingWizard({
                 )}
               </>
             )}
-            {step === 3 && (
+            {hasCamping && step === 3 && (
+              <>
+                <h1>
+                  ¿La aventura
+                  <br />
+                  sigue bajo las estrellas?
+                </h1>
+                <p className="wizard-lead">
+                  Elige si quieres agregar camping. Puedes venir sólo al hike
+                  o quedarte con la manada en la opción que prefieras.
+                </p>
+                <div className="choice-grid camping-choice-grid">
+                  <button
+                    type="button"
+                    aria-pressed={campingChoiceMade && !campingOptionId}
+                    className={campingChoiceMade && !campingOptionId ? "selected" : ""}
+                    onClick={() => {
+                      setCampingOptionId(null);
+                      setCampingChoiceMade(true);
+                    }}
+                  >
+                    <span className="camping-choice-icon">RUTA</span>
+                    <strong>Sin camping</strong>
+                    <small>Esta vez participamos sólo en el hike.</small>
+                    <i aria-hidden="true">
+                      {campingChoiceMade && !campingOptionId && <Check />}
+                    </i>
+                  </button>
+                  {adventure.campingOptions.map((option) => (
+                    <button
+                      type="button"
+                      key={option.id}
+                      aria-pressed={campingOptionId === option.id}
+                      className={campingOptionId === option.id ? "selected" : ""}
+                      onClick={() => {
+                        setCampingOptionId(option.id);
+                        setCampingChoiceMade(true);
+                      }}
+                    >
+                      <TentTree aria-hidden="true" />
+                      <strong>{option.name}</strong>
+                      <small>{option.description || "Camping con la manada."}</small>
+                      <b>
+                        +${option.price.toLocaleString("es-MX")} MXN
+                        {option.pricingMode === "PER_PERSON"
+                          ? " por persona"
+                          : " por reservación"}
+                      </b>
+                      <i aria-hidden="true">
+                        {campingOptionId === option.id && <Check />}
+                      </i>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+            {step === productStep && (
               <>
                 <h1>
                   Equipo para
@@ -691,7 +769,7 @@ export function BookingWizard({
                 <p className="product-pickup-note">Los productos se entregan durante el check-in del hike.</p>
               </>
             )}
-            {step === 4 && (
+            {step === waiverStep && (
               <>
                 <h1>
                   Un acuerdo
@@ -743,7 +821,7 @@ export function BookingWizard({
                 </label>
               </>
             )}
-            {step === 5 && (
+            {step === paymentStep && (
               <>
                 <h1>
                   Último paso.
@@ -892,6 +970,12 @@ export function BookingWizard({
                   </dd>
                 </div>
               )}
+              {selectedCamping && (
+                <div>
+                  <dt>Camping · {selectedCamping.name}</dt>
+                  <dd>${campingSubtotal.toLocaleString("es-MX")}</dd>
+                </div>
+              )}
               {productsSubtotal > 0 && (
                 <div>
                   <dt>Productos</dt>
@@ -927,6 +1011,7 @@ export function BookingWizard({
           peopleCount={selectedPeople.length}
           dogCount={selectedDogs.length}
           transport={transport}
+          campingName={selectedCamping?.name ?? null}
           total={total}
         />
       )}
@@ -939,12 +1024,14 @@ function Confirmation({
   peopleCount,
   dogCount,
   transport,
+  campingName,
   total,
 }: {
   adventure: Adventure;
   peopleCount: number;
   dogCount: number;
   transport: boolean;
+  campingName: string | null;
   total: number;
 }) {
   const token = "tdg:checkin:7f9f5c2e-74bc-4f89-a310-86b4109d9d25";
@@ -984,6 +1071,12 @@ function Confirmation({
               <dt>Transporte</dt>
               <dd>{transport ? "Sí" : "Por cuenta propia"}</dd>
             </div>
+            {campingName && (
+              <div>
+                <dt>Camping</dt>
+                <dd>{campingName}</dd>
+              </div>
+            )}
             <div>
               <dt>Pago</dt>
               <dd>${total.toLocaleString("es-MX")} MXN · Pagado</dd>

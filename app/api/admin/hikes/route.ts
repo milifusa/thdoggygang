@@ -15,6 +15,14 @@ const meetingPointSchema = z.object({
     }),
 });
 
+const campingOptionSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(2).max(100),
+  description: z.string().trim().max(600),
+  priceCents: z.number().int().min(0),
+  pricingMode: z.enum(["PER_RESERVATION", "PER_PERSON"]),
+});
+
 const hikeSchema = z.object({
   name: z.string().min(3).max(120),
   slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
@@ -47,6 +55,7 @@ const hikeSchema = z.object({
   transportDepartureAt: z.string().datetime({ offset: true }).nullable(),
   transportReturnDetails: z.string().max(1000).nullable(),
   transportRules: z.string().max(1500).nullable(),
+  campingOptions: z.array(campingOptionSchema).max(12),
 });
 
 async function adminClient() {
@@ -153,6 +162,28 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  if (value.campingOptions.length) {
+    const { error: campingError } = await supabase
+      .from("hike_camping_options")
+      .insert(
+        value.campingOptions.map((option, index) => ({
+          hike_id: data.id,
+          name: option.name,
+          description: option.description,
+          price_cents: option.priceCents,
+          pricing_mode: option.pricingMode,
+          sort_order: index,
+          active: true,
+        })),
+      );
+    if (campingError)
+      return Response.json(
+        {
+          error: `El hike se creó, pero el camping no pudo guardarse: ${campingError.message}`,
+        },
+        { status: 400 },
+      );
+  }
   return Response.json({ hike: data }, { status: 201 });
 }
 

@@ -6155,6 +6155,94 @@ footer small {
 .full-field {
   grid-column: 1/-1;
 }
+.camping-options-editor > p {
+  margin: -8px 0 20px;
+  color: #666;
+  font: 13px/1.55 "Atkinson Hyperlegible", Arial, sans-serif;
+}
+.camping-options-list {
+  display: grid;
+  gap: 14px;
+}
+.camping-options-list fieldset {
+  border: 1px solid #c9c4bc;
+  background: var(--cream);
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 1.4fr 0.7fr 1fr;
+  gap: 14px;
+}
+.camping-options-list legend {
+  padding: 0 7px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.camping-options-list label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+.camping-options-list input,
+.camping-options-list textarea,
+.camping-options-list select {
+  min-height: 46px;
+  border: 1px solid #bbb;
+  background: #fff;
+  padding: 11px;
+  font: 13px "Atkinson Hyperlegible", Arial, sans-serif;
+}
+.camping-options-list textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+.camping-choice-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.camping-choice-grid button > svg {
+  width: 34px;
+  height: 34px;
+  color: #9b6817;
+  stroke-width: 1.6;
+}
+.camping-choice-grid button > b {
+  margin-top: auto;
+  font-size: 12px;
+  color: #9b6817;
+}
+.camping-choice-icon {
+  font-size: 11px !important;
+  font-weight: 900;
+  letter-spacing: .14em;
+  color: #9b6817;
+}
+.camping-detail-note {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 15px;
+  background: #fff7e8;
+  border: 1px solid #e2c994;
+}
+.camping-detail-note svg {
+  color: #9b6817;
+}
+.camping-detail-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .camping-options-list fieldset,
+  .camping-choice-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .publish-toggle {
   background: #fff;
   border: 1px solid #ccc;

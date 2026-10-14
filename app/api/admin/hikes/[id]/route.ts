@@ -158,6 +158,86 @@ export async function PATCH(
     if (transportError)
       return Response.json({ error: transportError.message }, { status: 400 });
   }
+  if (value.campingOptions !== undefined) {
+    const { data: existingOptions, error: existingOptionsError } = await supabase
+      .from("hike_camping_options")
+      .select("id")
+      .eq("hike_id", id);
+    if (existingOptionsError)
+      return Response.json(
+        { error: `No pudimos consultar el camping: ${existingOptionsError.message}` },
+        { status: 400 },
+      );
+    const existingIds = new Set((existingOptions ?? []).map((option) => option.id));
+    const requestedExisting = value.campingOptions.filter((option) => option.id);
+    if (requestedExisting.some((option) => !existingIds.has(option.id!)))
+      return Response.json(
+        { error: "Una opción de camping no pertenece a este hike." },
+        { status: 400 },
+      );
+    if (requestedExisting.length) {
+      const { error: updateCampingError } = await supabase
+        .from("hike_camping_options")
+        .upsert(
+          requestedExisting.map((option) => ({
+            id: option.id!,
+            hike_id: id,
+            name: option.name,
+            description: option.description,
+            price_cents: option.priceCents,
+            pricing_mode: option.pricingMode,
+            sort_order: value.campingOptions!.findIndex(
+              (candidate) => candidate === option,
+            ),
+            active: true,
+          })),
+        );
+      if (updateCampingError)
+        return Response.json(
+          { error: `No pudimos actualizar el camping: ${updateCampingError.message}` },
+          { status: 400 },
+        );
+    }
+    const newOptions = value.campingOptions.filter((option) => !option.id);
+    if (newOptions.length) {
+      const { error: insertCampingError } = await supabase
+        .from("hike_camping_options")
+        .insert(
+          newOptions.map((option) => ({
+            hike_id: id,
+            name: option.name,
+            description: option.description,
+            price_cents: option.priceCents,
+            pricing_mode: option.pricingMode,
+            sort_order: value.campingOptions!.findIndex(
+              (candidate) => candidate === option,
+            ),
+            active: true,
+          })),
+        );
+      if (insertCampingError)
+        return Response.json(
+          { error: `No pudimos agregar el camping: ${insertCampingError.message}` },
+          { status: 400 },
+        );
+    }
+    const retainedIds = requestedExisting.map((option) => option.id!);
+    const removedIds = [...existingIds].filter(
+      (optionId) => !retainedIds.includes(optionId),
+    );
+    if (removedIds.length) {
+      const { error: deactivateCampingError } = await supabase
+        .from("hike_camping_options")
+        .update({ active: false })
+        .eq("hike_id", id)
+        .in("id", removedIds);
+      if (deactivateCampingError)
+        return Response.json(
+          { error: `No pudimos retirar una opción de camping: ${deactivateCampingError.message}` },
+          { status: 400 },
+        );
+    }
+  }
   const importantChanges = [
     value.startsAt !== undefined ? "fecha u horario" : null,
     value.locationName !== undefined ? "ubicación" : null,

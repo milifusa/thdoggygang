@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { BadgeCheck } from 'lucide-react';
+import { BadgeCheck, TentTree } from 'lucide-react';
 import { SiteHeader } from '../../components/SiteHeader';
 import { getAdventure, getAdventureReviews } from '../../lib/data';
 import { SITE_ORIGIN } from '../../lib/site-url';
@@ -124,6 +124,7 @@ export default async function AdventurePage({ params }: { params: Promise<{ slug
           </>}
           <div className="availability"><i /> Cupo para {hike.spots} personas</div>
           {hike.transportAvailable && <div className="transport-note"><span>BUS</span><p><strong>Transporte disponible</strong><br />{hike.transportDeparture ? `Desde ${hike.transportDeparture}` : 'Punto por confirmar'} · +${hike.transportPrice.toLocaleString('es-MX')}</p></div>}
+          {hike.campingOptions.length > 0 && <div className="camping-detail-note"><TentTree aria-hidden="true"/><p><strong>Camping opcional</strong><br />Elige entre {hike.campingOptions.map((option) => option.name).join(', ')} al reservar · desde ${Math.min(...hike.campingOptions.map((option) => option.price)).toLocaleString('es-MX')} MXN</p></div>}
           {hike.spots > 0 ? <Link className="button button-primary full-button" href={`/reservar/${hike.slug}`}>QUIERO IR <span>→</span></Link> : <WaitlistButton hikeId={hike.id} slug={hike.slug} />}
           <p className="secure-note">Reserva segura · Confirmación inmediata</p>
         </aside>

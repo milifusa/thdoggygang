@@ -76,6 +76,13 @@ type Booking = {
     booking_participant_id: string;
     dog_ids: string[];
   }>;
+  booking_camping_selections: Array<{
+    id: string;
+    option_name: string;
+    pricing_mode: string;
+    quantity: number;
+    unit_price_cents: number;
+  }>;
   signed_waivers: Array<{ id: string; signed_at: string }>;
   check_ins: Array<{ id: string; booking_participant_id: string }>;
 };
@@ -243,7 +250,7 @@ export default async function HikeAdminDetail({
     supabase
       .from("bookings")
       .select(
-        "id,booking_number,status,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,dog_id,snapshot),transport_reservations(id,booking_participant_id,dog_ids),signed_waivers(id,signed_at),check_ins(id,booking_participant_id)",
+        "id,booking_number,status,total_cents,profile:profiles!bookings_profile_id_fkey(first_name,last_name,email,phone),booking_participants(id,snapshot),booking_dogs(id,dog_id,snapshot),transport_reservations(id,booking_participant_id,dog_ids),booking_camping_selections(id,option_name,pricing_mode,quantity,unit_price_cents),signed_waivers(id,signed_at),check_ins(id,booking_participant_id)",
       )
       .eq("hike_id", id)
       .neq("status", "CANCELLED")
@@ -321,6 +328,7 @@ export default async function HikeAdminDetail({
   );
   let hikeRevenue = 0,
     transportRevenue = 0,
+    campingRevenue = 0,
     photoRevenue = 0,
     productRevenue = 0,
     refunded = 0,
@@ -341,6 +349,7 @@ export default async function HikeAdminDetail({
     order.order_items.forEach((i) => {
       const amount = i.quantity * i.unit_price_cents;
       if (i.item_type === "TRANSPORT") transportRevenue += amount;
+      else if (i.item_type === "CAMPING") campingRevenue += amount;
       else if (i.item_type.startsWith("PHOTO")) photoRevenue += amount;
       else if (i.item_type === "PRODUCT") productRevenue += amount;
       else if (i.item_type === "HIKE") hikeRevenue += amount;
@@ -657,6 +666,10 @@ export default async function HikeAdminDetail({
                     <dd>{money(transportRevenue)}</dd>
                   </div>
                   <div>
+                    <dt>Camping</dt>
+                    <dd>{money(campingRevenue)}</dd>
+                  </div>
+                  <div>
                     <dt>Fotografías</dt>
                     <dd>{money(photoRevenue)}</dd>
                   </div>
@@ -674,6 +687,7 @@ export default async function HikeAdminDetail({
                       {money(
                         hikeRevenue +
                           transportRevenue +
+                          campingRevenue +
                           photoRevenue +
                           productRevenue,
                       )}
@@ -721,6 +735,11 @@ export default async function HikeAdminDetail({
                         ? ` · ${bookingFreeChildren} menores de 5 sin ocupar lugar`
                         : ""}
                     </small>
+                    {b.booking_camping_selections.map((camping) => (
+                      <small key={camping.id}>
+                        Camping: {camping.option_name} · {camping.quantity} × {money(camping.unit_price_cents)}
+                      </small>
+                    ))}
                     <div className="hike-registration-contacts">
                       {b.booking_participants.map((participant) => (
                         <span key={participant.id}>

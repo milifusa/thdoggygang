@@ -10,7 +10,7 @@ import { getMemberCreditBalance } from '../../lib/server/member-credit';
 
 export const metadata: Metadata = { title: 'Arma tu aventura | The Doggy Gang', description: 'Selecciona tu manada, firma y reserva tu lugar.' };
 
-export type BookingResume = { bookingId:string; step:number; personIds:string[]; dogIds:string[]; transportPersonIds:string[]; productSelections:Array<{productId:string;variant:string;quantity:number}>; waiverSigned:boolean; creditAppliedCents:number };
+export type BookingResume = { bookingId:string; step:number; personIds:string[]; dogIds:string[]; transportPersonIds:string[]; campingOptionId:string|null; productSelections:Array<{productId:string;variant:string;quantity:number}>; waiverSigned:boolean; creditAppliedCents:number };
 
 export default async function BookingPage({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ booking?:string; step?:string; pago?:string }> }) {
   const { slug } = await params;
@@ -42,12 +42,14 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
   }
   if (context.mode === 'live' && requested.booking) {
     const supabase = await createSupabaseServerClient();
-    const { data: booking } = await supabase.from('bookings').select('id,current_step,credit_applied_cents,hike:hikes(slug),booking_participants(id,person_profile_id),booking_dogs(dog_id),transport_reservations(booking_participant_id),booking_product_selections(product_id,variant,quantity),signed_waivers(id)').eq('id',requested.booking).eq('profile_id',context.profileId).in('status',['DRAFT','PENDING_PAYMENT']).maybeSingle();
+    const { data: booking } = await supabase.from('bookings').select('id,current_step,credit_applied_cents,hike:hikes(slug),booking_participants(id,person_profile_id),booking_dogs(dog_id),transport_reservations(booking_participant_id),booking_camping_selections(camping_option_id),booking_product_selections(product_id,variant,quantity),signed_waivers(id)').eq('id',requested.booking).eq('profile_id',context.profileId).in('status',['DRAFT','PENDING_PAYMENT']).maybeSingle();
     const hike = Array.isArray(booking?.hike) ? booking?.hike[0] : booking?.hike;
     if (booking && hike?.slug === slug) {
-      const stepNames=['personas','perritos','transporte','productos','responsiva','pago','confirmacion'];
+      const stepNames=adventure.campingOptions.length
+        ? ['personas','perritos','transporte','camping','productos','responsiva','pago','confirmacion']
+        : ['personas','perritos','transporte','productos','responsiva','pago','confirmacion'];
       const participantMap=new Map(booking.booking_participants.map((participant)=>[participant.id,participant.person_profile_id]));
-      resume={ bookingId:booking.id, step:Math.max(0,stepNames.indexOf(requested.step || booking.current_step)), personIds:booking.booking_participants.map((participant)=>participant.person_profile_id).filter(Boolean) as string[], dogIds:booking.booking_dogs.map((dog)=>dog.dog_id).filter(Boolean) as string[], transportPersonIds:booking.transport_reservations.map((reservation)=>participantMap.get(reservation.booking_participant_id)).filter(Boolean) as string[], productSelections:booking.booking_product_selections.map((item)=>({productId:item.product_id,variant:item.variant,quantity:item.quantity})), waiverSigned:booking.signed_waivers.length>0, creditAppliedCents:booking.credit_applied_cents };
+      resume={ bookingId:booking.id, step:Math.max(0,stepNames.indexOf(requested.step || booking.current_step)), personIds:booking.booking_participants.map((participant)=>participant.person_profile_id).filter(Boolean) as string[], dogIds:booking.booking_dogs.map((dog)=>dog.dog_id).filter(Boolean) as string[], transportPersonIds:booking.transport_reservations.map((reservation)=>participantMap.get(reservation.booking_participant_id)).filter(Boolean) as string[], campingOptionId:booking.booking_camping_selections[0]?.camping_option_id??null, productSelections:booking.booking_product_selections.map((item)=>({productId:item.product_id,variant:item.variant,quantity:item.quantity})), waiverSigned:booking.signed_waivers.length>0, creditAppliedCents:booking.credit_applied_cents };
     }
   }
   const [bankTransfer, stripeSecret, creditBalanceCents] = await Promise.all([getBankTransferConfig(), getStripeSecretKey(), context.profileId ? getMemberCreditBalance(context.profileId) : Promise.resolve(0)]);

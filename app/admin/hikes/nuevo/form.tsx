@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
-import { CircleCheck, MapPin, Plus, Trash2 } from "lucide-react";
+import { CircleCheck, MapPin, Plus, TentTree, Trash2 } from "lucide-react";
 import {
   prepareImageForUpload,
   readJsonResponse,
@@ -45,6 +45,13 @@ export type HikeFormInitial = {
   transportDepartureAt: string;
   transportReturnDetails: string;
   transportRules: string;
+  campingOptions: Array<{
+    id?: string;
+    name: string;
+    description: string;
+    price: number;
+    pricingMode: "PER_RESERVATION" | "PER_PERSON";
+  }>;
 };
 
 export function NewHikeForm({
@@ -68,6 +75,12 @@ export function NewHikeForm({
     (initial?.meetingPoints ?? []).map((point, index) => ({
       ...point,
       key: point.id ?? `existing-${index}`,
+    })),
+  );
+  const [campingOptions, setCampingOptions] = useState(() =>
+    (initial?.campingOptions ?? []).map((option, index) => ({
+      ...option,
+      key: option.id ?? `camping-${index}`,
     })),
   );
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -122,6 +135,15 @@ export function NewHikeForm({
         : null,
       transportReturnDetails: data.get("transportReturnDetails") || null,
       transportRules: data.get("transportRules") || null,
+      campingOptions: campingOptions.map(
+        ({ id, name, description, price, pricingMode }) => ({
+          id,
+          name: name.trim(),
+          description: description.trim(),
+          priceCents: Math.round(Number(price) * 100),
+          pricingMode,
+        }),
+      ),
       published: data.get("published") === "on",
     };
     try {
@@ -642,7 +664,138 @@ export function NewHikeForm({
         </div>
       </div>
       <div className="form-section">
-        <span>05 · REGLAS Y CANCELACIONES</span>
+        <span>05 · CAMPING</span>
+        <div className="camping-options-editor">
+          <div className="meeting-points-heading">
+            <span>
+              <TentTree aria-hidden="true" />
+              OPCIONES DE CAMPING
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setCampingOptions((current) => [
+                  ...current,
+                  {
+                    key: crypto.randomUUID(),
+                    name: "",
+                    description: "",
+                    price: 0,
+                    pricingMode: "PER_RESERVATION" as const,
+                  },
+                ])
+              }
+            >
+              <Plus aria-hidden="true" /> AGREGAR OPCIÓN
+            </button>
+          </div>
+          <p>
+            Si agregas opciones, el cliente podrá elegir entre no acampar o
+            seleccionar uno de estos niveles durante su reservación.
+          </p>
+          <div className="camping-options-list">
+            {campingOptions.map((option, index) => (
+              <fieldset key={option.key}>
+                <legend>OPCIÓN {index + 1}</legend>
+                <label>
+                  NOMBRE
+                  <input
+                    required
+                    value={option.name}
+                    placeholder="Camping básico o Glamping"
+                    onChange={(event) =>
+                      setCampingOptions((current) =>
+                        current.map((item) =>
+                          item.key === option.key
+                            ? { ...item, name: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  PRECIO MXN
+                  <input
+                    required
+                    min="0"
+                    step="1"
+                    type="number"
+                    value={option.price}
+                    onChange={(event) =>
+                      setCampingOptions((current) =>
+                        current.map((item) =>
+                          item.key === option.key
+                            ? { ...item, price: Number(event.target.value) }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  FORMA DE COBRO
+                  <select
+                    value={option.pricingMode}
+                    onChange={(event) =>
+                      setCampingOptions((current) =>
+                        current.map((item) =>
+                          item.key === option.key
+                            ? {
+                                ...item,
+                                pricingMode: event.target.value as
+                                  | "PER_RESERVATION"
+                                  | "PER_PERSON",
+                              }
+                            : item,
+                        ),
+                      )
+                    }
+                  >
+                    <option value="PER_RESERVATION">Por reservación</option>
+                    <option value="PER_PERSON">Por persona</option>
+                  </select>
+                </label>
+                <label className="full-field">
+                  QUÉ INCLUYE
+                  <textarea
+                    value={option.description}
+                    placeholder="Zona asignada, acceso a baños, desayuno…"
+                    onChange={(event) =>
+                      setCampingOptions((current) =>
+                        current.map((item) =>
+                          item.key === option.key
+                            ? { ...item, description: event.target.value }
+                            : item,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+                <button
+                  className="meeting-point-remove"
+                  type="button"
+                  onClick={() =>
+                    setCampingOptions((current) =>
+                      current.filter((item) => item.key !== option.key),
+                    )
+                  }
+                >
+                  <Trash2 aria-hidden="true" /> ELIMINAR
+                </button>
+              </fieldset>
+            ))}
+            {!campingOptions.length && (
+              <div className="meeting-points-empty">
+                <TentTree aria-hidden="true" />
+                <span>Este hike no ofrece camping por ahora.</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <div className="form-section">
+        <span>06 · REGLAS Y CANCELACIONES</span>
         <div className="form-grid">
           <label className="full-field">
             REGLAS DE LA MANADA

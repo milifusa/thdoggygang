@@ -32,7 +32,7 @@ export async function POST(request: Request) {
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "id, booking_number, profile_id, total_cents, currency, status, hike:hikes(name), booking_participants(id), booking_product_selections(product_id,variant,quantity,unit_price_cents,product:products(name))",
+      "id, booking_number, profile_id, total_cents, currency, status, hike:hikes(name), booking_participants(id), booking_camping_selections(camping_option_id,option_name,quantity,unit_price_cents), booking_product_selections(product_id,variant,quantity,unit_price_cents,product:products(name))",
     )
     .eq("id", bookingId)
     .single();
@@ -143,6 +143,10 @@ export async function POST(request: Request) {
         (sum, item) => sum + item.quantity * item.unit_price_cents,
         0,
       );
+      const campingSubtotal = booking.booking_camping_selections.reduce(
+        (sum, item) => sum + item.quantity * item.unit_price_cents,
+        0,
+      );
       const items = [
         {
           order_id: order.id,
@@ -150,8 +154,17 @@ export async function POST(request: Request) {
           reference_id: booking.id,
           description: hike?.name ?? "Aventura The Doggy Gang",
           quantity: 1,
-          unit_price_cents: booking.total_cents - productSubtotal,
+          unit_price_cents:
+            booking.total_cents - productSubtotal - campingSubtotal,
         },
+        ...booking.booking_camping_selections.map((item) => ({
+          order_id: order.id,
+          item_type: "CAMPING",
+          reference_id: item.camping_option_id,
+          description: `Camping · ${item.option_name}`,
+          quantity: item.quantity,
+          unit_price_cents: item.unit_price_cents,
+        })),
         ...booking.booking_product_selections.map((item) => {
           const product = Array.isArray(item.product)
             ? item.product[0]
