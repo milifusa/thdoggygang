@@ -45,13 +45,25 @@ export async function POST(request: Request) {
   const bookingParticipants = relationArray(booking.booking_participants);
   const campingSelections = relationArray(booking.booking_camping_selections);
   const productSelections = relationArray(booking.booking_product_selections);
-  const { count: signedCount } = await supabase
+  const { data: signedWaivers, error: signedWaiversError } = await supabase
     .from("signed_waivers")
-    .select("id", { count: "exact", head: true })
+    .select("booking_participant_id")
     .eq("booking_id", booking.id);
-  if ((signedCount ?? 0) < bookingParticipants.length)
+  const signedParticipantIds = new Set(
+    (signedWaivers ?? []).map((waiver) => waiver.booking_participant_id),
+  );
+  if (
+    signedWaiversError ||
+    bookingParticipants.length === 0 ||
+    bookingParticipants.some(
+      (participant) => !signedParticipantIds.has(participant.id),
+    )
+  )
     return Response.json(
-      { error: "Falta firmar la responsiva." },
+      {
+        error:
+          "Debes firmar la responsiva y aceptar los términos antes de pagar.",
+      },
       { status: 409 },
     );
   const service = createSupabaseServiceClient();

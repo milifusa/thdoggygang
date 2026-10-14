@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import sharp from "sharp";
 import { z } from "zod";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { createSupabaseServiceClient } from "../../../lib/supabase/service";
@@ -6,6 +7,7 @@ import { createSupabaseServiceClient } from "../../../lib/supabase/service";
 const schema = z.object({
   bookingId: z.string().uuid(),
   signatureData: z.string().startsWith("data:image/png;base64,").max(500_000),
+  accepted: z.literal(true),
 });
 
 function fromBase64(value: string) {
@@ -21,6 +23,38 @@ async function sha256(bytes: Uint8Array) {
     .join("");
 }
 
+async function hasVisibleSignature(bytes: Uint8Array) {
+  try {
+    const { data, info } = await sharp(bytes, { failOn: "error" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let visiblePixels = 0;
+    let minX = info.width;
+    let minY = info.height;
+    let maxX = -1;
+    let maxY = -1;
+    for (let index = 0; index < data.length; index += 4) {
+      if (data[index + 3] < 24) continue;
+      const pixel = index / 4;
+      const x = pixel % info.width;
+      const y = Math.floor(pixel / info.width);
+      visiblePixels += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+    return (
+      visiblePixels >= 40 &&
+      maxX - minX >= 12 &&
+      maxY - minY >= 4
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success)
@@ -34,7 +68,7 @@ export async function POST(request: Request) {
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "id, booking_number, profile_id, hike:hikes(name, starts_at, location_name), booking_participants(id, guardian_booking_participant_id, snapshot), booking_dogs(snapshot)",
+      "id, booking_number, profile_id, status, hike:hikes(name, starts_at, location_name), booking_participants(id, guardian_booking_participant_id, snapshot), booking_dogs(snapshot)",
     )
     .eq("id", parsed.data.bookingId)
     .single();
@@ -43,8 +77,18 @@ export async function POST(request: Request) {
       { error: "Reservación no disponible." },
       { status: 404 },
     );
+  if (booking.status !== "DRAFT" && booking.status !== "PENDING_PAYMENT")
+    return Response.json(
+      { error: "Esta reservación ya no admite una nueva responsiva." },
+      { status: 409 },
+    );
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
   const signatureBytes = fromBase64(parsed.data.signatureData.split(",")[1]);
+  if (!(await hasVisibleSignature(signatureBytes)))
+    return Response.json(
+      { error: "La firma está vacía o es demasiado corta. Firma nuevamente." },
+      { status: 400 },
+    );
   const pdf = await PDFDocument.create();
   const page = pdf.addPage([595, 842]);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
@@ -103,6 +147,7 @@ export async function POST(request: Request) {
     "Me comprometo a seguir las indicaciones de seguridad, cuidado del entorno y bienestar",
     "de los perritos durante toda la experiencia. Entiendo los riesgos inherentes a una",
     "actividad al aire libre y autorizo la aplicacion del protocolo de emergencia registrado.",
+    "Confirmo que lei y acepte esta responsiva y los terminos y condiciones vigentes.",
   ];
   lines.forEach((line, index) =>
     page.drawText(line.slice(0, 105), {
@@ -161,9 +206,18 @@ export async function POST(request: Request) {
     user_agent: userAgent,
     document_hash: `${documentHash}:${participant.id}`,
   }));
+  const { error: deleteError } = await service
+    .from("signed_waivers")
+    .delete()
+    .eq("booking_id", booking.id);
+  if (deleteError)
+    return Response.json(
+      { error: "No pudimos actualizar la responsiva." },
+      { status: 500 },
+    );
   const { error } = await service
     .from("signed_waivers")
-    .upsert(rows, { onConflict: "document_hash" });
+    .insert(rows);
   if (error)
     return Response.json(
       { error: "No pudimos registrar la responsiva." },
@@ -176,7 +230,11 @@ export async function POST(request: Request) {
       action: "WAIVER_SIGNED",
       entity_type: "booking",
       entity_id: booking.id,
-      metadata: { version: 1, document_hash: documentHash },
+      metadata: {
+        version: 1,
+        document_hash: documentHash,
+        terms_accepted: true,
+      },
     });
   return Response.json({ ok: true, documentHash });
 }

@@ -18,6 +18,9 @@ function SignaturePad({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
+  const hasInk = useRef(false);
+  const lastPoint = useRef<{ x: number; y: number } | null>(null);
+  const strokeDistance = useRef(0);
   const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     return {
@@ -30,6 +33,8 @@ function SignaturePad({
     event.currentTarget.setPointerCapture(event.pointerId);
     const ctx = event.currentTarget.getContext("2d");
     const p = point(event);
+    lastPoint.current = p;
+    strokeDistance.current = 0;
     ctx?.beginPath();
     ctx?.moveTo(p.x, p.y);
   };
@@ -37,6 +42,13 @@ function SignaturePad({
     if (!drawing.current) return;
     const ctx = event.currentTarget.getContext("2d");
     const p = point(event);
+    if (lastPoint.current) {
+      strokeDistance.current += Math.hypot(
+        p.x - lastPoint.current.x,
+        p.y - lastPoint.current.y,
+      );
+    }
+    lastPoint.current = p;
     if (ctx) {
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
@@ -47,11 +59,18 @@ function SignaturePad({
   };
   const finish = () => {
     drawing.current = false;
-    if (canvas.current) onSigned(canvas.current.toDataURL("image/png"));
+    lastPoint.current = null;
+    if (strokeDistance.current >= 8) hasInk.current = true;
+    if (canvas.current && hasInk.current)
+      onSigned(canvas.current.toDataURL("image/png"));
+    else onSigned(null);
   };
   const clear = () => {
     const node = canvas.current;
     node?.getContext("2d")?.clearRect(0, 0, node.width, node.height);
+    hasInk.current = false;
+    lastPoint.current = null;
+    strokeDistance.current = 0;
     onSigned(null);
   };
   return (
@@ -288,6 +307,14 @@ export function BookingWizard({
     return payload.bookingId;
   };
   const next = async () => {
+    if (!canContinue) {
+      setSyncMessage(
+        step === waiverStep
+          ? "Firma la responsiva y activa la aceptación de los términos para continuar."
+          : "Completa este paso antes de continuar.",
+      );
+      return;
+    }
     setProcessing(true);
     setSyncMessage("");
     try {
@@ -304,7 +331,11 @@ export function BookingWizard({
         const response = await fetch("/api/waivers/sign", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ bookingId: savedBookingId, signatureData }),
+          body: JSON.stringify({
+            bookingId: savedBookingId,
+            signatureData,
+            accepted,
+          }),
         });
         const payload = (await response.json()) as {
           ok?: boolean;
@@ -897,7 +928,17 @@ export function BookingWizard({
                   />
                   <span className="accept-toggle" aria-hidden="true"><i>{accepted&&<Check />}</i></span>
                   <span className="accept-copy">
-                    <strong>He leído y acepto la responsiva.</strong>
+                    <strong>
+                      He leído y acepto la responsiva y los{" "}
+                      <Link
+                        href="/terminos"
+                        target="_blank"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        términos y condiciones
+                      </Link>
+                      .
+                    </strong>
                     <small>{accepted?"Aceptado. Ya puedes continuar.":"Activa este control para poder continuar."}</small>
                   </span>
                 </label>

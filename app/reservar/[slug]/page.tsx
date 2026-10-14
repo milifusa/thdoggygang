@@ -43,7 +43,7 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
   }
   if (context.mode === 'live' && requested.booking) {
     const supabase = await createSupabaseServerClient();
-    const { data: booking } = await supabase.from('bookings').select('id,current_step,credit_applied_cents,hike:hikes(slug),booking_participants(id,person_profile_id),booking_dogs(dog_id),transport_reservations(booking_participant_id),booking_camping_selections(camping_option_id),booking_product_selections(product_id,variant,quantity),signed_waivers(id)').eq('id',requested.booking).eq('profile_id',context.profileId).in('status',['DRAFT','PENDING_PAYMENT']).maybeSingle();
+    const { data: booking } = await supabase.from('bookings').select('id,current_step,credit_applied_cents,hike:hikes(slug),booking_participants(id,person_profile_id),booking_dogs(dog_id),transport_reservations(booking_participant_id),booking_camping_selections(camping_option_id),booking_product_selections(product_id,variant,quantity),signed_waivers(id,booking_participant_id)').eq('id',requested.booking).eq('profile_id',context.profileId).in('status',['DRAFT','PENDING_PAYMENT']).maybeSingle();
     const hike = Array.isArray(booking?.hike) ? booking?.hike[0] : booking?.hike;
     if (booking && hike?.slug === slug) {
       const bookingParticipants=relationArray(booking.booking_participants);
@@ -52,11 +52,12 @@ export default async function BookingPage({ params, searchParams }: { params: Pr
       const campingSelections=relationArray(booking.booking_camping_selections);
       const productSelections=relationArray(booking.booking_product_selections);
       const signedWaivers=relationArray(booking.signed_waivers);
+      const signedParticipantIds=new Set(signedWaivers.map((waiver)=>waiver.booking_participant_id));
       const stepNames=adventure.campingOptions.length
         ? ['personas','perritos','camping','transporte','productos','responsiva','pago','confirmacion']
         : ['personas','perritos','transporte','productos','responsiva','pago','confirmacion'];
       const participantMap=new Map(bookingParticipants.map((participant)=>[participant.id,participant.person_profile_id]));
-      resume={ bookingId:booking.id, step:Math.max(0,stepNames.indexOf(requested.step || booking.current_step)), personIds:bookingParticipants.map((participant)=>participant.person_profile_id).filter(Boolean) as string[], dogIds:bookingDogs.map((dog)=>dog.dog_id).filter(Boolean) as string[], transportPersonIds:transportReservations.map((reservation)=>participantMap.get(reservation.booking_participant_id)).filter(Boolean) as string[], campingOptionId:campingSelections[0]?.camping_option_id??null, productSelections:productSelections.map((item)=>({productId:item.product_id,variant:item.variant,quantity:item.quantity})), waiverSigned:signedWaivers.length>0, creditAppliedCents:booking.credit_applied_cents };
+      resume={ bookingId:booking.id, step:Math.max(0,stepNames.indexOf(requested.step || booking.current_step)), personIds:bookingParticipants.map((participant)=>participant.person_profile_id).filter(Boolean) as string[], dogIds:bookingDogs.map((dog)=>dog.dog_id).filter(Boolean) as string[], transportPersonIds:transportReservations.map((reservation)=>participantMap.get(reservation.booking_participant_id)).filter(Boolean) as string[], campingOptionId:campingSelections[0]?.camping_option_id??null, productSelections:productSelections.map((item)=>({productId:item.product_id,variant:item.variant,quantity:item.quantity})), waiverSigned:bookingParticipants.length>0&&bookingParticipants.every((participant)=>signedParticipantIds.has(participant.id)), creditAppliedCents:booking.credit_applied_cents };
     }
   }
   const [bankTransfer, stripeSecret, creditBalanceCents] = await Promise.all([getBankTransferConfig(), getStripeSecretKey(), context.profileId ? getMemberCreditBalance(context.profileId) : Promise.resolve(0)]);

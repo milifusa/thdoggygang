@@ -110,6 +110,33 @@ for (const route of [
   );
 }
 
+const waiverRoute = read("app/api/waivers/sign/route.ts");
+check(
+  waiverRoute.includes("accepted: z.literal(true)") &&
+    waiverRoute.includes("hasVisibleSignature") &&
+    waiverRoute.includes('status !== "DRAFT"') &&
+    waiverRoute.includes('status !== "PENDING_PAYMENT"'),
+  "La responsiva puede guardarse sin aceptación, sin firma visible o fuera de una reservación editable.",
+);
+for (const route of [
+  "app/api/checkout/stripe/route.ts",
+  "app/api/payments/transfer/route.ts",
+]) {
+  const source = read(route);
+  check(
+    source.includes('select("booking_participant_id")') &&
+      source.includes("signedParticipantIds") &&
+      source.includes("bookingParticipants.some"),
+    `${route} permite pagar sin una responsiva válida por cada asistente.`,
+  );
+}
+const bookingPage = read("app/reservar/[slug]/page.tsx");
+check(
+  bookingPage.includes("signedParticipantIds") &&
+    bookingPage.includes("bookingParticipants.every"),
+  "Un borrador con responsivas parciales puede omitir el paso obligatorio de firma.",
+);
+
 const photoUpload = read("app/api/admin/photos/upload-url/route.ts");
 const photoManager = read("app/admin/fotos/photo-manager.tsx");
 const photoDownload = read("app/api/photos/[id]/download/route.ts");
