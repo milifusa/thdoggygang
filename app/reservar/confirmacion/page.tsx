@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CircleCheck } from "lucide-react";
+import { CalendarPlus, CircleCheck, MapPin, PackageCheck, PawPrint, TentTree, UsersRound } from "lucide-react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
 import { decryptQrToken } from "../../lib/security/qr-token";
@@ -26,7 +26,7 @@ export default async function LiveConfirmationPage({
   const { data: booking } = await supabase
     .from("bookings")
     .select(
-      "id, booking_number, status, total_cents, credit_applied_cents, currency, hike:hikes(name, starts_at, location_name), booking_participants(id), booking_dogs(id), transport_reservations(id)",
+      "id, booking_number, status, total_cents, credit_applied_cents, currency, hike:hikes(name,slug,starts_at,location_name), booking_participants(id), booking_dogs(id), transport_reservations(id), booking_camping_selections(option_name,quantity,person_profile_ids), booking_product_selections(quantity,variant,product:products(name))",
     )
     .eq("id", bookingId)
     .single();
@@ -46,6 +46,21 @@ export default async function LiveConfirmationPage({
     }
   }
   const hike = Array.isArray(booking.hike) ? booking.hike[0] : booking.hike;
+  const campingSelections = Array.isArray(booking.booking_camping_selections)
+    ? booking.booking_camping_selections
+    : [];
+  const productSelections = Array.isArray(booking.booking_product_selections)
+    ? booking.booking_product_selections
+    : [];
+  const participantCount = Array.isArray(booking.booking_participants)
+    ? booking.booking_participants.length
+    : 0;
+  const dogCount = Array.isArray(booking.booking_dogs)
+    ? booking.booking_dogs.length
+    : 0;
+  const transportCount = Array.isArray(booking.transport_reservations)
+    ? booking.transport_reservations.length
+    : 0;
   const paid = booking.status === "CONFIRMED";
   return (
     <main className="wizard-page">
@@ -58,6 +73,11 @@ export default async function LiveConfirmationPage({
         </Link>
       </header>
       <section className="confirmation">
+        {paid && (
+          <div className="motion-burst" aria-hidden="true">
+            {Array.from({ length: 10 }, (_, index) => <i key={index} />)}
+          </div>
+        )}
         {paid ? (
           <>
             <div className="success-mark">
@@ -96,6 +116,45 @@ export default async function LiveConfirmationPage({
                 </p>
               </div>
             )}
+            <div className="confirmation-trip-summary">
+              <article>
+                <UsersRound aria-hidden="true" />
+                <span>PERSONAS</span>
+                <strong>{participantCount}</strong>
+              </article>
+              <article>
+                <PawPrint aria-hidden="true" />
+                <span>PERRITOS</span>
+                <strong>{dogCount}</strong>
+              </article>
+              <article>
+                <MapPin aria-hidden="true" />
+                <span>TRASLADO</span>
+                <strong>{transportCount ? `${transportCount} en transporte` : "Por cuenta propia"}</strong>
+              </article>
+              {campingSelections.map((selection) => (
+                <article key={selection.option_name}>
+                  <TentTree aria-hidden="true" />
+                  <span>CAMPING</span>
+                  <strong>{selection.option_name}</strong>
+                  <small>{selection.person_profile_ids?.length ?? selection.quantity} persona(s)</small>
+                </article>
+              ))}
+              {productSelections.length > 0 && (
+                <article className="confirmation-products">
+                  <PackageCheck aria-hidden="true" />
+                  <span>PRODUCTOS PARA RECOGER</span>
+                  <strong>
+                    {productSelections.map((selection) => {
+                      const product = Array.isArray(selection.product)
+                        ? selection.product[0]
+                        : selection.product;
+                      return `${selection.quantity} × ${product?.name ?? "Producto"}${selection.variant ? ` · ${selection.variant}` : ""}`;
+                    }).join(" | ")}
+                  </strong>
+                </article>
+              )}
+            </div>
           </>
         ) : (
           <>
@@ -115,14 +174,28 @@ export default async function LiveConfirmationPage({
           </>
         )}
         <div className="confirmation-actions">
-          <Link className="button button-dark" href="/mi-manada">
-            VER MIS AVENTURAS →
-          </Link>
-          <Link
-            className="button outline-button"
-            href={`/reservar/confirmacion?booking=${booking.id}`}
-          >
-            ACTUALIZAR
+          {paid && hike?.slug ? (
+            <>
+              <Link className="button button-dark" href={`/mi-manada/aventuras/${hike.slug}`}>
+                ABRIR CENTRO DE AVENTURA →
+              </Link>
+              <a className="button outline-button" href={`/api/bookings/${booking.id}/calendar`}>
+                <CalendarPlus aria-hidden="true" /> AGREGAR AL CALENDARIO
+              </a>
+              <a className="button outline-button" href={`/api/bookings/${booking.id}/guide`}>
+                DESCARGAR GUÍA
+              </a>
+            </>
+          ) : (
+            <Link
+              className="button button-dark"
+              href={`/reservar/confirmacion?booking=${booking.id}`}
+            >
+              ACTUALIZAR ESTADO
+            </Link>
+          )}
+          <Link className="button outline-button" href="/mi-manada">
+            VER MIS AVENTURAS
           </Link>
         </div>
       </section>

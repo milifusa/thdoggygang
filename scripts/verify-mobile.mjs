@@ -64,9 +64,22 @@ check(
   "El flujo no explica qué requisito impide avanzar.",
 );
 check(
+  wizard.includes('"Revisar"') &&
+    wizard.includes("booking-review") &&
+    wizard.includes("wizard-mobile-summary-toggle") &&
+    wizard.includes("paymentInterrupted") &&
+    wizard.includes("capacityLabel") &&
+    wizard.includes("wizard-save-toast"),
+  "El flujo móvil no conserva revisión, desglose, recuperación, cupo o confirmación visible de guardado.",
+);
+check(
   wizard.indexOf("{syncMessage && (") >
-    wizard.indexOf('className="wizard-actions"'),
-  "Los errores deben mostrarse dentro del pie visible del wizard.",
+    wizard.indexOf('className="wizard-main wizard-step-enter"') &&
+    wizard.indexOf("{syncMessage && (") <
+      wizard.indexOf('className="wizard-actions"') &&
+    wizard.includes("wizard-inline-error") &&
+    css.includes(".wizard-inline-error"),
+  "Los errores deben mostrarse junto al contenido que necesita corrección.",
 );
 check(
   ticket.includes("QRCodeCanvas") &&

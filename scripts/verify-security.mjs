@@ -289,10 +289,17 @@ for (const route of [
 }
 const bookingPricing = read("app/lib/server/booking-pricing.ts");
 const bookingDraft = read("app/api/bookings/draft/route.ts");
+const campingParticipantsMigration = read(
+  "supabase/migrations/202610140002_camping_participants_review_step.sql",
+);
 check(
   bookingPricing.includes("adultCampingCount") &&
     bookingPricing.includes('selection.pricing_mode === "PER_PERSON"') &&
-    bookingDraft.includes("selectedPeople.filter((person) => !person.is_minor).length"),
+    bookingPricing.includes("person_profile_ids") &&
+    bookingDraft.includes("campingPersonIds.has(person.id) && !person.is_minor") &&
+    bookingDraft.includes("campingMinorWithoutGuardian") &&
+    campingParticipantsMigration.includes("person_profile_ids uuid[]") &&
+    campingParticipantsMigration.includes("'revision'"),
   "El camping por persona puede cobrar a participantes menores.",
 );
 for (const route of [

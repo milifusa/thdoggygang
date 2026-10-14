@@ -18,7 +18,7 @@ export async function recalculateBookingTotal({
   const { data: booking, error } = await service
     .from("bookings")
     .select(
-      "id,profile_id,hike:hikes(starts_at,price_cents,dog_price_cents,pricing_mode),booking_participants(snapshot),booking_dogs(id),transport_reservations(price_cents),booking_product_selections(quantity,unit_price_cents),booking_camping_selections(id,pricing_mode,quantity,unit_price_cents)",
+      "id,profile_id,hike:hikes(starts_at,price_cents,dog_price_cents,pricing_mode),booking_participants(person_profile_id,snapshot),booking_dogs(id),transport_reservations(price_cents),booking_product_selections(quantity,unit_price_cents),booking_camping_selections(id,pricing_mode,quantity,unit_price_cents,person_profile_ids)",
     )
     .eq("id", bookingId)
     .eq("profile_id", profileId)
@@ -30,7 +30,6 @@ export async function recalculateBookingTotal({
     throw new Error("El hike de la reservación ya no está disponible.");
   const hikeDate = dateInMexico(hike.starts_at);
   let freeChildren = 0;
-  let adultCampingCount = 0;
   const participants = relationArray(booking.booking_participants);
   const dogs = relationArray(booking.booking_dogs);
   const transportReservations = relationArray(booking.transport_reservations);
@@ -40,7 +39,6 @@ export async function recalculateBookingTotal({
   for (const participant of participants) {
     const snapshot = (participant.snapshot ?? {}) as ParticipantSnapshot;
     const isMinor = snapshot.is_minor === true;
-    if (!isMinor) adultCampingCount += 1;
     const birthDate =
       typeof snapshot.birth_date === "string" ? snapshot.birth_date : null;
     if (isMinor && !birthDate)
@@ -69,25 +67,83 @@ export async function recalculateBookingTotal({
       sum + selection.quantity * selection.unit_price_cents,
     0,
   );
-  const campingSubtotal = campingSelections.reduce(
-    (sum, selection) =>
+  const participantByProfileId = new Map(
+    participants.map((participant) => [
+      participant.person_profile_id,
+      (participant.snapshot ?? {}) as ParticipantSnapshot,
+    ]),
+  );
+  const adultCampingCount = campingSelections.reduce((sum, selection) => {
+    const selectedIds = Array.isArray(selection.person_profile_ids)
+      ? selection.person_profile_ids
+      : [];
+    const camperIds = selectedIds.length
+      ? selectedIds
+      : participants.map((participant) => participant.person_profile_id);
+    return (
       sum +
-      (selection.pricing_mode === "PER_PERSON"
-        ? adultCampingCount
-        : selection.quantity) *
-        selection.unit_price_cents,
+      camperIds.filter((id) => {
+        const snapshot = participantByProfileId.get(id);
+        return snapshot && snapshot.is_minor !== true;
+      }).length
+    );
+  }, 0);
+  const campingSubtotal = campingSelections.reduce(
+    (sum, selection) => {
+      const selectedIds = Array.isArray(selection.person_profile_ids)
+        ? selection.person_profile_ids
+        : [];
+      const camperIds = selectedIds.length
+        ? selectedIds
+        : participants.map((participant) => participant.person_profile_id);
+      const adultCount = camperIds.filter((id) => {
+        const snapshot = participantByProfileId.get(id);
+        return snapshot && snapshot.is_minor !== true;
+      }).length;
+      return (
+        sum +
+        (selection.pricing_mode === "PER_PERSON"
+          ? adultCount
+          : selection.quantity) *
+          selection.unit_price_cents
+      );
+    },
     0,
   );
   const campingQuantityUpdates = campingSelections
     .filter(
       (selection) =>
         selection.pricing_mode === "PER_PERSON" &&
-        selection.quantity !== adultCampingCount,
+        selection.quantity !== (() => {
+          const selectedIds = Array.isArray(selection.person_profile_ids)
+            ? selection.person_profile_ids
+            : [];
+          const camperIds = selectedIds.length
+            ? selectedIds
+            : participants.map((participant) => participant.person_profile_id);
+          return camperIds.filter((id) => {
+            const snapshot = participantByProfileId.get(id);
+            return snapshot && snapshot.is_minor !== true;
+          }).length;
+        })(),
     )
     .map((selection) =>
       service
         .from("booking_camping_selections")
-        .update({ quantity: adultCampingCount })
+        .update({
+          quantity: (() => {
+            const selectedIds = Array.isArray(selection.person_profile_ids)
+              ? selection.person_profile_ids
+              : [];
+            const camperIds = selectedIds.length
+              ? selectedIds
+              : participants.map((participant) => participant.person_profile_id);
+            return camperIds.filter((id) => {
+              const snapshot = participantByProfileId.get(id);
+              return snapshot && snapshot.is_minor !== true;
+            }).length;
+          })(),
+        })
         .eq("id", selection.id),
     );
   if (campingQuantityUpdates.length) {

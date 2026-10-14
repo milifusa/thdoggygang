@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { ArrowRight, Check, CircleCheck, Minus, Plus, ShoppingBag, TentTree, UserRound, WalletCards, X } from "lucide-react";
 import { calculateHikeSubtotal, type Adventure } from "../../lib/data";
@@ -103,6 +103,7 @@ export function BookingWizard({
   bankTransfer,
   creditBalanceCents,
   resume,
+  paymentInterrupted,
 }: {
   adventure: Adventure;
   context: BookingContext;
@@ -111,6 +112,7 @@ export function BookingWizard({
   bankTransfer: BankTransferConfig | null;
   creditBalanceCents: number;
   resume?: BookingResume;
+  paymentInterrupted?: boolean;
 }) {
   const [people, setPeople] = useState(context.people);
   const dogs = context.dogs;
@@ -118,14 +120,15 @@ export function BookingWizard({
   const steps = useMemo(
     () =>
       hasCamping
-        ? ["Personas", "Perritos", "Camping", "Cómo llegamos", "Productos", "Responsivas", "Pago", "Listo"]
-        : ["Personas", "Perritos", "Cómo llegamos", "Productos", "Responsivas", "Pago", "Listo"],
+        ? ["Personas", "Perritos", "Camping", "Cómo llegamos", "Productos", "Revisar", "Responsivas", "Pago", "Listo"]
+        : ["Personas", "Perritos", "Cómo llegamos", "Productos", "Revisar", "Responsivas", "Pago", "Listo"],
     [hasCamping],
   );
   const campingStep = hasCamping ? 2 : -1;
   const transportStep = hasCamping ? 3 : 2;
   const productStep = hasCamping ? 4 : 3;
-  const waiverStep = productStep + 1;
+  const reviewStep = productStep + 1;
+  const waiverStep = reviewStep + 1;
   const paymentStep = waiverStep + 1;
   const finalStep = paymentStep + 1;
   const [step, setStep] = useState(resume?.step ?? 0);
@@ -142,6 +145,9 @@ export function BookingWizard({
     resume?.campingOptionId ?? null,
   );
   const [campingChoiceMade, setCampingChoiceMade] = useState(Boolean(resume));
+  const [campingPeople, setCampingPeople] = useState<string[]>(
+    resume?.campingPersonIds.length ? resume.campingPersonIds : [],
+  );
   const [productQuantities, setProductQuantities] = useState<Record<string,number>>(Object.fromEntries(resume?.productSelections.map((item)=>[item.productId,item.quantity])??[]));
   const [productVariants, setProductVariants] = useState<Record<string,string>>(
     Object.fromEntries(products.map((product)=>[product.id,resume?.productSelections.find((item)=>item.productId===product.id)?.variant??product.variants[0]??""])),
@@ -160,6 +166,16 @@ export function BookingWizard({
   const [phoneDrafts, setPhoneDrafts] = useState<Record<string, string>>({});
   const [phoneErrors, setPhoneErrors] = useState<Record<string, string>>({});
   const [phoneSavingId, setPhoneSavingId] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [celebrating, setCelebrating] = useState(false);
+  const [mobileSummaryOpen, setMobileSummaryOpen] = useState(false);
+  const saveNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (saveNoticeTimer.current) clearTimeout(saveNoticeTimer.current);
+    },
+    [],
+  );
   const selectedPeopleMissingPhone = useMemo(
     () =>
       selectedPeople
@@ -177,9 +193,14 @@ export function BookingWizard({
     [hikeDate, people, selectedPeople],
   );
   const billablePeopleCount = selectedPeople.length - freeChildCount;
-  const adultCampingCount = selectedPeople.filter((id) => {
+  const adultCampingCount = campingPeople.filter((id) => {
+    if (!selectedPeople.includes(id)) return false;
     const person = people.find((item) => item.id === id);
     return Boolean(person && !person.isMinor);
+  }).length;
+  const campingMinorCount = campingPeople.filter((id) => {
+    if (!selectedPeople.includes(id)) return false;
+    return Boolean(people.find((item) => item.id === id)?.isMinor);
   }).length;
   const hikeSubtotal = useMemo(
     () => calculateHikeSubtotal(adventure, billablePeopleCount, selectedDogs.length),
@@ -205,6 +226,11 @@ export function BookingWizard({
   const availableCredit = creditBalanceCents / 100;
   const creditApplied = useCredit ? Math.min(availableCredit, hikeSubtotal) : 0;
   const payableTotal = Math.max(0, total - creditApplied);
+  const spotsLeft = Math.max(0, adventure.spots);
+  const capacityLabel =
+    spotsLeft <= 3
+      ? `Últimos ${spotsLeft} ${spotsLeft === 1 ? "lugar" : "lugares"}`
+      : `${spotsLeft} lugares disponibles`;
   const toggle = (
     id: string,
     values: string[],
@@ -222,6 +248,7 @@ export function BookingWizard({
       if(hasSelectedMinor){setSyncMessage("Primero quita al menor que tiene a esta persona como responsable.");return;}
       setSelectedPeople(selectedPeople.filter((item)=>item!==id));
       setTransportPeople((current)=>current.filter((item)=>item!==id));
+      setCampingPeople((current)=>current.filter((item)=>item!==id));
       return;
     }
     const next=[...selectedPeople,id];
@@ -237,6 +264,47 @@ export function BookingWizard({
     setSelectedDogs([]);
     setDogChoiceMade(true);
     setDogNeedsUpdate(false);
+  };
+  const toggleCampingPerson = (id: string) => {
+    const person = people.find((item) => item.id === id);
+    if (campingPeople.includes(id)) {
+      const hasCampingMinor = people.some(
+        (item) =>
+          item.isMinor &&
+          item.guardianPersonId === id &&
+          campingPeople.includes(item.id),
+      );
+      if (hasCampingMinor) {
+        setSyncMessage(
+          "Primero quita del camping al menor que tiene a esta persona como responsable.",
+        );
+        return;
+      }
+      setCampingPeople((current) => current.filter((item) => item !== id));
+      return;
+    }
+    const next = [...campingPeople, id];
+    if (
+      person?.isMinor &&
+      person.guardianPersonId &&
+      !next.includes(person.guardianPersonId)
+    )
+      next.push(person.guardianPersonId);
+    setCampingPeople(next);
+    setSyncMessage(
+      person?.isMinor && person.guardianPersonId
+        ? "También incluimos en el camping a su persona adulta responsable."
+        : "",
+    );
+  };
+  const announceSaved = () => {
+    setSaveNotice("Avance guardado en tu cuenta");
+    setCelebrating(true);
+    if (saveNoticeTimer.current) clearTimeout(saveNoticeTimer.current);
+    saveNoticeTimer.current = setTimeout(() => {
+      setSaveNotice("");
+      setCelebrating(false);
+    }, 2600);
   };
   const savePersonPhone = async (personId: string) => {
     const digits = (phoneDrafts[personId] ?? "").replace(/\D/g, "").slice(0, 10);
@@ -295,10 +363,13 @@ export function BookingWizard({
           ? transportPeople.filter((id) => selectedPeople.includes(id))
           : [],
         campingOptionId,
+        campingPersonIds: campingOptionId
+          ? campingPeople.filter((id) => selectedPeople.includes(id))
+          : [],
         productSelections: products.filter((product)=>(productQuantities[product.id]??0)>0).map((product)=>({productId:product.id,variant:productVariants[product.id]??"",quantity:productQuantities[product.id]})),
         currentStep: (hasCamping
-          ? ['perritos','camping','transporte','productos','responsiva','pago','confirmacion','confirmacion']
-          : ['perritos','transporte','productos','responsiva','pago','confirmacion','confirmacion'])[step] ?? 'personas',
+          ? ['perritos','camping','transporte','productos','revision','responsiva','pago','confirmacion','confirmacion']
+          : ['perritos','transporte','productos','revision','responsiva','pago','confirmacion','confirmacion'])[step] ?? 'personas',
       }),
     });
     const payload = (await response.json()) as {
@@ -308,6 +379,7 @@ export function BookingWizard({
     if (!response.ok || !payload.bookingId)
       throw new Error(payload.error ?? "No pudimos guardar tu reservación.");
     setBookingId(payload.bookingId);
+    announceSaved();
     return payload.bookingId;
   };
   const next = async () => {
@@ -409,7 +481,20 @@ export function BookingWizard({
       : step === 1
         ? dogChoiceMade
         : hasCamping && step === campingStep
-          ? campingChoiceMade
+          ? campingChoiceMade &&
+            (!campingOptionId ||
+              (campingPeople.length > 0 &&
+                campingPeople.every((id) => selectedPeople.includes(id)) &&
+                campingPeople.every((id) => {
+                  const person = people.find((item) => item.id === id);
+                  return (
+                    !person?.isMinor ||
+                    Boolean(
+                      person.guardianPersonId &&
+                        campingPeople.includes(person.guardianPersonId),
+                    )
+                  );
+                })))
         : step === waiverStep
           ? Boolean(signatureData || waiverSaved) && accepted
           : step === paymentStep && context.mode === "live" && payment === "transfer"
@@ -430,7 +515,9 @@ export function BookingWizard({
           ? "SELECCIONA UN PERRITO O ELIGE SIN PERRITO"
           : "AGREGA UN PERRITO O ELIGE SIN PERRITO"
         : hasCamping && step === campingStep && !canContinue
-          ? "ELIGE CAMPING O SIN CAMPING"
+          ? campingOptionId
+            ? "ELIGE QUIÉN SE QUEDA A CAMPING"
+            : "ELIGE CAMPING O SIN CAMPING"
         : step === waiverStep && !canContinue
           ? signatureData || waiverSaved
             ? "ACTIVA HE LEÍDO Y ACEPTO"
@@ -476,7 +563,7 @@ export function BookingWizard({
       {step < finalStep && (
         <div className="wizard-desktop-dog-strip" aria-hidden="true">
           <div
-            className="wizard-dog-track"
+            className={`wizard-dog-track ${celebrating ? "celebrating" : ""}`}
             style={{ "--wizard-progress": progress } as CSSProperties}
           >
             <span className="wizard-dog-path" />
@@ -494,11 +581,11 @@ export function BookingWizard({
             <strong>{steps[step]}</strong>
           </div>
           <div className="wizard-mobile-total">
-            <span>{adventure.title}</span>
+            <span>{adventure.title} · {capacityLabel}</span>
             <strong>${payableTotal.toLocaleString("es-MX")} MXN</strong>
           </div>
           <div
-            className="wizard-dog-track"
+            className={`wizard-dog-track ${celebrating ? "celebrating" : ""}`}
             style={{ "--wizard-progress": progress } as CSSProperties}
             aria-hidden="true"
           >
@@ -506,6 +593,16 @@ export function BookingWizard({
             <img src="/brand/logo-circular-blue.png" alt="" />
           </div>
         </section>
+      )}
+      {saveNotice && (
+        <div className="wizard-save-toast" role="status" aria-live="polite">
+          <img src="/brand/logo-circular-blue.png" alt="" />
+          <span>
+            <strong>¡Todo va con la manada!</strong>
+            {saveNotice}
+          </span>
+          <Check aria-hidden="true" />
+        </div>
       )}
 
       {step < finalStep ? (
@@ -797,6 +894,7 @@ export function BookingWizard({
                     className={campingChoiceMade && !campingOptionId ? "selected" : ""}
                     onClick={() => {
                       setCampingOptionId(null);
+                      setCampingPeople([]);
                       setCampingChoiceMade(true);
                     }}
                   >
@@ -815,6 +913,11 @@ export function BookingWizard({
                       className={campingOptionId === option.id ? "selected" : ""}
                       onClick={() => {
                         setCampingOptionId(option.id);
+                        setCampingPeople((current) =>
+                          current.length
+                            ? current.filter((id) => selectedPeople.includes(id))
+                            : [...selectedPeople],
+                        );
                         setCampingChoiceMade(true);
                       }}
                     >
@@ -833,6 +936,54 @@ export function BookingWizard({
                     </button>
                   ))}
                 </div>
+                {selectedCamping && (
+                  <div className="camping-people">
+                    <div>
+                      <span>QUIÉN SE QUEDA</span>
+                      <strong>Elige a las personas que harán camping</strong>
+                      <p>
+                        Los menores pueden quedarse sin costo y siempre deben
+                        estar acompañados por su responsable.
+                      </p>
+                    </div>
+                    {people
+                      .filter((person) => selectedPeople.includes(person.id))
+                      .map((person) => {
+                        const selected = campingPeople.includes(person.id);
+                        return (
+                          <button
+                            type="button"
+                            key={person.id}
+                            aria-pressed={selected}
+                            className={selected ? "selected" : ""}
+                            onClick={() => toggleCampingPerson(person.id)}
+                          >
+                            <span className="profile-initials">
+                              {person.initials}
+                            </span>
+                            <span>
+                              <strong>{person.name}</strong>
+                              <small>
+                                {person.isMinor
+                                  ? "Menor · camping incluido sin costo"
+                                  : selectedCamping.pricingMode === "PER_PERSON"
+                                    ? `Adulto · +$${selectedCamping.price.toLocaleString("es-MX")}`
+                                    : "Incluido en la reservación"}
+                              </small>
+                            </span>
+                            <i aria-hidden="true">{selected && <Check />}</i>
+                          </button>
+                        );
+                      })}
+                    <p className="camping-price-note">
+                      {adultCampingCount} adulto{adultCampingCount === 1 ? "" : "s"}
+                      {campingMinorCount > 0
+                        ? ` · ${campingMinorCount} menor${campingMinorCount === 1 ? "" : "es"} sin costo`
+                        : ""}
+                      {` · Camping $${campingSubtotal.toLocaleString("es-MX")}`}
+                    </p>
+                  </div>
+                )}
               </>
             )}
             {step === productStep && (
@@ -884,6 +1035,104 @@ export function BookingWizard({
                   })}
                 </div>:<div className="wizard-empty"><ShoppingBag/><p>No hay productos disponibles en este momento.</p></div>}
                 <p className="product-pickup-note">Los productos se entregan durante el check-in del hike.</p>
+              </>
+            )}
+            {step === reviewStep && (
+              <>
+                <h1>
+                  Revisa tu
+                  <br />
+                  aventura.
+                </h1>
+                <p className="wizard-lead">
+                  Confirma que todo esté correcto antes de firmar. Puedes editar
+                  cualquier sección sin perder tu avance.
+                </p>
+                <div className="booking-review">
+                  <article>
+                    <div>
+                      <span>PERSONAS</span>
+                      <strong>
+                        {selectedPeople
+                          .map((id) => people.find((person) => person.id === id)?.name)
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </strong>
+                      <small>
+                        {billablePeopleCount} con costo
+                        {freeChildCount > 0
+                          ? ` · ${freeChildCount} menor${freeChildCount === 1 ? "" : "es"} de 5 sin costo`
+                          : ""}
+                      </small>
+                    </div>
+                    <button type="button" onClick={() => setStep(0)}>EDITAR</button>
+                  </article>
+                  <article>
+                    <div>
+                      <span>PERRITOS</span>
+                      <strong>
+                        {selectedDogs.length
+                          ? selectedDogs
+                              .map((id) => dogs.find((dog) => dog.id === id)?.name)
+                              .filter(Boolean)
+                              .join(" · ")
+                          : "Esta vez vamos sin perrito"}
+                      </strong>
+                    </div>
+                    <button type="button" onClick={() => setStep(1)}>EDITAR</button>
+                  </article>
+                  {hasCamping && (
+                    <article>
+                      <div>
+                        <span>CAMPING</span>
+                        <strong>{selectedCamping?.name ?? "Sin camping"}</strong>
+                        {selectedCamping && (
+                          <small>
+                            {campingPeople
+                              .map((id) => people.find((person) => person.id === id)?.name)
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </small>
+                        )}
+                      </div>
+                      <button type="button" onClick={() => setStep(campingStep)}>EDITAR</button>
+                    </article>
+                  )}
+                  <article>
+                    <div>
+                      <span>TRASLADO</span>
+                      <strong>
+                        {transport
+                          ? `${transportPeople.length} lugar${transportPeople.length === 1 ? "" : "es"} en transporte`
+                          : "Llegamos por nuestra cuenta"}
+                      </strong>
+                    </div>
+                    <button type="button" onClick={() => setStep(transportStep)}>EDITAR</button>
+                  </article>
+                  <article>
+                    <div>
+                      <span>PRODUCTOS</span>
+                      <strong>
+                        {Object.values(productQuantities).reduce((sum, quantity) => sum + quantity, 0)} artículo(s)
+                      </strong>
+                      <small>
+                        {products
+                          .filter((product) => (productQuantities[product.id] ?? 0) > 0)
+                          .map((product) => `${productQuantities[product.id]} × ${product.name}`)
+                          .join(" · ") || "Sin productos adicionales"}
+                      </small>
+                    </div>
+                    <button type="button" onClick={() => setStep(productStep)}>EDITAR</button>
+                  </article>
+                  <article className="booking-review-total">
+                    <div>
+                      <span>TOTAL DE LA AVENTURA</span>
+                      <strong>${payableTotal.toLocaleString("es-MX")} MXN</strong>
+                      <small>{capacityLabel}</small>
+                    </div>
+                    <CircleCheck aria-hidden="true" />
+                  </article>
+                </div>
               </>
             )}
             {step === waiverStep && (
@@ -959,6 +1208,15 @@ export function BookingWizard({
                   Elige tu forma de pago. Cuando se confirme, tu lugar quedará
                   reservado y recibirás tu pase de aventura.
                 </p>
+                {paymentInterrupted && (
+                  <div className="payment-recovery" role="status">
+                    <strong>Tu pago no se completó, pero tu avance está a salvo.</strong>
+                    <p>
+                      Puedes intentarlo nuevamente aquí. No crearemos otra
+                      reservación ni perderás las selecciones que ya hiciste.
+                    </p>
+                  </div>
+                )}
                 {creditBalanceCents > 0 && (
                   <label className="booking-credit-option">
                     <input type="checkbox" role="switch" checked={useCredit} onChange={(event) => setUseCredit(event.target.checked)} />
@@ -1032,11 +1290,32 @@ export function BookingWizard({
                 ) : null}
               </>
             )}
+            {syncMessage && (
+              <p className="wizard-inline-error" role="alert">
+                {syncMessage}
+              </p>
+            )}
             <div className="wizard-actions">
-              {syncMessage && (
-                <p className="wizard-error" role="alert">
-                  {syncMessage}
-                </p>
+              <button
+                type="button"
+                className="wizard-mobile-summary-toggle"
+                aria-expanded={mobileSummaryOpen}
+                onClick={() => setMobileSummaryOpen((current) => !current)}
+              >
+                <span>
+                  <small>TOTAL A PAGAR</small>
+                  <strong>${payableTotal.toLocaleString("es-MX")} MXN</strong>
+                </span>
+                <b>{mobileSummaryOpen ? "OCULTAR DETALLE" : "VER DETALLE"}</b>
+              </button>
+              {mobileSummaryOpen && (
+                <dl className="wizard-mobile-breakdown">
+                  <div><dt>Hike</dt><dd>${hikeSubtotal.toLocaleString("es-MX")}</dd></div>
+                  {transport && <div><dt>Transporte</dt><dd>${(transportPeople.length * adventure.transportPrice).toLocaleString("es-MX")}</dd></div>}
+                  {selectedCamping && <div><dt>Camping</dt><dd>${campingSubtotal.toLocaleString("es-MX")}</dd></div>}
+                  {productsSubtotal > 0 && <div><dt>Productos</dt><dd>${productsSubtotal.toLocaleString("es-MX")}</dd></div>}
+                  {creditApplied > 0 && <div><dt>Crédito</dt><dd>−${creditApplied.toLocaleString("es-MX")}</dd></div>}
+                </dl>
               )}
               <div className="wizard-action-row">
                 <button
@@ -1067,6 +1346,8 @@ export function BookingWizard({
                 {adventure.shortDate} · {adventure.time}
                 <br />
                 {adventure.location}
+                <br />
+                <strong>{capacityLabel}</strong>
               </p>
             </div>
             <dl>

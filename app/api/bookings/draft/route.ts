@@ -11,6 +11,7 @@ const schema = z.object({
   dogIds: z.array(z.string().uuid()),
   transportPersonIds: z.array(z.string().uuid()),
   campingOptionId: z.string().uuid().nullable().default(null),
+  campingPersonIds: z.array(z.string().uuid()).max(40).default([]),
   productSelections: z
     .array(
       z.object({
@@ -29,6 +30,7 @@ const schema = z.object({
       "transporte",
       "camping",
       "productos",
+      "revision",
       "responsiva",
       "pago",
       "confirmacion",
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
     );
   const { data: selectedPeople, error: selectedPeopleError } = await supabase
     .from("person_profiles")
-    .select("id,first_name,last_name,phone,is_minor")
+    .select("id,first_name,last_name,phone,is_minor,guardian_person_id")
     .eq("owner_profile_id", profile.id)
     .in("id", parsed.data.personIds)
     .is("deleted_at", null);
@@ -112,6 +114,29 @@ export async function POST(request: Request) {
           .join(", ")} antes de continuar.`,
         code: "PARTICIPANT_PHONE_REQUIRED",
       },
+      { status: 400 },
+    );
+  const selectedPersonIds = new Set(selectedPeople.map((person) => person.id));
+  const campingPersonIds = new Set(parsed.data.campingPersonIds);
+  if (
+    parsed.data.campingOptionId &&
+    (campingPersonIds.size === 0 ||
+      [...campingPersonIds].some((id) => !selectedPersonIds.has(id)))
+  )
+    return Response.json(
+      { error: "Elige quién se queda a camping." },
+      { status: 400 },
+    );
+  const campingMinorWithoutGuardian = selectedPeople.find(
+    (person) =>
+      campingPersonIds.has(person.id) &&
+      person.is_minor &&
+      (!person.guardian_person_id ||
+        !campingPersonIds.has(person.guardian_person_id)),
+  );
+  if (campingMinorWithoutGuardian)
+    return Response.json(
+      { error: "Cada menor que hace camping debe quedarse con su responsable." },
       { status: 400 },
     );
   let effectiveBookingId = parsed.data.bookingId;
@@ -189,9 +214,13 @@ export async function POST(request: Request) {
         pricing_mode: campingOption.pricing_mode,
         quantity:
           campingOption.pricing_mode === "PER_PERSON"
-            ? selectedPeople.filter((person) => !person.is_minor).length
+            ? selectedPeople.filter(
+                (person) =>
+                  campingPersonIds.has(person.id) && !person.is_minor,
+              ).length
             : 1,
         unit_price_cents: campingOption.price_cents,
+        person_profile_ids: [...campingPersonIds],
       });
     if (campingError)
       return Response.json(
