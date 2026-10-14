@@ -9,6 +9,7 @@ import {
 } from "../../../lib/server/member-credit";
 import { ensureBookingQrToken } from "../../../lib/domain/checkin-token";
 import { executeIdempotentJson } from "../../../lib/server/idempotency";
+import { relationArray } from "../../../lib/supabase/relations";
 
 const schema = z.object({
   bookingId: z.string().uuid(),
@@ -47,11 +48,14 @@ export async function POST(request: Request) {
       { error: "Esta reservación ya no admite nuevos intentos de pago." },
       { status: 409 },
     );
+  const bookingParticipants = relationArray(booking.booking_participants);
+  const campingSelections = relationArray(booking.booking_camping_selections);
+  const productSelections = relationArray(booking.booking_product_selections);
   const { count: signedCount } = await supabase
     .from("signed_waivers")
     .select("id", { count: "exact", head: true })
     .eq("booking_id", booking.id);
-  if ((signedCount ?? 0) < booking.booking_participants.length)
+  if ((signedCount ?? 0) < bookingParticipants.length)
     return Response.json(
       { error: "Falta firmar la responsiva de la reservación." },
       { status: 409 },
@@ -193,11 +197,11 @@ export async function POST(request: Request) {
         }
         order = data;
       }
-      const productSubtotal = booking.booking_product_selections.reduce(
+      const productSubtotal = productSelections.reduce(
         (sum, item) => sum + item.quantity * item.unit_price_cents,
         0,
       );
-      const campingSubtotal = booking.booking_camping_selections.reduce(
+      const campingSubtotal = campingSelections.reduce(
         (sum, item) => sum + item.quantity * item.unit_price_cents,
         0,
       );
@@ -211,7 +215,7 @@ export async function POST(request: Request) {
           unit_price_cents:
             booking.total_cents - productSubtotal - campingSubtotal,
         },
-        ...booking.booking_camping_selections.map((item) => ({
+        ...campingSelections.map((item) => ({
           order_id: order.id,
           item_type: "CAMPING",
           reference_id: item.camping_option_id,
@@ -219,7 +223,7 @@ export async function POST(request: Request) {
           quantity: item.quantity,
           unit_price_cents: item.unit_price_cents,
         })),
-        ...booking.booking_product_selections.map((item) => {
+        ...productSelections.map((item) => {
           const product = Array.isArray(item.product)
             ? item.product[0]
             : item.product;
@@ -296,23 +300,23 @@ export async function POST(request: Request) {
           name: hike?.name ?? "Aventura The Doggy Gang",
           amount:
             booking.total_cents -
-            booking.booking_product_selections.reduce(
+            productSelections.reduce(
               (sum, item) => sum + item.quantity * item.unit_price_cents,
               0,
             ) -
-            booking.booking_camping_selections.reduce(
+            campingSelections.reduce(
               (sum, item) => sum + item.quantity * item.unit_price_cents,
               0,
             ) -
             creditApplied,
           quantity: 1,
         },
-        ...booking.booking_camping_selections.map((item) => ({
+        ...campingSelections.map((item) => ({
           name: `Camping · ${item.option_name}`,
           amount: item.unit_price_cents,
           quantity: item.quantity,
         })),
-        ...booking.booking_product_selections.map((item) => {
+        ...productSelections.map((item) => {
           const product = Array.isArray(item.product)
             ? item.product[0]
             : item.product;

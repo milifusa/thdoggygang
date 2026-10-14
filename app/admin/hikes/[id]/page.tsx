@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { requireStaffSession } from "../../../lib/auth/guards";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { relationArray } from "../../../lib/supabase/relations";
 import { hikeCoverUrl } from "../../../lib/data";
 import {
   dateInMexico,
@@ -82,7 +83,13 @@ type Booking = {
     pricing_mode: string;
     quantity: number;
     unit_price_cents: number;
-  }>;
+  }> | {
+    id: string;
+    option_name: string;
+    pricing_mode: string;
+    quantity: number;
+    unit_price_cents: number;
+  } | null;
   signed_waivers: Array<{ id: string; signed_at: string }>;
   check_ins: Array<{ id: string; booking_participant_id: string }>;
 };
@@ -735,7 +742,7 @@ export default async function HikeAdminDetail({
                         ? ` · ${bookingFreeChildren} menores de 5 sin ocupar lugar`
                         : ""}
                     </small>
-                    {b.booking_camping_selections.map((camping) => (
+                    {relationArray(b.booking_camping_selections).map((camping) => (
                       <small key={camping.id}>
                         Camping: {camping.option_name} · {camping.quantity} × {money(camping.unit_price_cents)}
                       </small>

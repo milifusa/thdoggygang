@@ -1,5 +1,6 @@
 import { dateInMexico, isFreeChildForDate } from "../person-age";
 import { createSupabaseServiceClient } from "../supabase/service";
+import { relationArray } from "../supabase/relations";
 
 type ParticipantSnapshot = {
   birth_date?: unknown;
@@ -29,7 +30,13 @@ export async function recalculateBookingTotal({
     throw new Error("El hike de la reservación ya no está disponible.");
   const hikeDate = dateInMexico(hike.starts_at);
   let freeChildren = 0;
-  for (const participant of booking.booking_participants) {
+  const participants = relationArray(booking.booking_participants);
+  const dogs = relationArray(booking.booking_dogs);
+  const transportReservations = relationArray(booking.transport_reservations);
+  const productSelections = relationArray(booking.booking_product_selections);
+  const campingSelections = relationArray(booking.booking_camping_selections);
+
+  for (const participant of participants) {
     const snapshot = (participant.snapshot ?? {}) as ParticipantSnapshot;
     const isMinor = snapshot.is_minor === true;
     const birthDate =
@@ -44,23 +51,23 @@ export async function recalculateBookingTotal({
       freeChildren += 1;
   }
 
-  const billablePeople = booking.booking_participants.length - freeChildren;
-  const dogCount = booking.booking_dogs.length;
+  const billablePeople = participants.length - freeChildren;
+  const dogCount = dogs.length;
   const hikeSubtotal =
     hike.pricing_mode === "PERSON_DOG_BUNDLE"
       ? billablePeople * hike.price_cents +
         Math.max(dogCount - billablePeople, 0) * hike.dog_price_cents
       : billablePeople * hike.price_cents + dogCount * hike.dog_price_cents;
-  const transportSubtotal = booking.transport_reservations.reduce(
+  const transportSubtotal = transportReservations.reduce(
     (sum, reservation) => sum + reservation.price_cents,
     0,
   );
-  const productSubtotal = booking.booking_product_selections.reduce(
+  const productSubtotal = productSelections.reduce(
     (sum, selection) =>
       sum + selection.quantity * selection.unit_price_cents,
     0,
   );
-  const campingSubtotal = booking.booking_camping_selections.reduce(
+  const campingSubtotal = campingSelections.reduce(
     (sum, selection) => sum + selection.quantity * selection.unit_price_cents,
     0,
   );
